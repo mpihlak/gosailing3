@@ -1,5 +1,6 @@
-import { normalizeBearing, toRadians } from '@/foundation/geom'
-import type { Degrees, Knots, Seconds } from '@/foundation/units'
+import { normalizeBearing, normalizeSigned, toRadians } from '@/foundation/geom'
+import { clamp, type Degrees, type Knots, type Seconds } from '@/foundation/units'
+import type { Polar } from '@/domain/polars'
 import { formatRate } from '@/presentation/view/timescale'
 
 export interface Instruments {
@@ -9,8 +10,8 @@ export interface Instruments {
   readonly windSpeed: Knots
   /** Speed made good toward the next mark's side of the course. */
   readonly vmg: Knots
-  /** Boat speed as a fraction of what the polar says is available. */
-  readonly polarRatio: number
+  /** VMG as a fraction of the best available in this wind. */
+  readonly vmgRatio: number
   /**
    * Sailing seconds, not the seconds the player sits through. The clock has to agree
    * with the boat speed and the distance to the line for a start to be timed against it,
@@ -30,7 +31,7 @@ const FIELDS = [
   'twa',
   'tws',
   'vmg',
-  'polar',
+  'targetVmg',
   'wind',
   'timer',
   'line',
@@ -62,7 +63,7 @@ export class Hud {
       speed,
       twa,
       vmg,
-      polarRatio,
+      vmgRatio,
       windDirection,
       windSpeed,
       timeToStart,
@@ -76,7 +77,7 @@ export class Hud {
     this.set('twa', `${Math.round(Math.abs(twa))}° ${twa >= 0 ? 'P' : 'S'}`)
     this.set('tws', windSpeed.toFixed(1))
     this.set('vmg', vmg.toFixed(1))
-    this.set('polar', `${Math.round(polarRatio * 100)}%`)
+    this.set('targetVmg', `${Math.round(vmgRatio * 100)}%`)
     // Wind speed has its own gauge beside the angle, so this one carries the direction.
     this.set('wind', `${Math.round(normalizeBearing(windDirection))}°`)
     this.set('timer', timeToStart > 0 ? `−${clock(timeToStart)}` : clock(Math.max(0, raceTime)))
@@ -116,4 +117,22 @@ export function clock(seconds: Seconds): string {
 /** Speed made good straight upwind, which is what a beat is actually scored on. */
 export function velocityMadeGood(speed: Knots, twa: Degrees): Knots {
   return speed * Math.cos(toRadians(twa))
+}
+
+/**
+ * How much of the VMG available in this wind the boat is actually making.
+ *
+ * Speed against the polar at the angle she happens to be sailing says only whether she
+ * is going as fast as that angle allows, and a boat pinched badly can be at 100% of a
+ * hopeless angle. Measuring against the best VMG on offer judges the angle and the speed
+ * together, which is the question a beat is actually about.
+ *
+ * On a beam reach the honest answer is near zero: VMG is what you make toward the mark,
+ * and across the wind you make almost none. The number is right; it is simply not the
+ * number to sail by there.
+ */
+export function targetVmgRatio(polar: Polar, speed: Knots, twa: Degrees, tws: Knots): number {
+  const best = Math.abs(normalizeSigned(twa)) < 90 ? polar.beatTarget(tws) : polar.runTarget(tws)
+  if (best.vmg <= 0.05) return 0
+  return clamp(Math.abs(velocityMadeGood(speed, twa)) / best.vmg, 0, 2)
 }

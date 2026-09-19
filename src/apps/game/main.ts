@@ -1,5 +1,4 @@
 import { vec } from '@/foundation/geom'
-import { clamp } from '@/foundation/units'
 import { bowPosition, type BoatState } from '@/domain/boat'
 import { distanceToLine, type Mark } from '@/domain/course'
 import {
@@ -15,7 +14,7 @@ import { createCamera, follow, type Camera } from '@/presentation/view/camera'
 import { drawScene, resizeSurface, TrailStore } from '@/presentation/render'
 import { Helm, type HelmCommand } from '@/presentation/input'
 import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
-import { clock, Hud, velocityMadeGood } from '@/presentation/ui'
+import { clock, Hud, targetVmgRatio, velocityMadeGood } from '@/presentation/ui'
 import { GAME_PACE, PLAYER_ID, randomSeed, soloRace } from './scenario'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
@@ -176,7 +175,6 @@ function frame(timestamp: number): void {
 
 function updateInstruments(player: BoatState, windDirection: number, windSpeed: number): void {
   const spec = specOfPlayer()
-  const target = spec.polar.boatSpeed(player.twa, windSpeed)
   const progress = runner.world.race.progress[PLAYER_ID]
 
   const toLine = startLineDistance(player)
@@ -186,7 +184,7 @@ function updateInstruments(player: BoatState, windDirection: number, windSpeed: 
     windDirection,
     windSpeed,
     vmg: Math.abs(velocityMadeGood(player.speed, player.twa)),
-    polarRatio: target > 0.1 ? clamp(player.speed / target, 0, 1.5) : 0,
+    vmgRatio: targetVmgRatio(spec.polar, player.speed, player.twa, windSpeed),
     timeToStart: timeToStart(simulation.ctx, runner.world) / GAME_PACE,
     raceTime: raceTime(simulation.ctx, runner.world) / GAME_PACE,
     status: statusText(),

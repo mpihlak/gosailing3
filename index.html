@@ -48,8 +48,11 @@
         background: var(--panel);
         border: 1px solid var(--edge);
         border-radius: 10px;
-        padding: 6px 12px;
-        min-width: 74px;
+        padding: 6px 8px;
+        /* Fixed, not minimum: a gauge that grows with its digits shifts the whole row,
+           and the telltales are lined up against the first one. */
+        flex: 0 0 auto;
+        width: 86px;
         text-align: center;
         backdrop-filter: blur(8px);
       }
@@ -66,8 +69,16 @@
         font-variant-numeric: tabular-nums;
         font-weight: 600;
         line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
-      .gauge.wide { min-width: 120px; }
+      .gauge .label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .gauge.wide { width: 136px; }
       [data-field='timer'] .value { font-size: 24px; }
       [data-banner] {
         position: absolute;
@@ -111,9 +122,9 @@
       .card p { margin: 0; color: var(--dim); line-height: 1.6; font-size: 14px; }
       .card b { color: var(--ink); }
       @media (max-width: 520px) {
-        .gauge { min-width: 62px; padding: 5px 9px; }
+        .gauge { width: 70px; padding: 5px 5px; }
         .gauge .value { font-size: 16px; }
-        .gauge.wide { min-width: 96px; }
+        .gauge.wide { width: 108px; }
       }
     </style>
   </head>
@@ -127,7 +138,7 @@
       <div class="gauge" data-field="tws"><span class="label">TWS</span><span class="value">—</span></div>
       <div class="gauge" data-field="wind"><span class="label">TWD</span><span class="value">—</span></div>
       <div class="gauge" data-field="vmg"><span class="label">VMG</span><span class="value">—</span></div>
-      <div class="gauge" data-field="polar"><span class="label">Target</span><span class="value">—</span></div>
+      <div class="gauge" data-field="targetVmg"><span class="label">Target VMG</span><span class="value">—</span></div>
       <div class="gauge" data-field="line"><span class="label">To line</span><span class="value">—</span></div>
       <div class="gauge wide" data-field="status"><span class="label">Next</span><span class="value">—</span></div>
       <div class="gauge" data-field="rate"><span class="label">Rate</span><span class="value">1×</span></div>
