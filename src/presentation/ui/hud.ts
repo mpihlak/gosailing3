@@ -4,7 +4,6 @@ import { formatRate } from '@/presentation/view/timescale'
 
 export interface Instruments {
   readonly speed: Knots
-  readonly heading: Degrees
   readonly twa: Degrees
   readonly windDirection: Degrees
   readonly windSpeed: Knots
@@ -12,6 +11,11 @@ export interface Instruments {
   readonly vmg: Knots
   /** Boat speed as a fraction of what the polar says is available. */
   readonly polarRatio: number
+  /**
+   * Both clocks are wall-clock seconds: what the player actually waits and sits through,
+   * not the sailing time the simulation has covered. At four times speed a minute to the
+   * gun is fifteen seconds of it.
+   */
   readonly timeToStart: Seconds
   readonly raceTime: Seconds
   readonly distanceToLine?: number
@@ -23,8 +27,8 @@ export interface Instruments {
 
 const FIELDS = [
   'speed',
-  'heading',
   'twa',
+  'tws',
   'vmg',
   'polar',
   'wind',
@@ -56,7 +60,6 @@ export class Hud {
   update(instruments: Instruments): void {
     const {
       speed,
-      heading,
       twa,
       vmg,
       polarRatio,
@@ -70,11 +73,12 @@ export class Hud {
     } = instruments
 
     this.set('speed', `${speed.toFixed(1)}`)
-    this.set('heading', `${Math.round(normalizeBearing(heading))}°`)
     this.set('twa', `${Math.round(Math.abs(twa))}° ${twa >= 0 ? 'P' : 'S'}`)
+    this.set('tws', windSpeed.toFixed(1))
     this.set('vmg', vmg.toFixed(1))
     this.set('polar', `${Math.round(polarRatio * 100)}%`)
-    this.set('wind', `${Math.round(normalizeBearing(windDirection))}° ${windSpeed.toFixed(1)}kt`)
+    // Wind speed has its own gauge beside the angle, so this one carries the direction.
+    this.set('wind', `${Math.round(normalizeBearing(windDirection))}°`)
     this.set('timer', timeToStart > 0 ? `−${clock(timeToStart)}` : clock(Math.max(0, raceTime)))
     this.set('line', distanceToLine === undefined ? '—' : `${Math.round(distanceToLine)}m`)
     this.set('status', status)
