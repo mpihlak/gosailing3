@@ -164,6 +164,11 @@ function advanceStage(input: StageInput): BoatProgress {
   switch (stage.kind) {
     case 'start': {
       const { line } = stage
+      // None of this counts before the gun. A boat may sail where she likes while she
+      // waits, and going above the line and round an end is ordinary pre-start
+      // manoeuvring, not an offence.
+      if (!started) return progress
+
       const clearBefore = hullClearOfLine(input.previousHull, line, input.halfBeam)
       const clearNow = hullClearOfLine(input.currentHull, line, input.halfBeam)
 
@@ -172,15 +177,16 @@ function advanceStage(input: StageInput): BoatProgress {
        * line at or after her starting signal, she crosses the line from the pre-start
        * side to the course side.
        *
-       * Which side she is on is the whole of it, and how she came to be there does not
-       * matter: sailing round the end of the line puts her on the course side exactly as
-       * crossing it does. Judging this by crossings alone let a boat reach the course
-       * side around the end and then be started by a crossing she was not entitled to
-       * make, and the string of her track would not have passed the starting marks.
+       * Which side she is on at the gun is the whole of it, and how she came to be there
+       * does not matter: sailing round the end of the line puts her on the course side
+       * exactly as crossing it does, and the line extends past its marks for deciding
+       * that. Judging it by crossings alone let a boat reach the course side around the
+       * end and then be started by a crossing she was not entitled to make, and the
+       * string of her track would not have passed the starting marks.
        */
-      const clearedPreStart = progress.clearedPreStart || (started && clearBefore)
+      const clearedPreStart = progress.clearedPreStart || clearBefore
 
-      if (started && clearedPreStart && crossedLine(line, from, to) === 'forward') {
+      if (clearedPreStart && crossedLine(line, from, to) === 'forward') {
         events.push({ kind: 'boatStarted', boatId, late: raceTime })
         return {
           ...progress,

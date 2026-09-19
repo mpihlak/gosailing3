@@ -80,12 +80,31 @@ describe('the start', () => {
     expect(race.progress.a?.startTime).toBe(3)
   })
 
-  it('calls a boat over early and clears her when she returns', () => {
+  it('says nothing about where she is before the gun', () => {
+    // Over the line, round an end, back again: ordinary pre-start manoeuvring. Being on
+    // the course side only matters at the starting signal.
     const { race, events } = sail(
-      [{ id: 'a', path: [vec(0, -40), vec(0, 40), vec(0, -40)] }],
+      [{ id: 'a', path: [vec(0, -40), vec(0, 40), vec(260, 40), vec(0, -40)] }],
       () => -10,
     )
-    expect(events.map((event) => event.kind)).toEqual(['overEarly', 'cleared'])
+    expect(events).toEqual([])
+    expect(race.progress.a?.status).toBe('prestart')
+  })
+
+  it('crossing the line extension round an end is not being over early', () => {
+    // Round the outside of the committee boat while waiting, crossing the line's
+    // extension but never the line itself, and back behind it before the gun.
+    const roundTheEnd = [vec(0, -60), vec(240, -60), vec(260, 40), vec(240, -60), vec(0, -60)]
+    const { events } = sail([{ id: 'a', path: roundTheEnd }], () => -10)
+    expect(events).toEqual([])
+  })
+
+  it('calls her over early at the gun, and clears her when she returns', () => {
+    const { race, events } = sail(
+      [{ id: 'a', path: [vec(0, -40), vec(0, 40), vec(0, 40), vec(0, -40)] }],
+      (step) => (step < 2 ? -10 : 5),
+    )
+    expect(events.map((event) => event.kind)).toEqual(['raceStarted', 'overEarly', 'cleared'])
     expect(race.progress.a?.status).toBe('prestart')
     expect(race.progress.a?.stageIndex).toBe(0)
   })
@@ -95,7 +114,7 @@ describe('the start', () => {
       [{ id: 'a', path: [vec(0, -40), vec(0, 40), vec(0, 200)] }],
       (step) => (step < 2 ? -5 : 5),
     )
-    expect(events.map((event) => event.kind)).toEqual(['overEarly', 'raceStarted'])
+    expect(events.map((event) => event.kind)).toEqual(['raceStarted', 'overEarly'])
     expect(race.progress.a?.status).toBe('overEarly')
     expect(race.progress.a?.stageIndex).toBe(0)
   })
@@ -135,7 +154,8 @@ describe('the start', () => {
 
   it('starts her once she has returned behind the line and crossed it properly', () => {
     const backAndStart = [
-      vec(0, -60), vec(240, -60), vec(260, 40), // round the end, over early
+      vec(0, -60), vec(240, -60), vec(260, 40), // round the end, still there at the gun
+      vec(200, 40), // over early
       vec(120, -60), vec(60, -60), // wholly behind the line again
       vec(60, -10), vec(60, 40), // and across it
     ]
