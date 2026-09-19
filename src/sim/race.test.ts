@@ -1,0 +1,270 @@
+import { describe, it, expect } from 'vitest'
+import { vec, type Vec2 } from '@/foundation/geom'
+import { CRUISER_35_SPEC, type BoatId, type BoatState } from '@/domain/boat'
+import { windwardLeeward, type Course } from '@/domain/course'
+import { createRaceState, stepRace, type RaceState } from './race'
+import type { SimEvent } from './events'
+
+const COURSE: Course = windwardLeeward({
+  windDirection: 0,
+  legLength: 900,
+  lineLength: 400,
+  startCenter: vec(0, 0),
+})
+const MARK = COURSE.marks[0]!.position
+const SPECS = { a: CRUISER_35_SPEC, b: CRUISER_35_SPEC }
+
+function boatAt(id: BoatId, position: Vec2, heading = 0): BoatState {
+  return { id, position, heading, speed: 6, turnRate: 0, twa: 45, course: heading, leeway: 0 }
+}
+
+interface Track {
+  readonly id: BoatId
+  readonly path: readonly Vec2[]
+  readonly heading?: number
+}
+
+/** Walk one or more boats along a path, one position per tick, and collect what happens. */
+function sail(tracks: readonly Track[], raceTimeAt: (step: number) => number) {
+  const ids = tracks.map((track) => track.id)
+  let race: RaceState = createRaceState(ids)
+  const events: SimEvent[] = []
+  const steps = Math.max(...tracks.map((track) => track.path.length))
+
+  for (let i = 1; i < steps; i++) {
+    const previous = tracks.map((track) =>
+      boatAt(track.id, track.path[Math.min(i - 1, track.path.length - 1)]!, track.heading),
+    )
+    const current = tracks.map((track) =>
+      boatAt(track.id, track.path[Math.min(i, track.path.length - 1)]!, track.heading),
+    )
+    const result = stepRace(race, {
+      course: COURSE,
+      specs: SPECS,
+      previous,
+      current,
+      raceTime: raceTimeAt(i),
+    })
+    race = result.race
+    events.push(...result.events)
+  }
+  return { race, events }
+}
+
+/** A point at a bearing and distance from the windward mark. */
+function offMark(bearing: number, radius: number): Vec2 {
+  const rad = (bearing * Math.PI) / 180
+  return vec(MARK.x + radius * Math.sin(rad), MARK.y + radius * Math.cos(rad))
+}
+
+/**
+ * A path that rounds the windward mark. Approaching from the southeast and sweeping
+ * anticlockwise as seen from the mark leaves it to port, which is the way round a
+ * standard course is sailed.
+ */
+function roundingPath(radius = 40, steps = 48, direction: 1 | -1 = -1): Vec2[] {
+  const path: Vec2[] = [offMark(135, 335)]
+  for (let i = 0; i <= steps; i++) {
+    path.push(offMark(135 + direction * 270 * (i / steps), radius))
+  }
+  path.push(offMark(225, 335))
+  return path
+}
+
+describe('the start', () => {
+  it('starts a boat that crosses the line after the gun', () => {
+    const { race, events } = sail([{ id: 'a', path: [vec(0, -40), vec(0, 40)] }], () => 3)
+    expect(events).toContainEqual({ kind: 'boatStarted', boatId: 'a', late: 3 })
+    expect(race.progress.a?.status).toBe('racing')
+    expect(race.progress.a?.stageIndex).toBe(1)
+    expect(race.progress.a?.startTime).toBe(3)
+  })
+
+  it('calls a boat over early and clears her when she returns', () => {
+    const { race, events } = sail(
+      [{ id: 'a', path: [vec(0, -40), vec(0, 40), vec(0, -40)] }],
+      () => -10,
+    )
+    expect(events.map((event) => event.kind)).toEqual(['overEarly', 'cleared'])
+    expect(race.progress.a?.status).toBe('prestart')
+    expect(race.progress.a?.stageIndex).toBe(0)
+  })
+
+  it('does not let a boat that is over early simply sail on after the gun', () => {
+    const { race, events } = sail(
+      [{ id: 'a', path: [vec(0, -40), vec(0, 40), vec(0, 200)] }],
+      (step) => (step < 2 ? -5 : 5),
+    )
+    expect(events.map((event) => event.kind)).toEqual(['overEarly', 'raceStarted'])
+    expect(race.progress.a?.status).toBe('overEarly')
+    expect(race.progress.a?.stageIndex).toBe(0)
+  })
+
+  it('lets her start properly once she has gone back and cleared', () => {
+    const { race } = sail(
+      [{ id: 'a', path: [vec(0, -40), vec(0, 40), vec(0, -40), vec(0, 40)] }],
+      (step) => (step < 2 ? -5 : 5),
+    )
+    expect(race.progress.a?.status).toBe('racing')
+  })
+
+  it('ignores a boat that crosses outside the committee boat', () => {
+    const { race } = sail([{ id: 'a', path: [vec(260, -40), vec(260, 40)] }], () => 3)
+    expect(race.progress.a?.status).toBe('prestart')
+  })
+
+  it('announces the gun once', () => {
+    const { events } = sail(
+      [{ id: 'a', path: [vec(0, -200), vec(0, -190), vec(0, -180), vec(0, -170)] }],
+      (step) => step - 2.5,
+    )
+    expect(events.filter((event) => event.kind === 'raceStarted')).toHaveLength(1)
+  })
+})
+
+describe('mark rounding', () => {
+  function startedTrack(path: Vec2[]): Track[] {
+    return [{ id: 'a', path: [vec(0, -40), vec(0, 40), ...path] }]
+  }
+
+  it('counts a rounding that leaves the mark to port', () => {
+    const { race, events } = sail(startedTrack(roundingPath()), () => 5)
+    expect(events).toContainEqual({ kind: 'markRounded', boatId: 'a', markId: 'windward' })
+    expect(race.progress.a?.stageIndex).toBe(2)
+  })
+
+  it('does not count a boat that sails past the mark without rounding it', () => {
+    const { race } = sail(
+      startedTrack([vec(200, 700), vec(200, 900), vec(200, 1100), vec(200, 1300)]),
+      () => 5,
+    )
+    expect(race.progress.a?.stageIndex).toBe(1)
+  })
+
+  it('does not count a rounding the wrong way round', () => {
+    const { race } = sail(startedTrack(roundingPath(40, 48, 1)), () => 5)
+    expect(race.progress.a?.stageIndex).toBe(1)
+  })
+
+  it('ignores rotation accumulated far away from the mark', () => {
+    // A full circle 400m from the mark: a tactical disaster, but not a rounding.
+    const wideCircle: Vec2[] = Array.from({ length: 40 }, (_, i) => {
+      const angle = (Math.PI * 2 * i) / 39
+      return vec(MARK.x + 400 * Math.sin(angle), MARK.y + 400 * Math.cos(angle))
+    })
+    const { race } = sail(startedTrack(wideCircle), () => 5)
+    expect(race.progress.a?.stageIndex).toBe(1)
+  })
+
+  it('forgets a partial sweep once the boat leaves the mark behind', () => {
+    const partial = roundingPath().slice(0, 12)
+    const { race } = sail(startedTrack([...partial, vec(0, -500), ...roundingPath()]), () => 5)
+    expect(race.progress.a?.stageIndex).toBe(2) // one rounding, not two
+  })
+
+  it('will not count a boat that goes past on the wrong side', () => {
+    // Up the west side of the mark and back down the east: the mark was left to
+    // starboard, and this course calls for it to be left to port.
+    const wrongSide = [offMark(225, 60), offMark(270, 40), offMark(315, 40), offMark(45, 60)]
+    const { race } = sail(startedTrack(wrongSide), () => 5)
+    expect(race.progress.a?.stageIndex).toBe(1)
+  })
+
+  it('resets when a boat goes past the mark and thinks better of it', () => {
+    // East of the mark, up past it, then back down the same side without rounding.
+    const bailOut = [offMark(135, 50), offMark(90, 30), offMark(45, 40), offMark(90, 30), offMark(135, 50)]
+    const { race } = sail(startedTrack(bailOut), () => 5)
+    expect(race.progress.a?.stageIndex).toBe(1)
+    expect(race.progress.a?.passedMark).toBe(false)
+  })
+
+  it('counts a wide rounding the same as a tight one', () => {
+    const wide = [offMark(135, 110), offMark(90, 100), offMark(30, 100), offMark(300, 100), offMark(225, 110)]
+    const tight = [offMark(135, 30), offMark(90, 14), offMark(20, 14), offMark(300, 14), offMark(225, 30)]
+    expect(sail(startedTrack(wide), () => 5).race.progress.a?.stageIndex).toBe(2)
+    expect(sail(startedTrack(tight), () => 5).race.progress.a?.stageIndex).toBe(2)
+  })
+
+  it('ignores a boat that crosses the mark line far out on the course', () => {
+    const wayOut = [offMark(135, 400), offMark(90, 400), offMark(45, 400), offMark(315, 400)]
+    const { race } = sail(startedTrack(wayOut), () => 5)
+    expect(race.progress.a?.stageIndex).toBe(1)
+  })
+
+  it('will not round a mark for a boat that never started', () => {
+    const { race } = sail([{ id: 'a', path: roundingPath() }], () => 5)
+    expect(race.progress.a?.stageIndex).toBe(0)
+  })
+})
+
+describe('the finish', () => {
+  const fullRace = (id: BoatId, tail: Vec2[] = []): Track => ({
+    id,
+    path: [vec(0, -40), vec(0, 40), ...roundingPath(), vec(0, 200), vec(0, 40), vec(0, -40), ...tail],
+  })
+
+  it('finishes a boat that comes back down through the line', () => {
+    const { race, events } = sail([fullRace('a')], () => 5)
+    expect(events).toContainEqual({ kind: 'boatFinished', boatId: 'a', place: 1 })
+    expect(race.progress.a?.status).toBe('finished')
+    expect(race.phase).toBe('complete')
+  })
+
+  it('will not finish a boat that skipped the mark', () => {
+    const { race } = sail([{ id: 'a', path: [vec(0, -40), vec(0, 40), vec(0, 200), vec(0, -40)] }], () => 5)
+    expect(race.progress.a?.status).toBe('racing')
+  })
+
+  it('places boats in the order they cross', () => {
+    const slow = fullRace('b')
+    const { race } = sail(
+      [
+        fullRace('a'),
+        // The same track, but three ticks behind.
+        { id: 'b', path: [slow.path[0]!, slow.path[0]!, slow.path[0]!, ...slow.path] },
+      ],
+      () => 5,
+    )
+    expect(race.progress.a?.place).toBe(1)
+    expect(race.progress.b?.place).toBe(2)
+    expect(race.finishOrder).toEqual(['a', 'b'])
+  })
+
+  it('records the finish time from the gun, not from the start of the countdown', () => {
+    const { race } = sail([fullRace('a')], (step) => step * 2)
+    expect(race.progress.a?.finishTime).toBeGreaterThan(0)
+  })
+})
+
+describe('bookkeeping', () => {
+  it('adds up the distance sailed', () => {
+    const { race } = sail([{ id: 'a', path: [vec(0, 0), vec(0, 100), vec(100, 100)] }], () => 5)
+    expect(race.progress.a?.distanceSailed).toBeCloseTo(200)
+  })
+
+  it('notices a tack', () => {
+    const race = createRaceState(['a'])
+    const onPort = { ...boatAt('a', vec(0, 0)), twa: 40 }
+    const onStarboard = { ...boatAt('a', vec(0, 10)), twa: -40 }
+    const { events } = stepRace(race, {
+      course: COURSE,
+      specs: SPECS,
+      previous: [onPort],
+      current: [onStarboard],
+      raceTime: 5,
+    })
+    expect(events).toContainEqual({ kind: 'tacked', boatId: 'a', from: 'port', to: 'starboard' })
+  })
+
+  it('does not call a wobble head to wind a tack', () => {
+    const race = createRaceState(['a'])
+    const { events } = stepRace(race, {
+      course: COURSE,
+      specs: SPECS,
+      previous: [{ ...boatAt('a', vec(0, 0)), twa: 2 }],
+      current: [{ ...boatAt('a', vec(0, 10)), twa: -2 }],
+      raceTime: 5,
+    })
+    expect(events.filter((event) => event.kind === 'tacked')).toHaveLength(0)
+  })
+})

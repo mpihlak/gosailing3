@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a2c44" />
+    <title>Go Sailing</title>
+    <style>
+      :root {
+        --ink: #eaf2f8;
+        --dim: #8aa7ba;
+        --panel: rgba(8, 28, 44, 0.82);
+        --edge: rgba(255, 255, 255, 0.12);
+        --warn: #ffb347;
+        --good: #7ee08a;
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0a2c44;
+        color: var(--ink);
+        overscroll-behavior: none;
+      }
+      #stage {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+        display: block;
+      }
+      #hud {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 10px max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-bottom));
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+        flex-wrap: wrap;
+        pointer-events: none;
+      }
+      .gauge {
+        background: var(--panel);
+        border: 1px solid var(--edge);
+        border-radius: 10px;
+        padding: 6px 12px;
+        min-width: 74px;
+        text-align: center;
+        backdrop-filter: blur(8px);
+      }
+      .gauge .label {
+        display: block;
+        font-size: 10px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .gauge .value {
+        display: block;
+        font-size: 19px;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      .gauge.wide { min-width: 120px; }
+      [data-field='timer'] .value { font-size: 24px; }
+      [data-banner] {
+        position: absolute;
+        top: max(16px, env(safe-area-inset-top));
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 9px 18px;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--edge);
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        white-space: nowrap;
+      }
+      [data-banner][data-visible='true'] { opacity: 1; }
+      [data-banner][data-tone='warn'] { color: var(--warn); }
+      [data-banner][data-tone='good'] { color: var(--good); }
+      #overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(4, 18, 30, 0.62);
+        backdrop-filter: blur(3px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        padding: 20px;
+      }
+      #overlay[data-visible='true'] { opacity: 1; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--edge);
+        border-radius: 16px;
+        padding: 24px 28px;
+        max-width: 440px;
+        text-align: center;
+      }
+      .card h1 { margin: 0 0 10px; font-size: 22px; }
+      .card p { margin: 0; color: var(--dim); line-height: 1.6; font-size: 14px; }
+      .card b { color: var(--ink); }
+      @media (max-width: 520px) {
+        .gauge { min-width: 62px; padding: 5px 9px; }
+        .gauge .value { font-size: 16px; }
+        .gauge.wide { min-width: 96px; }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div data-banner data-visible="false"></div>
+    <div id="hud">
+      <div class="gauge" data-field="timer"><span class="label">Timer</span><span class="value">—</span></div>
+      <div class="gauge" data-field="speed"><span class="label">Speed</span><span class="value">—</span></div>
+      <div class="gauge" data-field="heading"><span class="label">Heading</span><span class="value">—</span></div>
+      <div class="gauge" data-field="twa"><span class="label">TWA</span><span class="value">—</span></div>
+      <div class="gauge" data-field="vmg"><span class="label">VMG</span><span class="value">—</span></div>
+      <div class="gauge" data-field="polar"><span class="label">Target</span><span class="value">—</span></div>
+      <div class="gauge wide" data-field="wind"><span class="label">Wind</span><span class="value">—</span></div>
+      <div class="gauge" data-field="line"><span class="label">To line</span><span class="value">—</span></div>
+      <div class="gauge wide" data-field="status"><span class="label">Next</span><span class="value">—</span></div>
+    </div>
+    <div id="overlay" data-visible="false"></div>
+    <script type="module" src="/src/apps/game/main.ts"></script>
+  </body>
+</html>
