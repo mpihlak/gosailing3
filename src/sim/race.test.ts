@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { vec, type Vec2 } from '@/foundation/geom'
 import { CRUISER_35_SPEC, type BoatId, type BoatState } from '@/domain/boat'
 import { windwardLeeward, type Course } from '@/domain/course'
-import { createRaceState, stepRace, type RaceState } from './race'
+import { createRaceState, stepRace, type BoatProgress, type RaceState } from './race'
 import type { SimEvent } from './events'
 
 const COURSE: Course = windwardLeeward({
@@ -108,9 +108,71 @@ describe('the start', () => {
     expect(race.progress.a?.status).toBe('racing')
   })
 
-  it('ignores a boat that crosses outside the committee boat', () => {
-    const { race } = sail([{ id: 'a', path: [vec(260, -40), vec(260, 40)] }], () => 3)
-    expect(race.progress.a?.status).toBe('prestart')
+  it('does not start a boat that goes by outside the committee boat', () => {
+    // She reaches the course side without passing between the marks, so the string of
+    // her track would not have passed the starting marks and she has not started. She is
+    // not over early either: she was behind the line at the gun, and only went round the
+    // end afterwards. She simply has to come back and cross properly.
+    const { race, events } = sail([{ id: 'a', path: [vec(260, -40), vec(260, 40), vec(260, 200)] }], () => 3)
+    expect(race.progress.a?.stageIndex).toBe(0)
+    expect(events.filter((event) => event.kind === 'boatStarted')).toHaveLength(0)
+    expect(events.filter((event) => event.kind === 'overEarly')).toHaveLength(0)
+  })
+
+  it('calls a boat over early for being on the course side at the gun, however she got there', () => {
+    // Round the outside of the committee boat before the gun, never crossing the line.
+    const roundTheEnd = [vec(0, -60), vec(240, -60), vec(260, 40), vec(120, 60)]
+    const { race, events } = sail([{ id: 'a', path: roundTheEnd }], (step) => (step < 3 ? -10 : 5))
+    expect(events).toContainEqual({ kind: 'overEarly', boatId: 'a' })
+    expect(race.progress.a?.status).toBe('overEarly')
+  })
+
+  it('will not start her from the course side until she has been wholly back behind the line', () => {
+    const roundTheEndThenUp = [vec(0, -60), vec(240, -60), vec(260, 40), vec(60, 60), vec(60, 400)]
+    const { race } = sail([{ id: 'a', path: roundTheEndThenUp }], (step) => (step < 3 ? -10 : 5))
+    expect(race.progress.a?.stageIndex).toBe(0)
+  })
+
+  it('starts her once she has returned behind the line and crossed it properly', () => {
+    const backAndStart = [
+      vec(0, -60), vec(240, -60), vec(260, 40), // round the end, over early
+      vec(120, -60), vec(60, -60), // wholly behind the line again
+      vec(60, -10), vec(60, 40), // and across it
+    ]
+    const { race, events } = sail([{ id: 'a', path: backAndStart }], (step) => (step < 3 ? -10 : 5))
+    expect(events.map((event) => event.kind)).toEqual(
+      expect.arrayContaining(['overEarly', 'cleared', 'boatStarted']),
+    )
+    expect(race.progress.a?.status).toBe('racing')
+  })
+
+  it('does not count a bow dipped back over the line as having been behind it', () => {
+    // She is over early and reaches down so her bow pokes across, then hardens up. Her
+    // hull was never entirely on the pre-start side, so she has not started.
+    const overEarly: BoatProgress = {
+      boatId: 'a',
+      status: 'overEarly',
+      stageIndex: 0,
+      passedMark: false,
+      clearedPreStart: false,
+      penalties: 0,
+      distanceSailed: 0,
+    }
+    const race: RaceState = { phase: 'racing', progress: { a: overEarly }, finishOrder: [] }
+
+    // Bow south of the line, stern still north of it, then swinging back to the north.
+    const bowDown = { ...boatAt('a', vec(40, 4), 180), twa: 45 }
+    const bowUp = { ...boatAt('a', vec(40, 4), 0), twa: 45 }
+    const { race: after, events } = stepRace(race, {
+      course: COURSE,
+      specs: SPECS,
+      previous: [bowDown],
+      current: [bowUp],
+      raceTime: 5,
+    })
+
+    expect(events.filter((event) => event.kind === 'boatStarted')).toHaveLength(0)
+    expect(after.progress.a?.status).toBe('overEarly')
   })
 
   it('announces the gun once', () => {

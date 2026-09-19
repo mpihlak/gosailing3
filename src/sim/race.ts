@@ -1,7 +1,22 @@
-import { distance, type Vec2 } from '@/foundation/geom'
+import { distance, type Segment, type Vec2 } from '@/foundation/geom'
 import type { Meters, Seconds } from '@/foundation/units'
-import { bowPosition, tackOf, type BoatId, type BoatSpec, type BoatState } from '@/domain/boat'
-import { crossedLine, pastMark, sideOfMark, type Course, type CourseStage } from '@/domain/course'
+import {
+  bowPosition,
+  hullCentreline,
+  tackOf,
+  type BoatId,
+  type BoatSpec,
+  type BoatState,
+} from '@/domain/boat'
+import {
+  crossedLine,
+  pastMark,
+  sideOfLine,
+  sideOfMark,
+  type Course,
+  type CourseStage,
+  type RaceLine,
+} from '@/domain/course'
 import type { SimEvent } from './events'
 
 export type RacePhase = 'prestart' | 'racing' | 'complete'
@@ -17,6 +32,11 @@ export interface BoatProgress {
   readonly place?: number
   /** Whether the boat has passed the mark on the required side, and so is half round it. */
   readonly passedMark: boolean
+  /**
+   * Whether her hull has been entirely on the pre-start side at or after the gun. Until
+   * it has, she cannot start, however many times she crosses the line.
+   */
+  readonly clearedPreStart: boolean
   readonly penalties: number
   readonly distanceSailed: Meters
 }
@@ -41,6 +61,7 @@ export function createRaceState(boatIds: readonly BoatId[]): RaceState {
       status: 'prestart',
       stageIndex: 0,
       passedMark: false,
+      clearedPreStart: false,
       penalties: 0,
       distanceSailed: 0,
     }
@@ -102,6 +123,9 @@ export function stepRace(race: RaceState, input: RaceStepInput): RaceStepResult 
         stage,
         from: bowPosition(previousState, spec),
         to: bowPosition(boat, spec),
+        previousHull: hullCentreline(previousState, spec),
+        currentHull: hullCentreline(boat, spec),
+        halfBeam: spec.beam / 2,
         started,
         raceTime,
         events,
@@ -124,6 +148,9 @@ interface StageInput {
   readonly stage: CourseStage
   readonly from: Vec2
   readonly to: Vec2
+  readonly previousHull: Segment
+  readonly currentHull: Segment
+  readonly halfBeam: Meters
   readonly started: boolean
   readonly raceTime: Seconds
   readonly events: SimEvent[]
@@ -136,30 +163,46 @@ function advanceStage(input: StageInput): BoatProgress {
 
   switch (stage.kind) {
     case 'start': {
-      const crossing = crossedLine(stage.line, from, to)
+      const { line } = stage
+      const clearBefore = hullClearOfLine(input.previousHull, line, input.halfBeam)
+      const clearNow = hullClearOfLine(input.currentHull, line, input.halfBeam)
 
-      if (!started) {
-        // Over the line early. She stays over until she comes back and clears it.
-        if (crossing === 'forward' && progress.status !== 'overEarly') {
-          events.push({ kind: 'overEarly', boatId })
-          return { ...progress, status: 'overEarly' }
-        }
-        if (crossing === 'backward' && progress.status === 'overEarly') {
-          events.push({ kind: 'cleared', boatId })
-          return { ...progress, status: 'prestart' }
-        }
-        return progress
-      }
+      /*
+       * A boat starts when, her hull having been entirely on the pre-start side of the
+       * line at or after her starting signal, she crosses the line from the pre-start
+       * side to the course side.
+       *
+       * Which side she is on is the whole of it, and how she came to be there does not
+       * matter: sailing round the end of the line puts her on the course side exactly as
+       * crossing it does. Judging this by crossings alone let a boat reach the course
+       * side around the end and then be started by a crossing she was not entitled to
+       * make, and the string of her track would not have passed the starting marks.
+       */
+      const clearedPreStart = progress.clearedPreStart || (started && clearBefore)
 
-      if (crossing === 'backward' && progress.status === 'overEarly') {
-        events.push({ kind: 'cleared', boatId })
-        return { ...progress, status: 'prestart' }
-      }
-      if (crossing === 'forward' && progress.status !== 'overEarly') {
+      if (started && clearedPreStart && crossedLine(line, from, to) === 'forward') {
         events.push({ kind: 'boatStarted', boatId, late: raceTime })
-        return { ...progress, status: 'racing', startTime: raceTime, stageIndex: progress.stageIndex + 1 }
+        return {
+          ...progress,
+          status: 'racing',
+          startTime: raceTime,
+          clearedPreStart: true,
+          stageIndex: progress.stageIndex + 1,
+        }
       }
-      return progress
+
+      // Being on the course side is only an offence while she is not entitled to be
+      // there. Once she has been wholly behind the line at or after the gun she is
+      // crossing it, and a boat in the act of starting is not over early.
+      if (!clearNow && !clearedPreStart && progress.status !== 'overEarly') {
+        events.push({ kind: 'overEarly', boatId })
+        return { ...progress, status: 'overEarly', clearedPreStart }
+      }
+      if (clearNow && progress.status === 'overEarly') {
+        events.push({ kind: 'cleared', boatId })
+        return { ...progress, status: 'prestart', clearedPreStart }
+      }
+      return { ...progress, clearedPreStart }
     }
 
     case 'mark': {
@@ -212,6 +255,14 @@ function advanceStage(input: StageInput): BoatProgress {
       }
     }
   }
+}
+
+/**
+ * Whether the whole hull is on the pre-start side. The hull is a capsule, so its nearest
+ * point to the line is half a beam ahead of whichever end is closer.
+ */
+function hullClearOfLine(hull: Segment, line: RaceLine, halfBeam: Meters): boolean {
+  return sideOfLine(line, hull.from) < -halfBeam && sideOfLine(line, hull.to) < -halfBeam
 }
 
 export function addPenalty(progress: BoatProgress): BoatProgress {
