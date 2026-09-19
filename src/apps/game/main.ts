@@ -140,6 +140,7 @@ function frame(timestamp: number): void {
     playerId: PLAYER_ID,
     started: raceTime(simulation.ctx, world) >= 0,
     medianWindSpeed: simulation.wind.median.speed,
+    displayTime: world.time / GAME_PACE,
     beatAngle: specOfPlayer().polar.beatAngle(wind.speed),
     ...(target === undefined ? {} : { targetMark: target }),
   })

@@ -1,5 +1,4 @@
 import { clamp, type Degrees, type Seconds } from '@/foundation/units'
-import type { Viewport } from '@/presentation/view/camera'
 import { PALETTE } from '../palette'
 
 /**
@@ -45,19 +44,29 @@ export function telltalesFor(twa: Degrees, beatAngle: Degrees): TelltaleState {
 
 const PANEL_WIDTH = 164
 const PANEL_HEIGHT = 84
-/** Clear of the banner, which sits at the very top of the page. */
-const PANEL_TOP = 64
+const PANEL_LEFT = 16
+const PANEL_TOP = 16
 const RIBBON_LENGTH = 62
 /** How far a fully lifted telltale swings up from streaming aft. */
 const LIFT_ANGLE = 68
 
+/**
+ * The flutter runs on the player's clock, not the simulation's. The game steps its
+ * physics several times faster than real time, and driving the animation from that made
+ * the ribbons shiver rather than fly.
+ */
+const FLUTTER_RATE = 3.1
+/** A telltale that is streaming lies almost still. One that has lifted is flogging. */
+const FLUTTER_STREAMING = 0.5
+const FLUTTER_LIFTED = 4.5
+
+/** `time` is in the player's seconds, since it drives an animation rather than physics. */
 export function drawTelltales(
   ctx: CanvasRenderingContext2D,
-  viewport: Viewport,
   state: TelltaleState,
   time: Seconds,
 ): void {
-  const left = viewport.width / 2 - PANEL_WIDTH / 2
+  const left = PANEL_LEFT
   const luffX = left + 34
   const windwardY = PANEL_TOP + 26
   const leewardY = PANEL_TOP + 58
@@ -85,7 +94,8 @@ export function drawTelltales(
   const leewardColor = state.windwardSide === 'port' ? starboardColor : portColor
 
   drawRibbon(ctx, luffX, windwardY, state.windwardLift, windwardColor, time)
-  drawRibbon(ctx, luffX, leewardY, state.leewardLift, leewardColor, time + 0.4)
+  // Offset so the two never beat in step, which reads as a mechanism rather than cloth.
+  drawRibbon(ctx, luffX, leewardY, state.leewardLift, leewardColor, time + 0.7)
 
   ctx.restore()
 }
@@ -102,8 +112,8 @@ function drawRibbon(
   color: string,
   time: Seconds,
 ): void {
-  const flutter = Math.sin(time * 9) * (2 + lift * 7)
-  const angle = ((-LIFT_ANGLE * lift + flutter * 0.35) * Math.PI) / 180
+  const flutter = Math.sin(time * FLUTTER_RATE) * (FLUTTER_STREAMING + lift * FLUTTER_LIFTED)
+  const angle = ((-LIFT_ANGLE * lift + flutter * 0.18) * Math.PI) / 180
   const tipX = x + Math.cos(angle) * RIBBON_LENGTH
   const tipY = y + Math.sin(angle) * RIBBON_LENGTH
 
