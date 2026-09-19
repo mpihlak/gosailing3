@@ -2,7 +2,7 @@ import { clamp } from '@/foundation/units'
 import type { BoatInput } from '@/domain/boat'
 import type { InputSource } from '@/sim'
 
-export type HelmCommand = 'toggleRun' | 'restart' | 'help'
+export type HelmCommand = 'toggleRun' | 'restart' | 'help' | 'faster' | 'slower' | 'normalRate'
 
 export interface HelmOptions {
   readonly onCommand?: (command: HelmCommand) => void
@@ -36,7 +36,9 @@ export class Helm implements InputSource {
       const action = commandFor(event.key)
       if (action) {
         event.preventDefault()
-        this.options.onCommand?.(action)
+        // Held keys repeat. Steering wants that; a command does not, or one press on the
+        // rate key would run through every step of the ladder.
+        if (!event.repeat) this.options.onCommand?.(action)
         return
       }
       const side = sideFor(event.key)
@@ -95,5 +97,9 @@ function commandFor(key: string): HelmCommand | null {
   if (key === ' ' || key === 'Spacebar') return 'toggleRun'
   if (key === 'r' || key === 'R') return 'restart'
   if (key === 'h' || key === 'H' || key === '?') return 'help'
+  // Accept the key both shifted and not, so it works without reaching for shift.
+  if (key === '+' || key === '=') return 'faster'
+  if (key === '-' || key === '_') return 'slower'
+  if (key === '0') return 'normalRate'
   return null
 }

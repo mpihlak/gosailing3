@@ -14,6 +14,7 @@ import {
 import { createCamera, follow, type Camera } from '@/presentation/view/camera'
 import { drawScene, resizeSurface, TrailStore } from '@/presentation/render'
 import { Helm, type HelmCommand } from '@/presentation/input'
+import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
 import { Hud, velocityMadeGood } from '@/presentation/ui'
 import { PLAYER_ID, randomSeed, soloRace } from './scenario'
 
@@ -30,6 +31,7 @@ let camera: Camera
 let trails = new TrailStore()
 let running = false
 let lastFrame = 0
+let timeScale = NORMAL_RATE
 
 const helm = new Helm({ onCommand: handleCommand })
 helm.attach(canvas)
@@ -42,6 +44,7 @@ function start(seed: string): void {
   runner = new SimulationRunner(simulation.ctx, simulation.world)
   trails = new TrailStore()
   running = false
+  timeScale = NORMAL_RATE
 
   const surface = resizeSurface(canvas)
   const player = playerBoat(runner.world.boats)
@@ -50,7 +53,8 @@ function start(seed: string): void {
   showOverlay(
     'Ready to race',
     `The gun is in one minute. Cross the line, leave the orange mark to port, and come back through the line to finish.
-     <b>← →</b> or <b>A D</b> to steer · <b>Space</b> to start and pause · <b>R</b> for a new race`,
+     <b>← →</b> or <b>A D</b> to steer · <b>Space</b> to start and pause · <b>R</b> for a new race
+     <br /><b>+</b> and <b>−</b> change how fast the race runs · <b>0</b> puts it back to normal`,
   )
 }
 
@@ -65,8 +69,20 @@ function handleCommand(command: HelmCommand): void {
     else showOverlay('Paused', 'Press <b>Space</b> to carry on.')
   }
   if (command === 'help') {
-    showOverlay('Controls', '<b>← →</b> steer · <b>Space</b> pause · <b>R</b> new race')
+    showOverlay(
+      'Controls',
+      '<b>← →</b> steer · <b>Space</b> pause · <b>R</b> new race · <b>+ −</b> race speed · <b>0</b> normal speed',
+    )
     running = false
+  }
+  if (command === 'faster' || command === 'slower' || command === 'normalRate') {
+    timeScale =
+      command === 'faster'
+        ? fasterThan(timeScale)
+        : command === 'slower'
+          ? slowerThan(timeScale)
+          : NORMAL_RATE
+    hud.showBanner(`Running at ${formatRate(timeScale)}`, 'info', 1400)
   }
 }
 
@@ -78,7 +94,9 @@ function frame(timestamp: number): void {
   lastFrame = timestamp
 
   if (running) {
-    const events = runner.advance(elapsed, { [PLAYER_ID]: helm })
+    // Scale the catch-up cap alongside the rate, or running fast would be throttled by
+    // the stall guard rather than by the rate itself.
+    const events = runner.advance(elapsed * timeScale, { [PLAYER_ID]: helm }, 0.25 * timeScale)
     for (const event of events) announce(event)
   }
 
@@ -128,6 +146,7 @@ function updateInstruments(player: BoatState, windDirection: number, windSpeed: 
     timeToStart: timeToStart(simulation.ctx, runner.world),
     raceTime: raceTime(simulation.ctx, runner.world),
     status: statusText(),
+    timeScale,
     ...(toLine === undefined ? {} : { distanceToLine: toLine }),
     ...(progress?.place === undefined ? {} : { place: progress.place }),
   })
