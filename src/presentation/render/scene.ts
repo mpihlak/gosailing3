@@ -20,6 +20,8 @@ export interface SceneView {
   readonly beatAngle: number
   /** The player's seconds, for animation. Physics uses the world's own clock. */
   readonly displayTime: number
+  /** Left edge to line screen furniture up with, in pixels from the left of the canvas. */
+  readonly panelLeft: number
 }
 
 /**
@@ -51,6 +53,6 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
   // Screen furniture rather than something on the water, so it goes on last.
   const player = playerId ? world.boats.find((boat) => boat.id === playerId) : undefined
   if (player && telltalesApply(player.twa)) {
-    drawTelltales(canvas, telltalesFor(player.twa, view.beatAngle), view.displayTime)
+    drawTelltales(canvas, telltalesFor(player.twa, view.beatAngle), view.displayTime, view.panelLeft)
   }
 }

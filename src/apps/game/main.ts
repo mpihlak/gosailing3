@@ -42,6 +42,9 @@ let trails = new TrailStore()
 let running = false
 let lastFrame = 0
 let debugRate = STARTING_DEBUG_RATE
+/** Left edge of the instrument panel, which screen furniture lines up with. */
+let panelLeft = 16
+let measuredAtWidth = 0
 
 const helm = new Helm({ onCommand: handleCommand })
 helm.attach(canvas)
@@ -104,9 +107,23 @@ function handleCommand(command: HelmCommand): void {
   }
 }
 
+/**
+ * Where the instruments start, read off the first gauge so the telltales line up with
+ * them however the panel wraps. Reading it costs a layout, so it is taken only when the
+ * width changes rather than every frame.
+ */
+function measurePanelLeft(width: number): void {
+  if (width === measuredAtWidth) return
+  measuredAtWidth = width
+  const gauge = document.querySelector('[data-field="timer"]')
+  if (!gauge) return
+  panelLeft = Math.max(8, gauge.getBoundingClientRect().left - canvas.getBoundingClientRect().left)
+}
+
 function frame(timestamp: number): void {
   const surface = resizeSurface(canvas)
   camera = { ...camera, viewport: surface.viewport }
+  measurePanelLeft(surface.viewport.width)
 
   const elapsed = lastFrame === 0 ? 0 : (timestamp - lastFrame) / 1000
   lastFrame = timestamp
@@ -141,6 +158,7 @@ function frame(timestamp: number): void {
     started: raceTime(simulation.ctx, world) >= 0,
     medianWindSpeed: simulation.wind.median.speed,
     displayTime: world.time / GAME_PACE,
+    panelLeft,
     beatAngle: specOfPlayer().polar.beatAngle(wind.speed),
     ...(target === undefined ? {} : { targetMark: target }),
   })

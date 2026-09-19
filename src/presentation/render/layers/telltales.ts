@@ -44,7 +44,6 @@ export function telltalesFor(twa: Degrees, beatAngle: Degrees): TelltaleState {
 
 const PANEL_WIDTH = 164
 const PANEL_HEIGHT = 84
-const PANEL_LEFT = 16
 const PANEL_TOP = 16
 const RIBBON_LENGTH = 62
 /** How far a fully lifted telltale swings up from streaming aft. */
@@ -55,18 +54,22 @@ const LIFT_ANGLE = 68
  * physics several times faster than real time, and driving the animation from that made
  * the ribbons shiver rather than fly.
  */
-const FLUTTER_RATE = 3.1
-/** A telltale that is streaming lies almost still. One that has lifted is flogging. */
-const FLUTTER_STREAMING = 0.5
-const FLUTTER_LIFTED = 4.5
+const FLUTTER_RATE = 6
+/** How far the cloth moves. A streaming telltale stirs; a lifted one flogs. */
+const FLUTTER_STREAMING = 2
+const FLUTTER_LIFTED = 7
 
-/** `time` is in the player's seconds, since it drives an animation rather than physics. */
+/**
+ * `left` lines the panel up with the instruments below it, and is measured from them
+ * rather than guessed at, so the two stay in line at any width.
+ * `time` is in the player's seconds, since it drives an animation rather than physics.
+ */
 export function drawTelltales(
   ctx: CanvasRenderingContext2D,
   state: TelltaleState,
   time: Seconds,
+  left: number,
 ): void {
-  const left = PANEL_LEFT
   const luffX = left + 34
   const windwardY = PANEL_TOP + 26
   const leewardY = PANEL_TOP + 58
@@ -113,7 +116,7 @@ function drawRibbon(
   time: Seconds,
 ): void {
   const flutter = Math.sin(time * FLUTTER_RATE) * (FLUTTER_STREAMING + lift * FLUTTER_LIFTED)
-  const angle = ((-LIFT_ANGLE * lift + flutter * 0.18) * Math.PI) / 180
+  const angle = ((-LIFT_ANGLE * lift + flutter * 0.35) * Math.PI) / 180
   const tipX = x + Math.cos(angle) * RIBBON_LENGTH
   const tipY = y + Math.sin(angle) * RIBBON_LENGTH
 
