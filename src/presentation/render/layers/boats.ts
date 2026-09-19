@@ -1,5 +1,5 @@
 import { toRadians, type Vec2 } from '@/foundation/geom'
-import type { Seconds } from '@/foundation/units'
+import { clamp, smoothstep, type Degrees, type Seconds } from '@/foundation/units'
 import type { BoatId, BoatSpec, BoatState } from '@/domain/boat'
 import { metersToPixels, worldToScreen, type Camera } from '@/presentation/view/camera'
 import { PALETTE } from '../palette'
@@ -113,18 +113,56 @@ function drawHull(
   ctx.restore()
 }
 
+/** Close-hauled, and eased right out on a run. */
+const BOOM_CLOSE_HAULED: Degrees = 18
+const BOOM_RUNNING: Degrees = 80
+/** Below this angle to the wind she is luffing, and there is no tack to show. */
+const LUFFING_WITHIN: Degrees = 12
+
+/**
+ * How far the boom is off the centreline, for drawing.
+ *
+ * Deliberately exaggerated at the top end. A main sheeted properly close-hauled sits
+ * within a few degrees of the centreline, which at the size a boat is drawn on screen is
+ * a pixel or two and tells the player nothing. Eighteen degrees is wrong as trim and
+ * right as a signal: it is the only thing on the boat that shows which tack she is on.
+ */
+export function boomAngle(twa: Degrees): Degrees {
+  const off = Math.abs(twa)
+  const eased = clamp((off - 30) / 120, 0, 1)
+  const angle = BOOM_CLOSE_HAULED + (BOOM_RUNNING - BOOM_CLOSE_HAULED) * eased
+  // Head to wind the sail comes back amidships and flogs: no tack, and none shown.
+  return angle * smoothstep(off / LUFFING_WITHIN)
+}
+
 /** The mainsail, set on the leeward side. It shows which tack a boat is on at a glance. */
 function drawSail(ctx: CanvasRenderingContext2D, boat: BoatState, length: number): void {
   const toLeeward = boat.twa >= 0 ? 1 : -1
-  // Sheeted in hard upwind, eased right out on a run.
-  const boomOut = Math.min(Math.abs(boat.twa) / 180, 0.8)
-  const mast = -length / 5
-  const clew = length / 2.4
+  const angle = toRadians(boomAngle(boat.twa))
+  const mastY = -length / 5
+  const boom = length * 0.62
+
+  // In the boat's own frame, forward is negative y and starboard is positive x.
+  const clewX = toLeeward * boom * Math.sin(angle)
+  const clewY = mastY + boom * Math.cos(angle)
+
+  // The sail bellies out to leeward of the boom rather than lying along it.
+  const camber = boom * 0.22
+  const controlX = clewX / 2 + toLeeward * camber * Math.cos(angle)
+  const controlY = (mastY + clewY) / 2 - camber * Math.sin(angle)
 
   ctx.beginPath()
-  ctx.moveTo(0, mast)
-  ctx.quadraticCurveTo(toLeeward * boomOut * length * 0.55, (mast + clew) / 2, toLeeward * boomOut * length * 0.75, clew)
+  ctx.moveTo(0, mastY)
+  ctx.quadraticCurveTo(controlX, controlY, clewX, clewY)
   ctx.strokeStyle = PALETTE.sail
   ctx.lineWidth = 2
+  ctx.lineCap = 'round'
+  ctx.stroke()
+
+  // A short mast, so the sail reads as set on something.
+  ctx.beginPath()
+  ctx.moveTo(0, mastY)
+  ctx.lineTo(0, mastY + length * 0.12)
+  ctx.lineWidth = 1.5
   ctx.stroke()
 }
