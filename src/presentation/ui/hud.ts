@@ -39,12 +39,18 @@ export class Hud {
   private readonly cells = new Map<Field, HTMLElement>()
   private readonly banner: HTMLElement
 
-  constructor(root: HTMLElement) {
+  /**
+   * The banner is passed in rather than looked up, because it sits outside the instrument
+   * panel. Falling back to the panel when the lookup missed cost the whole HUD: writing
+   * the banner text into it replaced every gauge with a single line of text.
+   */
+  constructor(root: HTMLElement, banner: HTMLElement) {
     for (const field of FIELDS) {
       const cell = root.querySelector<HTMLElement>(`[data-field="${field}"] .value`)
-      if (cell) this.cells.set(field, cell)
+      if (!cell) throw new Error(`the instrument panel is missing a cell for "${field}"`)
+      this.cells.set(field, cell)
     }
-    this.banner = root.querySelector<HTMLElement>('[data-banner]') ?? root
+    this.banner = banner
   }
 
   update(instruments: Instruments): void {
@@ -89,6 +95,11 @@ export class Hud {
   private set(field: Field, text: string): void {
     const cell = this.cells.get(field)
     if (cell && cell.textContent !== text) cell.textContent = text
+  }
+
+  /** Which instruments the panel is wired to, so a smoke test can check the markup. */
+  get fields(): readonly string[] {
+    return [...this.cells.keys()]
   }
 }
 

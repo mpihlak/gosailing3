@@ -19,7 +19,10 @@ import { Hud, velocityMadeGood } from '@/presentation/ui'
 import { PLAYER_ID, randomSeed, soloRace } from './scenario'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
-const hud = new Hud(requireElement<HTMLElement>('#hud'))
+const hud = new Hud(
+  requireElement<HTMLElement>('#hud'),
+  requireElement<HTMLElement>('[data-banner]'),
+)
 const overlay = requireElement<HTMLElement>('#overlay')
 
 /** How much water to show across the short edge of the screen. */
