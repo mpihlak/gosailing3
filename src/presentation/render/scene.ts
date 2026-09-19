@@ -6,7 +6,12 @@ import { drawWater } from './layers/water'
 import { drawWindField } from './layers/wind'
 import { drawCourse } from './layers/course'
 import { drawBoats, type TrailStore } from './layers/boats'
-import { drawTelltales, telltalesApply, telltalesFor } from './layers/telltales'
+import {
+  drawTelltales,
+  telltalesApply,
+  telltalesFor,
+  type PanelAnchor,
+} from './layers/telltales'
 
 export interface SceneView {
   readonly ctx: SimContext
@@ -20,8 +25,8 @@ export interface SceneView {
   readonly beatAngle: number
   /** The player's seconds, for animation. Physics uses the world's own clock. */
   readonly displayTime: number
-  /** Left edge to line screen furniture up with, in pixels from the left of the canvas. */
-  readonly panelLeft: number
+  /** Where screen furniture sits, measured off the instrument panel. */
+  readonly panelAnchor: PanelAnchor
 }
 
 /**
@@ -53,6 +58,11 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
   // Screen furniture rather than something on the water, so it goes on last.
   const player = playerId ? world.boats.find((boat) => boat.id === playerId) : undefined
   if (player && telltalesApply(player.twa)) {
-    drawTelltales(canvas, telltalesFor(player.twa, view.beatAngle), view.displayTime, view.panelLeft)
+    drawTelltales(
+      canvas,
+      telltalesFor(player.twa, view.beatAngle),
+      view.displayTime,
+      view.panelAnchor,
+    )
   }
 }

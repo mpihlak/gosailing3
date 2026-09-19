@@ -44,7 +44,6 @@ export function telltalesFor(twa: Degrees, beatAngle: Degrees): TelltaleState {
 
 const PANEL_WIDTH = 164
 const PANEL_HEIGHT = 84
-const PANEL_TOP = 16
 const RIBBON_LENGTH = 62
 /** How far a fully lifted telltale swings up from streaming aft. */
 const LIFT_ANGLE = 68
@@ -59,24 +58,32 @@ const FLUTTER_RATE = 6
 const FLUTTER_STREAMING = 2
 const FLUTTER_LIFTED = 7
 
+/** Where the panel sits: its bottom left corner, in pixels from the canvas corner. */
+export interface PanelAnchor {
+  readonly left: number
+  readonly bottom: number
+}
+
 /**
- * `left` lines the panel up with the instruments below it, and is measured from them
- * rather than guessed at, so the two stay in line at any width.
+ * `anchor` is measured off the instruments rather than guessed at, so the panel stays
+ * sitting on them however the window is sized and however they wrap.
  * `time` is in the player's seconds, since it drives an animation rather than physics.
  */
 export function drawTelltales(
   ctx: CanvasRenderingContext2D,
   state: TelltaleState,
   time: Seconds,
-  left: number,
+  anchor: PanelAnchor,
 ): void {
+  const left = anchor.left
+  const top = anchor.bottom - PANEL_HEIGHT
   const luffX = left + 34
-  const windwardY = PANEL_TOP + 26
-  const leewardY = PANEL_TOP + 58
+  const windwardY = top + 26
+  const leewardY = top + 58
 
   ctx.save()
 
-  roundedRect(ctx, left, PANEL_TOP, PANEL_WIDTH, PANEL_HEIGHT, 10)
+  roundedRect(ctx, left, top, PANEL_WIDTH, PANEL_HEIGHT, 10)
   ctx.fillStyle = 'rgba(8, 28, 44, 0.72)'
   ctx.fill()
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)'
@@ -85,8 +92,8 @@ export function drawTelltales(
 
   // The luff they are tied to.
   ctx.beginPath()
-  ctx.moveTo(luffX, PANEL_TOP + 14)
-  ctx.lineTo(luffX, PANEL_TOP + PANEL_HEIGHT - 14)
+  ctx.moveTo(luffX, top + 14)
+  ctx.lineTo(luffX, top + PANEL_HEIGHT - 14)
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'
   ctx.lineWidth = 2
   ctx.stroke()
