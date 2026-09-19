@@ -16,7 +16,7 @@ import { drawScene, resizeSurface, TrailStore } from '@/presentation/render'
 import { Helm, type HelmCommand } from '@/presentation/input'
 import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
 import { clock, Hud, velocityMadeGood } from '@/presentation/ui'
-import { PLAYER_ID, randomSeed, soloRace } from './scenario'
+import { GAME_PACE, PLAYER_ID, randomSeed, soloRace } from './scenario'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
 const hud = new Hud(
@@ -29,10 +29,11 @@ const overlay = requireElement<HTMLElement>('#overlay')
 const METERS_ACROSS = 420
 
 /**
- * A lap takes about eleven minutes of sailing, which is a long time to sit through, so
- * the game opens at four times speed. The 0 key still means normal speed, not this.
+ * A debugging aid: watch the race faster or slower than it is meant to be played. It is
+ * not part of the game and is expected to come out again. The pace the game actually
+ * runs at is GAME_PACE, which this multiplies on top of.
  */
-const STARTING_RATE = 4
+const STARTING_DEBUG_RATE = 1
 
 let simulation: Simulation
 let runner: SimulationRunner
@@ -40,13 +41,7 @@ let camera: Camera
 let trails = new TrailStore()
 let running = false
 let lastFrame = 0
-let timeScale = STARTING_RATE
-/**
- * Seconds the player has actually sat through since the gun. Accumulated rather than
- * derived from race time, because the rate can change mid-race and dividing by whatever
- * it happens to be now would rewrite the part already sailed.
- */
-let wallClockSinceGun = 0
+let debugRate = STARTING_DEBUG_RATE
 
 const helm = new Helm({ onCommand: handleCommand })
 helm.attach(canvas)
@@ -59,8 +54,7 @@ function start(seed: string): void {
   runner = new SimulationRunner(simulation.ctx, simulation.world)
   trails = new TrailStore()
   running = false
-  timeScale = STARTING_RATE
-  wallClockSinceGun = 0
+  debugRate = STARTING_DEBUG_RATE
 
   const surface = resizeSurface(canvas)
   const player = playerBoat(runner.world.boats)
@@ -69,8 +63,7 @@ function start(seed: string): void {
   showOverlay(
     'Ready to race',
     `The gun is in one minute. Cross the line, leave the orange mark to port, and come back through the line to finish.
-     <b>← →</b> or <b>A D</b> to steer · <b>Space</b> to start and pause · <b>R</b> for a new race
-     <br /><b>+</b> and <b>−</b> change how fast the race runs · <b>0</b> puts it back to normal`,
+     <b>← →</b> or <b>A D</b> to steer · <b>Space</b> to start and pause · <b>R</b> for a new race`,
   )
 }
 
@@ -87,18 +80,18 @@ function handleCommand(command: HelmCommand): void {
   if (command === 'help') {
     showOverlay(
       'Controls',
-      '<b>← →</b> steer · <b>Space</b> pause · <b>R</b> new race · <b>+ −</b> race speed · <b>0</b> normal speed',
+      '<b>← →</b> steer · <b>Space</b> pause · <b>R</b> new race<br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal',
     )
     running = false
   }
   if (command === 'faster' || command === 'slower' || command === 'normalRate') {
-    timeScale =
+    debugRate =
       command === 'faster'
-        ? fasterThan(timeScale)
+        ? fasterThan(debugRate)
         : command === 'slower'
-          ? slowerThan(timeScale)
+          ? slowerThan(debugRate)
           : NORMAL_RATE
-    hud.showBanner(`Running at ${formatRate(timeScale)}`, 'info', 1400)
+    hud.showBanner(`Debug: watching at ${formatRate(debugRate)}`, 'info', 1400)
   }
 }
 
@@ -112,8 +105,8 @@ function frame(timestamp: number): void {
   if (running) {
     // Scale the catch-up cap alongside the rate, or running fast would be throttled by
     // the stall guard rather than by the rate itself.
-    const events = runner.advance(elapsed * timeScale, { [PLAYER_ID]: helm }, 0.25 * timeScale)
-    if (raceTime(simulation.ctx, runner.world) >= 0) wallClockSinceGun += elapsed
+    const pace = GAME_PACE * debugRate
+    const events = runner.advance(elapsed * pace, { [PLAYER_ID]: helm }, 0.25 * pace)
     for (const event of events) announce(event)
   }
 
@@ -159,13 +152,10 @@ function updateInstruments(player: BoatState, windDirection: number, windSpeed: 
     windSpeed,
     vmg: Math.abs(velocityMadeGood(player.speed, player.twa)),
     polarRatio: target > 0.1 ? clamp(player.speed / target, 0, 1.5) : 0,
-    // Sailing seconds, so the clock agrees with the distance to the line and the boat
-    // speed beside it. A countdown scaled to the playback rate reads fifteen seconds
-    // while the line is still half a minute of water away, and times the start wrong.
-    timeToStart: timeToStart(simulation.ctx, runner.world),
-    raceTime: raceTime(simulation.ctx, runner.world),
+    timeToStart: timeToStart(simulation.ctx, runner.world) / GAME_PACE,
+    raceTime: raceTime(simulation.ctx, runner.world) / GAME_PACE,
     status: statusText(),
-    timeScale,
+    timeScale: debugRate,
     ...(toLine === undefined ? {} : { distanceToLine: toLine }),
     ...(progress?.place === undefined ? {} : { place: progress.place }),
   })
@@ -198,13 +188,9 @@ function announce(event: TimedEvent): void {
     case 'contact':
       return hud.showBanner(`Contact with the ${event.otherId}`, 'warn')
     case 'boatFinished': {
-      const sailed = runner.world.race.progress[PLAYER_ID]?.finishTime ?? 0
+      const elapsed = (runner.world.race.progress[PLAYER_ID]?.finishTime ?? 0) / GAME_PACE
       running = false
-      showOverlay(
-        'Finished',
-        `<b>${wallClockSinceGun.toFixed(1)}s</b> of your time, at ${formatRate(timeScale)}.
-         That is <b>${clock(sailed)}</b> of sailing. Press <b>R</b> to race again.`,
-      )
+      showOverlay('Finished', `Elapsed <b>${clock(elapsed)}</b>. Press <b>R</b> to race again.`)
       return
     }
     default:

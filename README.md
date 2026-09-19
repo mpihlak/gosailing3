@@ -34,6 +34,12 @@ come back through the line to finish. Crossing early means going back and crossi
 The wind shifts, blows harder on one side of the course than the other, and carries gusts
 down it. One end of the start line is favored. Both are worth watching.
 
+Boats sail faster than they would on the water — a nine hundred meter beat at true scale
+takes the better part of ten minutes, which is no fun. `GAME_PACE` in
+`src/apps/game/scenario.ts` sets how much faster. Every clock is divided back down by it,
+so the timer counts real seconds. `+` and `-` watch the race faster or slower; that is a
+debugging aid, not part of the game.
+
 ## Layout
 
 ```
