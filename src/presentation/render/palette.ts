@@ -18,4 +18,7 @@ export const PALETTE = {
   trail: 'rgba(255, 255, 255, 0.34)',
   trailRival: 'rgba(160, 190, 210, 0.22)',
   penalty: '#ff5d5d',
+  // The sides a sailor already knows by their lights: green to starboard, red to port.
+  telltaleStarboard: '#4ade80',
+  telltalePort: '#f87171',
 } as const
