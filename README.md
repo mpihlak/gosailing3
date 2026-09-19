@@ -53,3 +53,4 @@ src/
 ```
 
 `ARCHITECTURE.md` explains why it is arranged this way and where new work goes.
+`KNOWN_ISSUES.md` lists what is wrong with it.
