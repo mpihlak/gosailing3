@@ -3,10 +3,10 @@ import type { ScenarioSpec } from '@/sim'
 export const PLAYER_ID = 'player'
 
 /**
- * Sailing at true scale is too slow to be much fun: a boat doing six knots up a nine
- * hundred meter beat takes the better part of ten minutes. The game runs its simulation
- * this many simulated seconds per second of the player's time, which is the pace it is
- * tuned at.
+ * Sailing at true scale is too slow to be much fun: the course below takes a boat about
+ * six and a half minutes on the water. The game runs its simulation this many simulated
+ * seconds per second of the player's time, which is the pace it is tuned at, and brings
+ * that down to a minute and a half.
  *
  * Every clock the player sees is divided back down by it, so the timer counts real
  * seconds however fast the boats are moving.
@@ -14,7 +14,7 @@ export const PLAYER_ID = 'player'
 export const GAME_PACE = 4
 
 /** Countdown before the gun, in the player's seconds. */
-export const COUNTDOWN: number = 60
+export const COUNTDOWN: number = 30
 
 /** The race the game opens with: one boat, one lap. */
 export function soloRace(seed: number | string): ScenarioSpec {
@@ -22,7 +22,7 @@ export function soloRace(seed: number | string): ScenarioSpec {
     name: 'Solo windward-leeward',
     seed,
     boats: [{ id: PLAYER_ID, name: 'You', controller: 'human' }],
-    course: { legLength: 900, lineLength: 260 },
+    course: { legLength: 450, lineLength: 260 },
     wind: { direction: 0, speed: 12 },
     config: { startSequence: COUNTDOWN * GAME_PACE },
     duration: 1200 * GAME_PACE,

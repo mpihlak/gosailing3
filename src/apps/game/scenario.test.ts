@@ -11,9 +11,9 @@ import { COUNTDOWN, GAME_PACE, soloRace } from './scenario'
 describe('the clocks the player reads', () => {
   const sim = createSimulation(soloRace('clock-check'))
 
-  it('counts the countdown down from a minute of the player\'s time', () => {
+  it('counts the countdown down in the player\'s seconds', () => {
+    // The relationship, not the number: the countdown is tuning, and moves.
     expect(timeToStart(sim.ctx, sim.world) / GAME_PACE).toBeCloseTo(COUNTDOWN)
-    expect(COUNTDOWN).toBe(60)
   })
 
   it('runs a race in a couple of minutes rather than ten', () => {

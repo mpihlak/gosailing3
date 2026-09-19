@@ -19,8 +19,9 @@ Three ways out, none of them another scale factor:
 
 - A boat class that genuinely sails at that speed. A foiling boat doing 25 knots makes
   speed, distance and time consistent with no adjustment anywhere.
-- A shorter course. True speeds over a 225 m beat take the same real time as the present
-  arrangement, at the cost of a cramped course and little scrolling.
+- A shorter course. Dividing the leg by the same factor as the pace takes the same real
+  time at true speeds, at the cost of a course cramped enough that a boat is a sizeable
+  part of it and there is little left to scroll.
 - Accept it and add a time-to-line instrument that does the sum correctly, so the player
   reads the answer instead of computing it.
 
