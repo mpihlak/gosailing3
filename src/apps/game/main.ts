@@ -34,6 +34,17 @@ const METERS_ACROSS = 420
  */
 const STARTING_DEBUG_RATE = 1
 
+/**
+ * The angle the laylines are drawn at: the forty-five degrees sailors use to judge a
+ * tack, rather than the polar beat angle.
+ *
+ * A boat does not travel along her heading. Leeway carries her to leeward, so where she
+ * points 37 to 43 degrees off the wind depending on the breeze, her track over the
+ * ground runs 42 to 46. Drawing the laylines at the pointing angle put them where no
+ * boat could lay the mark.
+ */
+const LAYLINE_ANGLE = 45
+
 let simulation: Simulation
 let runner: SimulationRunner
 let camera: Camera
@@ -166,6 +177,7 @@ function frame(timestamp: number): void {
     displayTime: world.time / GAME_PACE,
     panelAnchor,
     beatAngle: specOfPlayer().polar.beatAngle(wind.speed),
+    laylineAngle: LAYLINE_ANGLE,
     ...(target === undefined ? {} : { targetMark: target }),
   })
 

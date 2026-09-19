@@ -8,16 +8,18 @@ export interface CourseView {
   readonly course: Course
   readonly camera: Camera
   readonly windDirection: Degrees
-  readonly beatAngle: Degrees
+  /** The angle the laylines are drawn at, which is a track over the ground rather than
+   * a heading. */
+  readonly laylineAngle: Degrees
   readonly started: boolean
   /** The mark the player is working toward, drawn with its laylines. */
   readonly targetMark?: Mark
 }
 
 export function drawCourse(ctx: CanvasRenderingContext2D, view: CourseView): void {
-  const { course, camera, started, targetMark, windDirection, beatAngle } = view
+  const { course, camera, started, targetMark, windDirection, laylineAngle } = view
 
-  if (targetMark) drawLaylines(ctx, camera, targetMark, windDirection, beatAngle)
+  if (targetMark) drawLaylines(ctx, camera, targetMark, windDirection, laylineAngle)
 
   const startStage = course.stages.find((stage) => stage.kind === 'start')
   if (startStage?.kind === 'start') {
@@ -134,7 +136,7 @@ function drawLaylines(
   camera: Camera,
   mark: Mark,
   windDirection: Degrees,
-  beatAngle: Degrees,
+  laylineAngle: Degrees,
 ): void {
   const reach = 2500
   ctx.save()
@@ -142,7 +144,7 @@ function drawLaylines(
   ctx.lineWidth = 1
   ctx.setLineDash([10, 10])
 
-  for (const layline of laylines(mark.position, windDirection, beatAngle)) {
+  for (const layline of laylines(mark.position, windDirection, laylineAngle)) {
     const start = worldToScreen(camera, layline.origin)
     const end = worldToScreen(camera, add(layline.origin, scale(layline.extends, reach)))
     ctx.beginPath()

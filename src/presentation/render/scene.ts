@@ -22,7 +22,10 @@ export interface SceneView {
   readonly targetMark?: Mark
   readonly started: boolean
   readonly medianWindSpeed: number
+  /** The target angle the telltales are read against: a heading, from the polar. */
   readonly beatAngle: number
+  /** The angle the laylines are drawn at: a track, which is wider. */
+  readonly laylineAngle: number
   /** The player's seconds, for animation. Physics uses the world's own clock. */
   readonly displayTime: number
   /** Where screen furniture sits, measured off the instrument panel. */
@@ -43,7 +46,7 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
     course: ctx.course,
     camera,
     windDirection,
-    beatAngle: view.beatAngle,
+    laylineAngle: view.laylineAngle,
     started,
     ...(targetMark ? { targetMark } : {}),
   })
