@@ -3,6 +3,7 @@ import { distance, vec } from '@/foundation/geom'
 import { createSimulation } from './scenario'
 import { step } from './step'
 import { fixedSource, runHeadless, SimulationRunner, type InputSource } from './runner'
+import { DEFAULT_CONFIG } from './world'
 import { interpolateWorld } from './interpolate'
 import type { WorldState } from './world'
 
@@ -60,8 +61,8 @@ describe('contacts', () => {
       name: 'collision',
       seed: 'contact',
       boats: [
-        { id: 'a', name: 'Alpha', position: vec(-3, -100), heading: 0 },
-        { id: 'b', name: 'Bravo', position: vec(3, -100), heading: 0 },
+        { id: 'a', name: 'Alpha', position: vec(-1.5, -100), heading: 0 },
+        { id: 'b', name: 'Bravo', position: vec(1.5, -100), heading: 0 },
       ],
     })
 
@@ -92,18 +93,97 @@ describe('contacts', () => {
     expect(after.race.progress.b?.penalties).toBe(1)
   })
 
-  it('reports hitting a mark, and does not move the mark', () => {
+  it('lets a boat pass close by a mark without calling it a touch', () => {
+    // Five meters abeam is clear water: the old circular hull called this a collision.
+    const sim = createSimulation({
+      name: 'near miss',
+      seed: 'near',
+      boats: [{ id: 'a', name: 'Alpha', position: vec(5, 880), heading: 0 }],
+      course: { legLength: 900, lineLength: 400, startCenter: vec(0, 0) },
+    })
+    const { events } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 120 })
+    expect(events.filter((event) => event.kind === 'contact')).toHaveLength(0)
+  })
+
+  it('pushes the mark aside rather than bouncing the boat off it', () => {
+    // Running down onto the mark from upwind, which is an angle she can actually sail.
+    const sim = createSimulation({
+      name: 'mark brush',
+      seed: 'brush',
+      boats: [{ id: 'a', name: 'Alpha', position: vec(0, 940), heading: 180 }],
+      course: { legLength: 900, lineLength: 400, startCenter: vec(0, 0) },
+    })
+    // Dead downwind is slow going: forty seconds to run the length of the approach.
+    const { world, events } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 40 })
+
+    expect(events.filter((event) => event.kind === 'contact')).toHaveLength(1)
+    expect(world.race.progress.a?.penalties).toBe(1)
+    // She carries on through and out the far side, rather than being held off it.
+    expect(world.boats[0]!.position.y).toBeLessThan(890)
+    expect(Math.abs(world.boats[0]!.position.x)).toBeLessThan(6)
+  })
+
+  it('reports a boat hitting the committee boat, and stops her', () => {
+    const sim = createSimulation({
+      name: 'committee',
+      seed: 'rc',
+      // Reaching along the line straight at the committee boat on the starboard end.
+      boats: [{ id: 'a', name: 'Alpha', position: vec(160, 0), heading: 90 }],
+      course: { legLength: 900, lineLength: 400, startCenter: vec(0, 0) },
+    })
+    const { world, events } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 30 })
+
+    const contact = events.find((event) => event.kind === 'contact')
+    expect(contact).toMatchObject({ otherId: 'committee', with: 'mark' })
+    // Solid: she is held off it rather than sailing through.
+    expect(world.boats[0]!.position.x).toBeLessThan(200)
+  })
+
+  it('reports a boat hitting the pin, and lets her push it aside', () => {
+    const sim = createSimulation({
+      name: 'pin',
+      seed: 'pin',
+      boats: [{ id: 'a', name: 'Alpha', position: vec(-160, 0), heading: 270 }],
+      course: { legLength: 900, lineLength: 400, startCenter: vec(0, 0) },
+    })
+    const { events } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 30 })
+    expect(events.find((event) => event.kind === 'contact')).toMatchObject({ otherId: 'pin' })
+  })
+
+  it('lets a boat start between the ends without touching either', () => {
+    const sim = createSimulation({
+      name: 'clean start',
+      seed: 'clean',
+      // Close-hauled, which she can hold, rather than pinched into the no-go zone.
+      boats: [{ id: 'a', name: 'Alpha', position: vec(0, -50), heading: 45 }],
+      course: { legLength: 900, lineLength: 400, startCenter: vec(0, 0) },
+      config: { startSequence: 0 },
+    })
+    const { events } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 40 })
+    expect(events.filter((event) => event.kind === 'contact')).toHaveLength(0)
+    expect(events.some((event) => event.kind === 'boatStarted')).toBe(true)
+  })
+
+  it('costs less speed to brush a mark than to hit another boat', () => {
+    expect(DEFAULT_CONFIG.markContactSpeedLoss).toBeLessThan(DEFAULT_CONFIG.contactSpeedLoss)
+  })
+
+  it('names the mark it touched, and leaves the mark where it was', () => {
     const sim = createSimulation({
       name: 'mark hit',
       seed: 'mark',
-      boats: [{ id: 'a', name: 'Alpha', position: vec(0, 899), heading: 0 }],
+      boats: [{ id: 'a', name: 'Alpha', position: vec(0, 899), heading: 180 }],
       course: { legLength: 900, lineLength: 400, startCenter: vec(0, 0) },
     })
     const { events, world } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 5 })
-    const contact = events.find((event) => event.kind === 'contact')
-    expect(contact).toMatchObject({ with: 'mark', otherId: 'windward' })
+
+    expect(events.find((event) => event.kind === 'contact')).toMatchObject({
+      with: 'mark',
+      otherId: 'windward',
+    })
     expect(sim.ctx.course.marks[0]!.position).toEqual(vec(0, 900))
-    expect(distance(world.boats[0]!.position, vec(0, 900))).toBeGreaterThan(6)
+    // Soft: she is not shoved clear of it the moment they touch.
+    expect(distance(world.boats[0]!.position, vec(0, 900))).toBeLessThan(3)
   })
 })
 

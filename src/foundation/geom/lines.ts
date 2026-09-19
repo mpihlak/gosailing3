@@ -66,3 +66,62 @@ export function segmentCrossing(
     direction: Math.sign(sideOfLine(segment.from, segment.to, pathStart)),
   }
 }
+
+export interface ClosestPoints {
+  readonly distance: Meters
+  readonly onFirst: Vec2
+  readonly onSecond: Vec2
+}
+
+/**
+ * The nearest points on two segments, and how far apart they are. A hull is long and
+ * thin, so treating it as its centreline plus a radius measures contact far better than
+ * a circle around its middle does.
+ *
+ * Follows the standard clamped-parameter solution: solve for the closest points on the
+ * infinite lines, clamp each to its segment, and re-solve the other against the clamp.
+ */
+export function closestBetweenSegments(first: Segment, second: Segment): ClosestPoints {
+  const EPSILON = 1e-12
+  const d1 = sub(first.to, first.from)
+  const d2 = sub(second.to, second.from)
+  const between = sub(first.from, second.from)
+
+  const len1 = lengthSq(d1)
+  const len2 = lengthSq(d2)
+  const projected2 = dot(d2, between)
+
+  let s = 0
+  let t = 0
+
+  if (len1 <= EPSILON && len2 <= EPSILON) {
+    // Both degenerate to points.
+  } else if (len1 <= EPSILON) {
+    t = clampUnit(projected2 / len2)
+  } else {
+    const projected1 = dot(d1, between)
+    if (len2 <= EPSILON) {
+      s = clampUnit(-projected1 / len1)
+    } else {
+      const skew = dot(d1, d2)
+      const denominator = len1 * len2 - skew * skew
+      s = denominator !== 0 ? clampUnit((skew * projected2 - projected1 * len2) / denominator) : 0
+      t = (skew * s + projected2) / len2
+      if (t < 0) {
+        t = 0
+        s = clampUnit(-projected1 / len1)
+      } else if (t > 1) {
+        t = 1
+        s = clampUnit((skew - projected1) / len1)
+      }
+    }
+  }
+
+  const onFirst = add(first.from, scale(d1, s))
+  const onSecond = add(second.from, scale(d2, t))
+  return { distance: Math.hypot(onFirst.x - onSecond.x, onFirst.y - onSecond.y), onFirst, onSecond }
+}
+
+function clampUnit(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value
+}

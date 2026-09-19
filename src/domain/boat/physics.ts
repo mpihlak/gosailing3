@@ -4,10 +4,12 @@ import {
   normalizeBearing,
   normalizeSigned,
   scale,
+  sub,
   toRadians,
+  type Segment,
   type Vec2,
 } from '@/foundation/geom'
-import { clamp, knotsToMps, type Degrees, type Knots, type Seconds } from '@/foundation/units'
+import { clamp, knotsToMps, type Degrees, type Knots, type Meters, type Seconds } from '@/foundation/units'
 import type { WindSample } from '@/domain/wind'
 import type { BoatSpec } from './spec'
 import type { BoatInput, BoatState, Tack } from './types'
@@ -26,6 +28,20 @@ export function tackOf(twa: Degrees): Tack {
 
 export function bowPosition(state: BoatState, spec: BoatSpec): Vec2 {
   return add(state.position, scale(bearingToVector(state.heading), spec.length / 2))
+}
+
+/**
+ * The hull as a centreline and a radius. The line is shortened by the beam at each end so
+ * that the capsule it describes — line plus radius — is exactly the length of the boat.
+ */
+export function hullCentreline(state: BoatState, spec: BoatSpec): Segment {
+  const half = Math.max(0, (spec.length - spec.beam) / 2)
+  const along = scale(bearingToVector(state.heading), half)
+  return { from: sub(state.position, along), to: add(state.position, along) }
+}
+
+export function hullRadius(spec: BoatSpec): Meters {
+  return spec.beam / 2
 }
 
 export function velocityOf(state: BoatState): Vec2 {

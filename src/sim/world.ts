@@ -9,14 +9,21 @@ export interface SimConfig {
   readonly dt: Seconds
   /** How long the countdown runs before the starting gun. */
   readonly startSequence: Seconds
-  /** How much speed a boat loses when it hits something, as a fraction. */
+  /** Speed a boat loses when hulls meet, as a fraction. */
   readonly contactSpeedLoss: number
+  /**
+   * Speed lost brushing a mark. A mark is an inflatable buoy on a rope: a boat pushes it
+   * aside rather than bouncing off it, so touching one costs a nudge and a penalty under
+   * the rules, not a collision.
+   */
+  readonly markContactSpeedLoss: number
 }
 
 export const DEFAULT_CONFIG: SimConfig = {
   dt: 1 / 60,
   startSequence: 60,
   contactSpeedLoss: 0.35,
+  markContactSpeedLoss: 0.08,
 }
 
 /**

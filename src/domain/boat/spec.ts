@@ -10,8 +10,6 @@ export interface BoatSpec {
   readonly polar: Polar
   readonly length: Meters
   readonly beam: Meters
-  /** Radius used for contact, a little wider than the hull to stand in for crew nerves. */
-  readonly contactRadius: Meters
   /** Turn rate at full rudder once the boat has steerage way. */
   readonly maxTurnRate: DegreesPerSecond
   /** How quickly the turn rate answers the helm. */
@@ -34,7 +32,6 @@ export const CRUISER_35_SPEC: BoatSpec = {
   polar: createPolar(CRUISER_35),
   length: 10.7,
   beam: 3.4,
-  contactRadius: 6,
   maxTurnRate: 22,
   turnResponse: 0.7,
   steerageSpeed: 2.5,

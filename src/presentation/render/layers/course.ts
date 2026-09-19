@@ -1,4 +1,4 @@
-import { add, scale, type Vec2 } from '@/foundation/geom'
+import { add, scale, toRadians, type Vec2 } from '@/foundation/geom'
 import type { Degrees } from '@/foundation/units'
 import { laylines, lineMidpoint, type Course, type Mark, type RaceLine } from '@/domain/course'
 import { metersToPixels, worldToScreen, type Camera } from '@/presentation/view/camera'
@@ -20,7 +20,9 @@ export function drawCourse(ctx: CanvasRenderingContext2D, view: CourseView): voi
   if (targetMark) drawLaylines(ctx, camera, targetMark, windDirection, beatAngle)
 
   const startStage = course.stages.find((stage) => stage.kind === 'start')
-  if (startStage?.kind === 'start') drawStartLine(ctx, camera, startStage.line, started)
+  if (startStage?.kind === 'start') {
+    drawStartLine(ctx, camera, startStage.line, started, windDirection)
+  }
 
   for (const mark of course.marks) drawMark(ctx, camera, mark, mark === targetMark)
   for (const obstacle of course.obstacles) {
@@ -31,14 +33,19 @@ export function drawCourse(ctx: CanvasRenderingContext2D, view: CourseView): voi
   }
 }
 
+/** Length and beam of the committee boat on the water. She is a bigger vessel than the
+ * boats racing round her. */
+const COMMITTEE_LENGTH = 14
+const COMMITTEE_BEAM = 4.4
+
 function drawStartLine(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
   line: RaceLine,
   started: boolean,
+  windDirection: Degrees,
 ): void {
   const pin = worldToScreen(camera, line.from)
-  const committee = worldToScreen(camera, line.to)
 
   ctx.save()
   ctx.strokeStyle = started ? PALETTE.startLineOpen : PALETTE.startLine
@@ -46,21 +53,56 @@ function drawStartLine(
   ctx.setLineDash([8, 6])
   ctx.beginPath()
   ctx.moveTo(pin.x, pin.y)
+  const committee = worldToScreen(camera, line.to)
   ctx.lineTo(committee.x, committee.y)
   ctx.stroke()
   ctx.restore()
 
-  // The pin: a small buoy with a flag.
+  drawCommitteeBoat(ctx, camera, line.to, windDirection)
+
+  // Both ends of the line are marked the same way, because both ends are the line.
   ctx.fillStyle = PALETTE.mark
   circle(ctx, pin.x, pin.y, 5)
   ctx.fill()
+  circle(ctx, committee.x, committee.y, 4)
+  ctx.fill()
+}
 
-  // The committee boat: a rectangle lying along the line.
+/**
+ * The committee boat lies head to wind, as an anchored boat does. The line ends at the
+ * staff on her rail rather than at the vessel, so the orange dot on top of her is what
+ * the boats are actually crossing.
+ */
+function drawCommitteeBoat(
+  ctx: CanvasRenderingContext2D,
+  camera: Camera,
+  at: Vec2,
+  windDirection: Degrees,
+): void {
+  const screen = worldToScreen(camera, at)
+  const length = Math.max(18, metersToPixels(camera, COMMITTEE_LENGTH))
+  const beam = Math.max(7, metersToPixels(camera, COMMITTEE_BEAM))
+
   ctx.save()
-  ctx.translate(committee.x, committee.y)
-  ctx.rotate(Math.atan2(committee.y - pin.y, committee.x - pin.x))
+  ctx.translate(screen.x, screen.y)
+  ctx.rotate(toRadians(windDirection))
+
+  ctx.beginPath()
+  ctx.moveTo(0, -length / 2)
+  ctx.lineTo(beam / 2, -length / 5)
+  ctx.lineTo(beam / 2, length / 2.4)
+  ctx.quadraticCurveTo(0, length / 2, -beam / 2, length / 2.4)
+  ctx.lineTo(-beam / 2, -length / 5)
+  ctx.closePath()
   ctx.fillStyle = PALETTE.committee
-  ctx.fillRect(-6, -5, 22, 10)
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = PALETTE.hullOutline
+  ctx.stroke()
+
+  // A wheelhouse, so she reads as a vessel rather than a blob at a glance.
+  ctx.fillStyle = PALETTE.hullOutline
+  ctx.fillRect(-beam / 4, -length / 8, beam / 2, length / 4)
   ctx.restore()
 }
 

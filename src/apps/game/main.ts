@@ -49,7 +49,7 @@ helm.attach(canvas)
 start(randomSeed())
 requestAnimationFrame(frame)
 
-function start(seed: string): void {
+function start(seed: string, immediate = false): void {
   simulation = createSimulation(soloRace(seed))
   runner = new SimulationRunner(simulation.ctx, simulation.world)
   trails = new TrailStore()
@@ -60,16 +60,25 @@ function start(seed: string): void {
   const player = playerBoat(runner.world.boats)
   camera = createCamera(surface.viewport, player?.position ?? vec(0, 0), METERS_ACROSS)
 
+  if (immediate) {
+    running = true
+    hideOverlay()
+    return
+  }
+
   showOverlay(
     'Ready to race',
-    `The gun is in one minute. Cross the line, leave the orange mark to port, and come back through the line to finish.
-     <b>← →</b> or <b>A D</b> to steer · <b>Space</b> to start and pause · <b>R</b> for a new race`,
+    `The gun is in thirty seconds. Cross the line, leave the orange mark to port, and come
+     back through the line to finish.
+     <br /><b>← →</b> or <b>A D</b> to steer · <b>Space</b> to start and pause · <b>R</b> for a new race`,
   )
 }
 
 function handleCommand(command: HelmCommand): void {
   if (command === 'restart') {
-    start(randomSeed())
+    // Straight into the next race: restarting is what you do when you want another go,
+    // not something to be asked about.
+    start(randomSeed(), true)
     return
   }
   if (command === 'toggleRun') {

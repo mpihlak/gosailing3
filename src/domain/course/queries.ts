@@ -1,6 +1,6 @@
 import { add, bearingToVector, cross, dot, normalizeBearing, scale, sub, type Vec2 } from '@/foundation/geom'
 import type { Degrees, Meters } from '@/foundation/units'
-import type { Mark, RoundingSide } from './types'
+import type { CourseStage, Mark, RoundingSide } from './types'
 
 export interface Layline {
   readonly tack: 'port' | 'starboard'
@@ -81,4 +81,44 @@ export function sideOfMark(mark: Vec2, approach: Degrees, position: Vec2): numbe
 /** How far along the leg the boat is relative to the mark. Positive means past it. */
 export function pastMark(mark: Vec2, approach: Degrees, position: Vec2): Meters {
   return dot(sub(position, mark), bearingToVector(approach))
+}
+
+/** Something solid enough to hit, derived from the course rather than stored on it. */
+export interface CourseBody {
+  readonly id: string
+  readonly position: Vec2
+  readonly radius: Meters
+  readonly solid?: boolean
+}
+
+/** A committee boat is a vessel, and stops you. */
+const COMMITTEE_RADIUS: Meters = 5
+/** The pin is an inflatable on a rope. */
+const PIN_RADIUS: Meters = 1.5
+
+/**
+ * The ends of every line on the course. They are marks of the course in the rules and
+ * solid objects on the water, but nothing rounds them, so they are not stages and are
+ * worked out from the lines instead of being stored twice. Start and finish share their
+ * ends on a windward-leeward course, so each end is reported once.
+ */
+export function lineEndBodies(stages: readonly CourseStage[]): CourseBody[] {
+  const bodies = new Map<string, CourseBody>()
+
+  for (const stage of stages) {
+    if (stage.kind !== 'start' && stage.kind !== 'finish') continue
+    const { line } = stage
+    const pin: CourseBody = { id: 'pin', position: line.from, radius: PIN_RADIUS }
+    const committee: CourseBody = {
+      id: 'committee',
+      position: line.to,
+      radius: COMMITTEE_RADIUS,
+      solid: true,
+    }
+    for (const body of [pin, committee]) {
+      const key = `${body.id}:${Math.round(body.position.x)}:${Math.round(body.position.y)}`
+      if (!bodies.has(key)) bodies.set(key, body)
+    }
+  }
+  return [...bodies.values()]
 }

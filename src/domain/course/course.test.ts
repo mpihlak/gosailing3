@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { distance, vec } from '@/foundation/geom'
 import { createLine, crossedLine, lineBearing, lineBias, lineLength, lineMidpoint, sideOfLine } from './line'
-import { bearingAroundMark, isInZone, laylines, laylineMargin } from './queries'
+import { bearingAroundMark, isInZone, laylineMargin, laylines, lineEndBodies } from './queries'
 import { windwardLeeward } from './layouts'
 
 const pin = vec(-200, 0)
@@ -184,3 +184,39 @@ function startLineOf(course: ReturnType<typeof windwardLeeward>) {
   if (stage?.kind !== 'start') throw new Error('expected a start stage')
   return stage.line
 }
+
+describe('lineEndBodies', () => {
+  const course = windwardLeeward({
+    windDirection: 0,
+    legLength: 900,
+    lineLength: 400,
+    startCenter: vec(0, 0),
+  })
+  const bodies = lineEndBodies(course.stages)
+
+  it('puts something solid at each end of the line', () => {
+    expect(bodies.map((body) => body.id).sort()).toEqual(['committee', 'pin'])
+  })
+
+  it('places them on the ends of the line itself', () => {
+    expect(bodies.find((body) => body.id === 'pin')?.position.x).toBeCloseTo(-200)
+    expect(bodies.find((body) => body.id === 'committee')?.position.x).toBeCloseTo(200)
+  })
+
+  it('makes the committee boat solid and the pin a buoy', () => {
+    expect(bodies.find((body) => body.id === 'committee')?.solid).toBe(true)
+    expect(bodies.find((body) => body.id === 'pin')?.solid).toBeUndefined()
+    expect(bodies.find((body) => body.id === 'committee')!.radius).toBeGreaterThan(
+      bodies.find((body) => body.id === 'pin')!.radius,
+    )
+  })
+
+  it('reports each end once, though the start and finish share them', () => {
+    expect(course.stages.filter((stage) => stage.kind === 'start' || stage.kind === 'finish')).toHaveLength(2)
+    expect(bodies).toHaveLength(2)
+  })
+
+  it('finds nothing on a course with no lines', () => {
+    expect(lineEndBodies([])).toEqual([])
+  })
+})

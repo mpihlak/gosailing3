@@ -58,8 +58,10 @@ does the rest.
 **course** holds marks, lines and the ordered list of stages to sail. A different course
 shape is a different list of stages, not new code in the race logic.
 
-**collision** reports overlaps. What a contact costs is a racing question, decided in
-`sim`.
+**collision** reports overlaps. A hull is a capsule — its centreline plus half its beam —
+because a boat is three times longer than it is wide and a circle round its middle is
+wrong in both directions at once. Marks and obstacles are discs, and each says whether it
+is solid or gives way. What a contact costs is a racing question, decided in `sim`.
 
 ### sim
 

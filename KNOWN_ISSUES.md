@@ -32,14 +32,14 @@ so it is recorded rather than called a fault.
 
 ## The AI clips marks
 
-The skipper touches the mark it is rounding in roughly one race in five: 3 of 14 in a sweep
-across seeds, wind speeds and lap counts. It costs a penalty and a third of the boat's
+The skipper touches the mark it is rounding in about one race in eight: 5 of 40 across
+eight seeds and five wind speeds, all of which finish. It costs a penalty and a little
 speed, and it looks careless.
 
-`ROUNDING_OFFSET` (`src/agents/ai/navigator.ts:22`) is the width the AI aims to leave, and
-24 m is not always enough once the boat's turn radius and leeway are taken into account. A
-fixed clearance is the wrong shape for the problem: what is needed scales with speed and
-turn rate. This is worth tuning in the lab rather than by guessing at the constant.
+`ROUNDING_OFFSET` in `src/agents/ai/navigator.ts` is the width the AI aims to leave. A
+fixed clearance is the wrong shape for the problem: what is needed scales with how fast
+the boat is going and how hard she is turning. This is worth tuning in the lab rather than
+by guessing at the constant.
 
 ## The HUD and the renderer have no tests
 

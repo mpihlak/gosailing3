@@ -1,6 +1,14 @@
 import { add } from '@/foundation/geom'
-import { stepBoat, type BoatInput, type BoatState, NEUTRAL_INPUT } from '@/domain/boat'
-import { detectContacts, separationFor, type Body, type Contact } from '@/domain/collision'
+import {
+  hullCentreline,
+  hullRadius,
+  stepBoat,
+  type BoatInput,
+  type BoatState,
+  NEUTRAL_INPUT,
+} from '@/domain/boat'
+import { detectContacts, separationFor, type Contact, type Hull } from '@/domain/collision'
+import { lineEndBodies } from '@/domain/course'
 import { addPenalty, stepRace } from './race'
 import type { TimedEvent } from './events'
 import type { InputFrame, SimContext, WorldState } from './world'
@@ -96,20 +104,24 @@ function resolveContacts(
   boats: readonly BoatState[],
   ongoing: readonly string[],
 ): ContactResolution {
-  const bodies: Body[] = boats.map((boat) => ({
-    id: boat.id,
-    position: boat.position,
-    radius: specFor(ctx, boat.id).contactRadius,
-  }))
+  const hulls: Hull[] = boats.map((boat) => {
+    const spec = specFor(ctx, boat.id)
+    return { id: boat.id, centreline: hullCentreline(boat, spec), radius: hullRadius(spec) }
+  })
 
   const contacts = detectContacts({
-    boats: bodies,
-    marks: ctx.course.marks.map((mark) => ({
-      id: mark.id,
-      position: mark.position,
-      radius: mark.radius,
-    })),
-    obstacles: ctx.course.obstacles,
+    boats: hulls,
+    // Rounding marks and the ends of the start line alike: all of them are marks of the
+    // course, and all of them can be hit.
+    marks: [
+      ...ctx.course.marks.map((mark) => ({
+        id: mark.id,
+        position: mark.position,
+        radius: mark.radius,
+      })),
+      ...lineEndBodies(ctx.course.stages),
+    ],
+    obstacles: ctx.course.obstacles.map((obstacle) => ({ ...obstacle, solid: true })),
   })
 
   if (contacts.length === 0) {
@@ -123,11 +135,17 @@ function resolveContacts(
     const other = byId.get(contact.otherId)
     const shared = other !== undefined
     const isNew = !ongoing.includes(keyOf(contact))
-    const slowing = isNew ? 1 - ctx.config.contactSpeedLoss : 1
+    const soft = contact.soft
+    const loss = soft ? ctx.config.markContactSpeedLoss : ctx.config.contactSpeedLoss
+    // Something solid goes on taking the way off a boat for as long as she leans on it,
+    // or she grinds straight through: separating her by the overlap each tick does not
+    // touch the speed that put her there. A buoy only charges her once, on the way past —
+    // repeating that pinned boats motionless against marks.
+    const slowing = isNew || !soft ? 1 - loss : 1
 
     byId.set(contact.boatId, {
       ...boat,
-      position: add(boat.position, separationFor(contact, shared)),
+      position: soft ? boat.position : add(boat.position, separationFor(contact, shared)),
       speed: boat.speed * slowing,
     })
     if (other) {

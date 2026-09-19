@@ -11,7 +11,7 @@ import {
 } from '@/foundation/geom'
 import type { Degrees, Meters } from '@/foundation/units'
 import type { BoatSpec, BoatState } from '@/domain/boat'
-import { lineMidpoint, sideOfMark, type CourseStage, type RaceLine } from '@/domain/course'
+import { lineMidpoint, pastMark, sideOfMark, type CourseStage, type RaceLine } from '@/domain/course'
 import type { WindSample } from '@/domain/wind'
 import { raceTime, type SimContext, type WorldState } from '@/sim'
 
@@ -110,11 +110,17 @@ function planMark(
   // sailing angles she has not got.
   const required = mark.rounding === 'port' ? -1 : 1
   const onApproachSide = Math.sign(sideOfMark(mark.position, approach, boat.position)) === required
+  const alreadyPast = pastMark(mark.position, approach, boat.position) > 0
+
+  // A boat that slipped by on the wrong side, or overshot the mark without the pass
+  // counting, has to drop back downwind and come at it again. Without this she sits on a
+  // target she has already reached and waits for a rounding that cannot happen.
+  const mustComeAgain = !passedMark && (alreadyPast || !onApproachSide)
 
   const target = !passedMark
-    ? onApproachSide
-      ? offMark(ROUNDING_OFFSET, ROUNDING_OFFSET) // past the mark, correct side
-      : offMark(ROUNDING_OFFSET * 2, -ROUNDING_OFFSET * 3) // get onto that side first
+    ? mustComeAgain
+      ? offMark(ROUNDING_OFFSET * 2, -ROUNDING_OFFSET * 3) // back below the mark, correct side
+      : offMark(ROUNDING_OFFSET, ROUNDING_OFFSET) // up past it, correct side
     : onApproachSide
       ? offMark(-ROUNDING_OFFSET, ROUNDING_OFFSET * 1.3) // cross over, well clear to windward
       : offMark(-ROUNDING_OFFSET, -ROUNDING_OFFSET * 4) // away onto the next leg
