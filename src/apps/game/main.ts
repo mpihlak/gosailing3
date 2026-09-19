@@ -47,7 +47,6 @@ let timeScale = STARTING_RATE
  * it happens to be now would rewrite the part already sailed.
  */
 let wallClockSinceGun = 0
-let wallClockAtFinish = 0
 
 const helm = new Helm({ onCommand: handleCommand })
 helm.attach(canvas)
@@ -62,7 +61,6 @@ function start(seed: string): void {
   running = false
   timeScale = STARTING_RATE
   wallClockSinceGun = 0
-  wallClockAtFinish = 0
 
   const surface = resizeSurface(canvas)
   const player = playerBoat(runner.world.boats)
@@ -161,11 +159,11 @@ function updateInstruments(player: BoatState, windDirection: number, windSpeed: 
     windSpeed,
     vmg: Math.abs(velocityMadeGood(player.speed, player.twa)),
     polarRatio: target > 0.1 ? clamp(player.speed / target, 0, 1.5) : 0,
-    // Shown in real seconds. What is left of the countdown depends on the rate it will
-    // be run off at, so it is projected; what has already gone is what was actually sat
-    // through.
-    timeToStart: timeToStart(simulation.ctx, runner.world) / timeScale,
-    raceTime: wallClockSinceGun,
+    // Sailing seconds, so the clock agrees with the distance to the line and the boat
+    // speed beside it. A countdown scaled to the playback rate reads fifteen seconds
+    // while the line is still half a minute of water away, and times the start wrong.
+    timeToStart: timeToStart(simulation.ctx, runner.world),
+    raceTime: raceTime(simulation.ctx, runner.world),
     status: statusText(),
     timeScale,
     ...(toLine === undefined ? {} : { distanceToLine: toLine }),
@@ -200,12 +198,11 @@ function announce(event: TimedEvent): void {
     case 'contact':
       return hud.showBanner(`Contact with the ${event.otherId}`, 'warn')
     case 'boatFinished': {
-      wallClockAtFinish = wallClockSinceGun
       const sailed = runner.world.race.progress[PLAYER_ID]?.finishTime ?? 0
       running = false
       showOverlay(
         'Finished',
-        `<b>${wallClockAtFinish.toFixed(1)}s</b> of your time, at ${formatRate(timeScale)}.
+        `<b>${wallClockSinceGun.toFixed(1)}s</b> of your time, at ${formatRate(timeScale)}.
          That is <b>${clock(sailed)}</b> of sailing. Press <b>R</b> to race again.`,
       )
       return

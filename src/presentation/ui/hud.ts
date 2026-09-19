@@ -12,9 +12,9 @@ export interface Instruments {
   /** Boat speed as a fraction of what the polar says is available. */
   readonly polarRatio: number
   /**
-   * Both clocks are wall-clock seconds: what the player actually waits and sits through,
-   * not the sailing time the simulation has covered. At four times speed a minute to the
-   * gun is fifteen seconds of it.
+   * Sailing seconds, not the seconds the player sits through. The clock has to agree
+   * with the boat speed and the distance to the line for a start to be timed against it,
+   * and those are in knots and meters however fast the race is being played.
    */
   readonly timeToStart: Seconds
   readonly raceTime: Seconds
