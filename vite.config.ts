@@ -1,7 +1,15 @@
 import { defineConfig } from 'vitest/config'
 import { resolve } from 'node:path'
 
-export default defineConfig({
+/**
+ * GitHub Pages serves a project site from a subdirectory, so a built page has to ask for
+ * its assets under that path. The dev server keeps serving from the root, where it is
+ * the only thing on the host.
+ */
+const PAGES_BASE = '/gosailing3/'
+
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? PAGES_BASE : '/',
   resolve: {
     alias: { '@': resolve(import.meta.dirname, 'src') },
   },
@@ -23,4 +31,4 @@ export default defineConfig({
       exclude: ['src/**/*.test.ts', 'src/apps/**', 'src/presentation/render/**'],
     },
   },
-})
+}))
