@@ -25,7 +25,11 @@ interface Track {
 }
 
 /** Walk one or more boats along a path, one position per tick, and collect what happens. */
-function sail(tracks: readonly Track[], raceTimeAt: (step: number) => number) {
+function sail(
+  tracks: readonly Track[],
+  raceTimeAt: (step: number) => number,
+  course: Course = COURSE,
+) {
   const ids = tracks.map((track) => track.id)
   let race: RaceState = createRaceState(ids)
   const events: SimEvent[] = []
@@ -39,7 +43,7 @@ function sail(tracks: readonly Track[], raceTimeAt: (step: number) => number) {
       boatAt(track.id, track.path[Math.min(i, track.path.length - 1)]!, track.heading),
     )
     const result = stepRace(race, {
-      course: COURSE,
+      course,
       specs: SPECS,
       previous,
       current,
@@ -348,5 +352,102 @@ describe('bookkeeping', () => {
       raceTime: 5,
     })
     expect(events.filter((event) => event.kind === 'tacked')).toHaveLength(0)
+  })
+})
+
+/**
+ * Rule 28.1: a boat sails the course when a string representing her track, drawn taut,
+ * passes each mark of the course on the required side and in the correct order, and a
+ * mark that does not bound the leg she is sailing has no required side at all.
+ */
+describe('the string rule at a mark', () => {
+  const TWO_LAPS = windwardLeeward({
+    windDirection: 0,
+    legLength: 900,
+    lineLength: 400,
+    startCenter: vec(0, 0),
+    laps: 2,
+  })
+  const LEEWARD = TWO_LAPS.marks[1]!.position
+
+  function started(path: Vec2[]): Track[] {
+    return [{ id: 'a', path: [vec(0, -40), vec(0, 40), ...path] }]
+  }
+
+  it('does not round a mark the boat merely passes on the required side', () => {
+    // Up the correct side of the mark and away north. The string passes it on the right
+    // side but never goes round it, so the leg is not complete.
+    const straightPast = [offMark(135, 60), offMark(90, 30), offMark(45, 40), offMark(20, 200)]
+    const { race } = sail(started(straightPast), () => 5)
+    expect(race.progress.a?.stageIndex).toBe(1)
+    expect(race.progress.a?.passedMark).toBe(true) // half round, and no further
+  })
+
+  it('lets a boat who went by on the wrong side come back and do it properly', () => {
+    // Wrong side first, which counts for nothing, then a proper rounding. Drawn taut the
+    // string unwinds the first excursion and passes the mark correctly.
+    const wrongThenRight = [
+      offMark(225, 60), offMark(270, 40), offMark(225, 60), // up the wrong side and back
+      offMark(135, 50), offMark(90, 30), offMark(30, 30), offMark(300, 30), offMark(225, 60),
+    ]
+    const { race, events } = sail(started(wrongThenRight), () => 5)
+    expect(events.filter((event) => event.kind === 'markRounded')).toHaveLength(1)
+    expect(race.progress.a?.stageIndex).toBe(2)
+  })
+
+  it('does not undo a rounding if the boat circles the mark again', () => {
+    // An extra turn, as a penalty turn would be. The mark is behind her and belongs to a
+    // leg she has finished, so it no longer has a required side.
+    const roundTwice = [...roundingPath(), ...roundingPath()]
+    const { race, events } = sail(started(roundTwice), () => 5)
+    expect(events.filter((event) => event.kind === 'markRounded')).toHaveLength(1)
+    expect(race.progress.a?.stageIndex).toBe(2)
+  })
+
+  it('ignores a mark that does not bound the leg she is sailing', () => {
+    // Beating to the windward mark, she passes the leeward mark on what would be the
+    // wrong side were she rounding it. It bounds a later leg, so it has no required side
+    // here and nothing about it counts.
+    const byTheLeewardMark = [
+      vec(LEEWARD.x + 30, LEEWARD.y - 40),
+      vec(LEEWARD.x + 30, LEEWARD.y + 40),
+      vec(0, 300),
+    ]
+    const { race, events } = sail(started(byTheLeewardMark), () => 5, TWO_LAPS)
+    expect(events.filter((event) => event.kind === 'markRounded')).toHaveLength(0)
+    expect(race.progress.a?.stageIndex).toBe(1) // still on the first beat
+  })
+
+  it('requires the marks in the order the course sets', () => {
+    // She rounds the leeward mark first, which is the second mark of the course. It is
+    // not the mark bounding her leg, so it does nothing for her.
+    const leewardFirst = [
+      vec(LEEWARD.x + 60, LEEWARD.y - 60),
+      vec(LEEWARD.x + 30, LEEWARD.y),
+      vec(LEEWARD.x, LEEWARD.y + 30),
+      vec(LEEWARD.x - 30, LEEWARD.y),
+      vec(LEEWARD.x - 60, LEEWARD.y - 60),
+    ]
+    const { race } = sail(started(leewardFirst), () => 5, TWO_LAPS)
+    expect(race.progress.a?.stageIndex).toBe(1)
+  })
+
+  it('rounds the two marks of a lap in turn', () => {
+    // Running down to the leeward mark, leaving it to port means passing to the west of
+    // it, then coming back up its eastern side onto the next beat.
+    const bothMarks = [
+      ...roundingPath(),
+      vec(LEEWARD.x - 60, LEEWARD.y + 80),
+      vec(LEEWARD.x - 25, LEEWARD.y + 20),
+      vec(LEEWARD.x - 15, LEEWARD.y - 25),
+      vec(LEEWARD.x + 20, LEEWARD.y - 20),
+      vec(LEEWARD.x + 25, LEEWARD.y + 40),
+    ]
+    const { race, events } = sail(started(bothMarks), () => 5, TWO_LAPS)
+    expect(events.filter((event) => event.kind === 'markRounded').map((e) => e.markId)).toEqual([
+      'windward',
+      'leeward',
+    ])
+    expect(race.progress.a?.stageIndex).toBe(3) // back onto the second beat
   })
 })
