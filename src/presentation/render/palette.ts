@@ -13,10 +13,14 @@ export const PALETTE = {
   committee: '#dfe6ec',
   hull: '#f2f6f9',
   hullRival: '#9fb6c6',
+  // Muted rather than pillar-box: an opponent should be easy to pick out at a glance
+  // without pulling the eye off your own boat.
+  hullOpponent: '#c4655c',
   hullOutline: '#0b2233',
   sail: '#ffffff',
   trail: 'rgba(255, 255, 255, 0.34)',
   trailRival: 'rgba(160, 190, 210, 0.22)',
+  trailOpponent: 'rgba(196, 101, 92, 0.3)',
   penalty: '#ff5d5d',
   // The sides a sailor already knows by their lights: green to starboard, red to port.
   telltaleStarboard: '#4ade80',

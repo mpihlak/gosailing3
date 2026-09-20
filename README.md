@@ -28,8 +28,9 @@ npm run dev      # http://localhost:5173
 | R | A new race, with a new wind |
 | H | Controls |
 
-The gun is a minute after you start. Cross the line, leave the orange mark to port, and
-come back through the line to finish. Crossing early means going back and crossing again.
+The gun is thirty seconds after you start. Cross the line, leave the orange mark to port,
+and come back through the line to finish. You start alongside one opponent, lying stern to
+stern with you on the other tack. Crossing early means going back and crossing again.
 
 The wind shifts, blows harder on one side of the course than the other, and carries gusts
 down it. One end of the start line is favored. Both are worth watching.

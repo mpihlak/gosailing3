@@ -5,7 +5,7 @@ import type { Camera } from '@/presentation/view/camera'
 import { drawWater } from './layers/water'
 import { drawWindField } from './layers/wind'
 import { drawCourse } from './layers/course'
-import { drawBoats, type TrailStore } from './layers/boats'
+import { drawBoats, type BoatStyle, type TrailStore } from './layers/boats'
 import {
   drawTelltales,
   telltalesApply,
@@ -18,6 +18,8 @@ export interface SceneView {
   readonly world: WorldState
   readonly camera: Camera
   readonly trails: TrailStore
+  readonly styles: Readonly<Record<BoatId, BoatStyle>>
+  /** Whose instruments are on screen. The telltales are read from her boat. */
   readonly playerId?: BoatId
   readonly targetMark?: Mark
   readonly started: boolean
@@ -50,13 +52,7 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
     started,
     ...(targetMark ? { targetMark } : {}),
   })
-  drawBoats(canvas, {
-    camera,
-    boats: world.boats,
-    specs: ctx.specs,
-    trails,
-    ...(playerId ? { playerId } : {}),
-  })
+  drawBoats(canvas, { camera, boats: world.boats, specs: ctx.specs, trails, styles: view.styles })
 
   // Screen furniture rather than something on the water, so it goes on last.
   const player = playerId ? world.boats.find((boat) => boat.id === playerId) : undefined

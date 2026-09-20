@@ -39,23 +39,38 @@ export class TrailStore {
   }
 }
 
+/** How one boat is drawn. Everything that distinguishes a hull on the water is here. */
+export interface BoatStyle {
+  readonly hull: string
+  readonly trail: string
+  readonly trailWidth: number
+}
+
+const ANONYMOUS: BoatStyle = {
+  hull: PALETTE.hullRival,
+  trail: PALETTE.trailRival,
+  trailWidth: 1.5,
+}
+
 export interface BoatView {
   readonly camera: Camera
   readonly boats: readonly BoatState[]
   readonly specs: Readonly<Record<BoatId, BoatSpec>>
   readonly trails: TrailStore
-  readonly playerId?: BoatId
+  /** A style per boat. A boat without one is drawn as an anonymous competitor. */
+  readonly styles: Readonly<Record<BoatId, BoatStyle>>
 }
 
 export function drawBoats(ctx: CanvasRenderingContext2D, view: BoatView): void {
-  const { camera, boats, specs, trails, playerId } = view
+  const { camera, boats, specs, trails, styles } = view
 
+  // Trails first, all of them, so no boat's wake is drawn over another's hull.
   for (const boat of boats) {
-    drawTrail(ctx, camera, trails.of(boat.id), boat.id === playerId)
+    drawTrail(ctx, camera, trails.of(boat.id), styles[boat.id] ?? ANONYMOUS)
   }
   for (const boat of boats) {
     const spec = specs[boat.id]
-    if (spec) drawHull(ctx, camera, boat, spec, boat.id === playerId)
+    if (spec) drawHull(ctx, camera, boat, spec, styles[boat.id] ?? ANONYMOUS)
   }
 }
 
@@ -63,12 +78,12 @@ function drawTrail(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
   trail: readonly Vec2[],
-  isPlayer: boolean,
+  style: BoatStyle,
 ): void {
   if (trail.length < 2) return
   ctx.save()
-  ctx.strokeStyle = isPlayer ? PALETTE.trail : PALETTE.trailRival
-  ctx.lineWidth = isPlayer ? 2 : 1.5
+  ctx.strokeStyle = style.trail
+  ctx.lineWidth = style.trailWidth
   ctx.beginPath()
   trail.forEach((point, index) => {
     const screen = worldToScreen(camera, point)
@@ -84,7 +99,7 @@ function drawHull(
   camera: Camera,
   boat: BoatState,
   spec: BoatSpec,
-  isPlayer: boolean,
+  style: BoatStyle,
 ): void {
   const screen = worldToScreen(camera, boat.position)
   const length = Math.max(10, metersToPixels(camera, spec.length))
@@ -103,7 +118,7 @@ function drawHull(
   ctx.lineTo(-beam / 2, -length / 8)
   ctx.closePath()
 
-  ctx.fillStyle = isPlayer ? PALETTE.hull : PALETTE.hullRival
+  ctx.fillStyle = style.hull
   ctx.fill()
   ctx.lineWidth = 1
   ctx.strokeStyle = PALETTE.hullOutline

@@ -2,6 +2,7 @@ import { vec } from '@/foundation/geom'
 import { bowPosition, type BoatState } from '@/domain/boat'
 import { distanceToLine, type Mark } from '@/domain/course'
 import {
+  type InputSource,
   createSimulation,
   interpolateWorld,
   raceTime,
@@ -11,11 +12,12 @@ import {
   type TimedEvent,
 } from '@/sim'
 import { createCamera, follow, type Camera } from '@/presentation/view/camera'
-import { drawScene, resizeSurface, TrailStore } from '@/presentation/render'
+import { drawScene, PALETTE, resizeSurface, TrailStore, type BoatStyle } from '@/presentation/render'
 import { Helm, type HelmCommand } from '@/presentation/input'
 import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
 import { clock, Hud, targetVmgRatio, velocityMadeGood } from '@/presentation/ui'
-import { GAME_PACE, PLAYER_ID, randomSeed, soloRace } from './scenario'
+import { Skipper } from '@/agents/ai'
+import { duel, GAME_PACE, PLAYER_ID, randomSeed } from './scenario'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
 const hud = new Hud(
@@ -45,10 +47,19 @@ const STARTING_DEBUG_RATE = 1
  */
 const LAYLINE_ANGLE = 45
 
+const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hull, trail: PALETTE.trail, trailWidth: 2 }
+
+/** Colors for the boats the player is racing against, handed out in order. */
+const OPPONENT_STYLES: BoatStyle[] = [
+  { hull: PALETTE.hullOpponent, trail: PALETTE.trailOpponent, trailWidth: 1.5 },
+]
+
 let simulation: Simulation
 let runner: SimulationRunner
 let camera: Camera
 let trails = new TrailStore()
+let sources: Record<string, InputSource> = {}
+let styles: Record<string, BoatStyle> = {}
 let running = false
 let lastFrame = 0
 let debugRate = STARTING_DEBUG_RATE
@@ -63,9 +74,11 @@ start(randomSeed())
 requestAnimationFrame(frame)
 
 function start(seed: string, immediate = false): void {
-  simulation = createSimulation(soloRace(seed))
+  simulation = createSimulation(duel(seed))
   runner = new SimulationRunner(simulation.ctx, simulation.world)
   trails = new TrailStore()
+  sources = helmsFor(simulation)
+  styles = stylesFor(simulation)
   running = false
   debugRate = STARTING_DEBUG_RATE
 
@@ -149,7 +162,7 @@ function frame(timestamp: number): void {
     // Scale the catch-up cap alongside the rate, or running fast would be throttled by
     // the stall guard rather than by the rate itself.
     const pace = GAME_PACE * debugRate
-    const events = runner.advance(elapsed * pace, { [PLAYER_ID]: helm }, 0.25 * pace)
+    const events = runner.advance(elapsed * pace, sources, 0.25 * pace)
     for (const event of events) announce(event)
   }
 
@@ -172,6 +185,7 @@ function frame(timestamp: number): void {
     camera,
     trails,
     playerId: PLAYER_ID,
+    styles,
     started: raceTime(simulation.ctx, world) >= 0,
     medianWindSpeed: simulation.wind.median.speed,
     displayTime: world.time / GAME_PACE,
@@ -218,7 +232,39 @@ function statusText(): string {
   return 'To the finish'
 }
 
+/**
+ * Who steers which boat. A boat left out of this sails on whatever helm she was given
+ * and no more, which is what an idle competitor does.
+ */
+function helmsFor(sim: Simulation): Record<string, InputSource> {
+  const helms: Record<string, InputSource> = {}
+  for (const [boatId, controller] of Object.entries(sim.controllers)) {
+    if (controller === 'human') helms[boatId] = helm
+    if (controller === 'ai') helms[boatId] = new Skipper()
+  }
+  return helms
+}
+
+function stylesFor(sim: Simulation): Record<string, BoatStyle> {
+  const assigned: Record<string, BoatStyle> = {}
+  let opponent = 0
+  for (const boat of sim.world.boats) {
+    if (boat.id === PLAYER_ID) {
+      assigned[boat.id] = PLAYER_STYLE
+    } else {
+      assigned[boat.id] = OPPONENT_STYLES[opponent % OPPONENT_STYLES.length] as BoatStyle
+      opponent++
+    }
+  }
+  return assigned
+}
+
 function announce(event: TimedEvent): void {
+  // An event that names a boat is only news when it names this one. Without this the
+  // player is told about a rival's mark rounding, and handed a finish card when she
+  // crosses the line.
+  if ('boatId' in event && event.boatId !== PLAYER_ID) return
+
   switch (event.kind) {
     case 'raceStarted':
       return hud.showBanner('Go!', 'good', 1600)
@@ -235,7 +281,11 @@ function announce(event: TimedEvent): void {
     case 'boatFinished': {
       const elapsed = (runner.world.race.progress[PLAYER_ID]?.finishTime ?? 0) / GAME_PACE
       running = false
-      showOverlay('Finished', `Elapsed <b>${clock(elapsed)}</b>. Press <b>R</b> to race again.`)
+      showOverlay(
+        'Finished',
+        `Elapsed <b>${clock(elapsed)}</b>.
+         <br /><b>Space</b> to carry on watching · <b>R</b> to race again.`,
+      )
       return
     }
     default:
