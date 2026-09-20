@@ -4,12 +4,19 @@ import { clamp, smoothstep, type Degrees, type Seconds } from '@/foundation/unit
 import { shadowHalfWidth, shadowReach, type Shadower, type ShadowReach } from '@/domain/wind'
 import { isVisible, metersToPixels, worldToScreen, type Camera } from '@/presentation/view/camera'
 
-/** Wisps drawn per boat. Enough to read as a stream, few enough to cost nothing. */
-const WISPS = 54
+/** Wisps drawn per boat. Enough to read as haze rather than as a row of dots. */
+const WISPS = 130
 /** How long a wisp takes to travel the length of the shadow. */
 const DRIFT: Seconds = 3.4
 /** How far a wisp wanders across the stream as it goes. */
-const WANDER = 0.14
+const WANDER = 0.2
+/**
+ * How strongly they gather down the middle of the stream. One would scatter them evenly
+ * and leave the middle looking thin; three drew them up in a line down the centre.
+ */
+const GATHERING = 1.5
+/** How much of one wisp shows. They are meant to read together, not one by one. */
+const OPACITY = 0.13
 
 /**
  * The water a boat takes the wind out of, drawn as the dirty air itself: wisps leaving
@@ -25,8 +32,8 @@ export function drawShadows(
   windDirection: Degrees,
   time: Seconds,
 ): void {
+  const wisp = softWisp()
   ctx.save()
-  ctx.fillStyle = 'rgba(176, 198, 192, 1)'
 
   for (const shadower of shadowers) {
     const reach = shadowReach(shadower)
@@ -43,8 +50,8 @@ export function drawShadows(
     // downwind — where the dirty air goes — is below her.
     ctx.rotate(toRadians(windDirection))
 
-    for (let wisp = 0; wisp < WISPS; wisp++) {
-      drawWisp(ctx, camera, shadower, reach, wisp, time, aft, forward)
+    for (let index = 0; index < WISPS; index++) {
+      drawWisp(ctx, wisp, camera, shadower, reach, index, time, aft, forward)
     }
     ctx.restore()
   }
@@ -59,6 +66,7 @@ function seed(shadower: Shadower, wisp: number, salt: string): number {
 
 function drawWisp(
   ctx: CanvasRenderingContext2D,
+  sprite: CanvasImageSource,
   camera: Camera,
   shadower: Shadower,
   reach: ShadowReach,
@@ -72,9 +80,10 @@ function drawWisp(
   const carried = (phase + time / DRIFT) % 1
   const fraction = -1 + 2 * carried
 
-  // Its place across the stream holds as the stream widens, so the wisps fan out. Cubed,
-  // to gather them down the middle rather than spread them evenly.
-  const offset = (2 * seed(shadower, wisp, 'across') - 1) ** 3
+  // Its place across the stream holds as the stream widens, so the wisps fan out, with a
+  // gentle gathering toward the middle.
+  const lateral = 2 * seed(shadower, wisp, 'across') - 1
+  const offset = Math.sign(lateral) * Math.abs(lateral) ** GATHERING
   const wander = Math.sin(time * 1.7 + phase * Math.PI * 2) * WANDER
   const across = clamp(offset + wander, -1, 1)
 
@@ -86,11 +95,40 @@ function drawWisp(
   const x = across * spread * halfWidth
   const y = fraction >= 0 ? fraction * aft : fraction * forward
 
-  // They swell as they go, the way anything carried on the wind spreads out.
-  const size = metersToPixels(camera, 1.1 + 2.2 * Math.max(0, fraction))
+  // They swell as they go, the way anything carried on the wind spreads out, and no two
+  // are the same size, so the stream does not read as a row of identical dots.
+  const scale = 0.6 + 1.1 * seed(shadower, wisp, 'size')
+  const size = Math.max(1.5, metersToPixels(camera, scale * (2.2 + 4 * Math.max(0, fraction))))
 
-  ctx.globalAlpha = strength * 0.38
-  ctx.beginPath()
-  ctx.arc(x, y, Math.max(0.6, size), 0, Math.PI * 2)
-  ctx.fill()
+  ctx.globalAlpha = strength * OPACITY * (0.55 + 0.9 * seed(shadower, wisp, 'weight'))
+  ctx.drawImage(sprite, x - size, y - size, size * 2, size * 2)
+}
+
+let sprite: HTMLCanvasElement | undefined
+
+/**
+ * One soft blob, drawn once and stamped for every wisp. A hard-edged circle reads as a
+ * bubble however faint it is; what makes it look like air is the edge going nowhere.
+ */
+function softWisp(): CanvasImageSource {
+  if (sprite) return sprite
+
+  const size = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+
+  const paint = canvas.getContext('2d')
+  if (!paint) throw new Error('this browser has no 2d canvas context')
+
+  const middle = size / 2
+  const haze = paint.createRadialGradient(middle, middle, 0, middle, middle, middle)
+  haze.addColorStop(0, 'rgba(183, 203, 212, 0.85)')
+  haze.addColorStop(0.35, 'rgba(183, 203, 212, 0.3)')
+  haze.addColorStop(1, 'rgba(183, 203, 212, 0)')
+  paint.fillStyle = haze
+  paint.fillRect(0, 0, size, size)
+
+  sprite = canvas
+  return sprite
 }
