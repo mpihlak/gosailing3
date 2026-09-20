@@ -55,13 +55,17 @@ export interface ShadowReach {
 }
 
 /**
- * How wide the disturbed air is, a given fraction of the way along. Narrow at the boat
- * and spreading downwind, which is the way it goes: what leaves her rig is only as wide
- * as her rig, and it fans out behind her.
+ * How wide the disturbed air is, a given fraction of the way along: negative ahead of
+ * her, positive behind.
+ *
+ * It spreads downwind and only downwind. What leaves her rig is no wider than her rig,
+ * and it fans out behind her; ahead of her there is nothing to fan out yet. Letting it
+ * widen with distance in either direction made it broadest at both ends and pinched at
+ * the boat, which is an hourglass rather than an egg.
  */
 export function shadowHalfWidth(reach: ShadowReach, fraction: number): Meters {
-  const along = Math.min(Math.abs(fraction), 1)
-  return reach.nearWidth + (reach.farWidth - reach.nearWidth) * along
+  const behind = Math.max(0, Math.min(fraction, 1))
+  return reach.nearWidth + (reach.farWidth - reach.nearWidth) * behind
 }
 
 /** How far a boat's shadow reaches, for judging it and for drawing it. */

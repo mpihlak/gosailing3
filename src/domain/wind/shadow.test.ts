@@ -63,6 +63,32 @@ describe('the shape of a shadow', () => {
     expect(widthAt(45)).toBeGreaterThan(widthAt(reach.aft - 5))
   })
 
+  it('is an egg and not an hourglass', () => {
+    // No pinch at the boat: walking from the nose to the tail it swells once and closes.
+    const widthAt = (downwindMetres: number): number => {
+      let widest = 0
+      for (let across = 0; across < reach.farWidth + 5; across += 0.5) {
+        if (shadowStrength(her, vec(across, -downwindMetres), 0) > 0) widest = across
+      }
+      return widest
+    }
+
+    const walk = []
+    for (let along = -reach.forward + 1; along < reach.aft - 1; along += 2) {
+      walk.push(widthAt(along))
+    }
+
+    // Once it starts closing it never swells again, which is what a waist would be.
+    let closing = false
+    for (let i = 1; i < walk.length; i++) {
+      if ((walk[i] as number) < (walk[i - 1] as number)) closing = true
+      else if (closing) expect.fail(`widened again at ${i} after it had begun to close`)
+    }
+
+    // And nothing ahead of her is wider than she is.
+    expect(widthAt(-8)).toBeLessThanOrEqual(widthAt(0))
+  })
+
   it('follows the wind round', () => {
     // In an easterly the shadow lies to the west of her, not to the south.
     const west = vec(-40, 0)
