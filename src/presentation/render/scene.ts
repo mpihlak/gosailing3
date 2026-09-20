@@ -45,7 +45,7 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
   const fleet = shadowersIn(ctx, world)
 
   drawWater(canvas, camera)
-  drawShadows(canvas, camera, fleet, windDirection)
+  drawShadows(canvas, camera, fleet, windDirection, view.displayTime)
   drawWindField(
     canvas,
     camera,
