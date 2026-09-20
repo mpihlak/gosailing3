@@ -1,7 +1,6 @@
 import { normalizeBearing, normalizeSigned, toRadians } from '@/foundation/geom'
 import { clamp, type Degrees, type Knots, type Seconds } from '@/foundation/units'
 import type { Polar } from '@/domain/polars'
-import { formatRate } from '@/presentation/view/timescale'
 
 export interface Instruments {
   readonly speed: Knots
@@ -22,8 +21,6 @@ export interface Instruments {
   readonly distanceToLine?: number
   readonly status: string
   readonly place?: number
-  /** How fast the race is running against the clock. */
-  readonly timeScale: number
 }
 
 const FIELDS = [
@@ -36,7 +33,6 @@ const FIELDS = [
   'timer',
   'line',
   'status',
-  'rate',
 ] as const
 type Field = (typeof FIELDS)[number]
 
@@ -70,7 +66,6 @@ export class Hud {
       raceTime,
       distanceToLine,
       status,
-      timeScale,
     } = instruments
 
     this.set('speed', `${speed.toFixed(1)}`)
@@ -86,7 +81,6 @@ export class Hud {
     )
     this.set('line', distanceToLine === undefined ? '—' : `${Math.round(distanceToLine)}m`)
     this.set('status', status)
-    this.set('rate', formatRate(timeScale))
   }
 
   showBanner(text: string, tone: 'info' | 'warn' | 'good' = 'info', holdMs = 2600): void {

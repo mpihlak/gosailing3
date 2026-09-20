@@ -255,7 +255,6 @@ function updateInstruments(player: BoatState, windDirection: number, windSpeed: 
     timeToStart: timeToStart(simulation.ctx, runner.world) / GAME_PACE,
     raceTime: raceTime(simulation.ctx, runner.world) / GAME_PACE,
     status: statusText(),
-    timeScale: debugRate,
     ...(toLine === undefined ? {} : { distanceToLine: toLine }),
     ...(progress?.place === undefined ? {} : { place: progress.place }),
   })
