@@ -44,8 +44,23 @@ describe('the shape of a shadow', () => {
   })
 
   it('stops at the sides', () => {
-    expect(shadowStrength(her, abeam(reach.halfWidth + 1), 0)).toBe(0)
-    expect(shadowStrength(her, abeam(5), 0)).toBeGreaterThan(0)
+    expect(shadowStrength(her, abeam(reach.nearWidth + 1), 0)).toBe(0)
+    expect(shadowStrength(her, abeam(4), 0)).toBeGreaterThan(0)
+  })
+
+  it('is narrow where it leaves her and spreads downwind', () => {
+    expect(reach.farWidth).toBeGreaterThan(reach.nearWidth * 2)
+
+    // The widest water it covers is well behind her, not alongside.
+    const widthAt = (downwindMetres: number): number => {
+      let widest = 0
+      for (let across = 0; across < reach.farWidth + 5; across += 0.5) {
+        if (shadowStrength(her, vec(across, -downwindMetres), 0) > 0) widest = across
+      }
+      return widest
+    }
+    expect(widthAt(45)).toBeGreaterThan(widthAt(0))
+    expect(widthAt(45)).toBeGreaterThan(widthAt(reach.aft - 5))
   })
 
   it('follows the wind round', () => {

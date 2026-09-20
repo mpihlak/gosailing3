@@ -1,6 +1,6 @@
 import { toRadians } from '@/foundation/geom'
 import type { Degrees } from '@/foundation/units'
-import { shadowReach, type Shadower } from '@/domain/wind'
+import { shadowHalfWidth, shadowReach, type Shadower, type ShadowReach } from '@/domain/wind'
 import { isVisible, metersToPixels, worldToScreen, type Camera } from '@/presentation/view/camera'
 
 /**
@@ -23,8 +23,8 @@ export function drawShadows(
     const screen = worldToScreen(camera, shadower.position)
     const aft = metersToPixels(camera, reach.aft)
     const forward = metersToPixels(camera, reach.forward)
-    const halfWidth = metersToPixels(camera, reach.halfWidth)
-    if (aft < 2 || halfWidth < 1) continue
+    const farWidth = metersToPixels(camera, reach.farWidth)
+    if (aft < 2 || farWidth < 1) continue
 
     ctx.save()
     ctx.translate(screen.x, screen.y)
@@ -32,14 +32,11 @@ export function drawShadows(
     // downwind — where the shadow lies — is below her.
     ctx.rotate(toRadians(windDirection))
 
-    ctx.beginPath()
-    ctx.ellipse(0, 0, halfWidth, aft, 0, 0, Math.PI)
-    ctx.ellipse(0, 0, halfWidth, forward, 0, Math.PI, Math.PI * 2)
-    ctx.closePath()
+    traceShadow(ctx, camera, reach, aft, forward)
 
-    const fade = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(aft, halfWidth))
-    fade.addColorStop(0, 'rgba(2, 14, 24, 0.34)')
-    fade.addColorStop(0.55, 'rgba(2, 14, 24, 0.16)')
+    const fade = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(aft, farWidth))
+    fade.addColorStop(0, 'rgba(2, 14, 24, 0.18)')
+    fade.addColorStop(0.55, 'rgba(2, 14, 24, 0.08)')
     fade.addColorStop(1, 'rgba(2, 14, 24, 0)')
     ctx.fillStyle = fade
     ctx.fill()
@@ -47,4 +44,39 @@ export function drawShadows(
   }
 
   ctx.restore()
+}
+
+/** How finely the outline is walked. Enough that the curve reads as a curve. */
+const OUTLINE_STEPS = 28
+
+/**
+ * The outline of the disturbed air, drawn from the same numbers the simulation judges it
+ * by, so the edge you can see is the edge that bites.
+ */
+function traceShadow(
+  ctx: CanvasRenderingContext2D,
+  camera: Camera,
+  reach: ShadowReach,
+  aft: number,
+  forward: number,
+): void {
+  const edge = (fraction: number): { along: number; across: number } => {
+    const width = metersToPixels(camera, shadowHalfWidth(reach, fraction))
+    return {
+      along: fraction >= 0 ? fraction * aft : fraction * forward,
+      across: width * Math.sqrt(Math.max(0, 1 - fraction * fraction)),
+    }
+  }
+
+  ctx.beginPath()
+  for (let step = 0; step <= OUTLINE_STEPS; step++) {
+    const { along, across } = edge(-1 + (2 * step) / OUTLINE_STEPS)
+    if (step === 0) ctx.moveTo(across, along)
+    else ctx.lineTo(across, along)
+  }
+  for (let step = OUTLINE_STEPS; step >= 0; step--) {
+    const { along, across } = edge(-1 + (2 * step) / OUTLINE_STEPS)
+    ctx.lineTo(-across, along)
+  }
+  ctx.closePath()
 }

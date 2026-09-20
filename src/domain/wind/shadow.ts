@@ -28,7 +28,10 @@ export interface ShadowOptions {
   readonly aftLengths?: number
   /** And how far upwind, which is much less. */
   readonly forwardLengths?: number
-  readonly widthLengths?: number
+  /** How wide it is at the boat, where it is no broader than her rig and a little air. */
+  readonly nearWidthLengths?: number
+  /** And how wide it spreads downwind of her. */
+  readonly farWidthLengths?: number
   /** Wind lost right behind her, as a fraction. */
   readonly maxLoss?: number
   /** How far the air is turned right behind her. */
@@ -38,7 +41,8 @@ export interface ShadowOptions {
 const DEFAULTS = {
   aftLengths: 7,
   forwardLengths: 1.5,
-  widthLengths: 2.5,
+  nearWidthLengths: 0.9,
+  farWidthLengths: 3,
   maxLoss: 0.4,
   maxBend: 12,
 } as const
@@ -46,25 +50,40 @@ const DEFAULTS = {
 export interface ShadowReach {
   readonly aft: Meters
   readonly forward: Meters
-  readonly halfWidth: Meters
+  readonly nearWidth: Meters
+  readonly farWidth: Meters
+}
+
+/**
+ * How wide the disturbed air is, a given fraction of the way along. Narrow at the boat
+ * and spreading downwind, which is the way it goes: what leaves her rig is only as wide
+ * as her rig, and it fans out behind her.
+ */
+export function shadowHalfWidth(reach: ShadowReach, fraction: number): Meters {
+  const along = Math.min(Math.abs(fraction), 1)
+  return reach.nearWidth + (reach.farWidth - reach.nearWidth) * along
 }
 
 /** How far a boat's shadow reaches, for judging it and for drawing it. */
 export function shadowReach(shadower: Shadower, options: ShadowOptions = {}): ShadowReach {
-  const { aftLengths, forwardLengths, widthLengths } = { ...DEFAULTS, ...options }
+  const { aftLengths, forwardLengths, nearWidthLengths, farWidthLengths } = {
+    ...DEFAULTS,
+    ...options,
+  }
   return {
     aft: shadower.length * aftLengths,
     forward: shadower.length * forwardLengths,
-    halfWidth: shadower.length * widthLengths,
+    nearWidth: shadower.length * nearWidthLengths,
+    farWidth: shadower.length * farWidthLengths,
   }
 }
 
 /**
  * How heavily one boat's shadow lies on a point: nothing outside it, hardest at the boat.
  *
- * Two half ellipses sharing a waist at her rather than one ellipse behind her, so that
- * the worst of it is where she is and it thins out downwind, which is the way round it
- * happens.
+ * A teardrop rather than an ellipse: narrow where it leaves her rig, spreading as it
+ * goes downwind, and closing again at the end of its reach. The worst of it is where she
+ * is, which is the way round it happens.
  */
 export function shadowStrength(
   shadower: Shadower,
@@ -79,9 +98,13 @@ export function shadowStrength(
   const along = dot(offset, downwind)
   const across = cross(downwind, offset)
   const span = along >= 0 ? reach.aft : reach.forward
-  if (span <= 0 || reach.halfWidth <= 0) return 0
+  if (span <= 0) return 0
 
-  const within = Math.hypot(along / span, across / reach.halfWidth)
+  const fraction = along / span
+  const halfWidth = shadowHalfWidth(reach, fraction)
+  if (halfWidth <= 0) return 0
+
+  const within = Math.hypot(fraction, across / halfWidth)
   return within >= 1 ? 0 : smoothstep(1 - within)
 }
 
