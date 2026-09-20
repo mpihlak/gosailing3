@@ -21,6 +21,8 @@ export function drawWindField(
   const columns = 7
   const stepX = (view.max.x - view.min.x) / columns
   const stepY = stepX
+  // A canvas with no area would step nowhere, and the loop below would never end.
+  if (!(stepX > 0)) return
 
   ctx.save()
   ctx.lineCap = 'round'

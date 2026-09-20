@@ -41,19 +41,20 @@ fixed clearance is the wrong shape for the problem: what is needed scales with h
 the boat is going and how hard she is turning. This is worth tuning in the lab rather than
 by guessing at the constant.
 
-## The HUD and the renderer have no tests
+## The HUD and the renderer have little testing
 
-The test environment is Node with no DOM (`vite.config.ts:19`), so `presentation/ui` and
-`presentation/render` are exercised by nothing. Everything below them is covered.
+The tests run in Node with no DOM, which is what keeps them fast, so most of
+`presentation/ui` and `presentation/render` is exercised only through the pure functions
+pulled out of it — the boom angle, the telltale lift, the camera, the clocks.
 
-This is not theoretical. A bug shipped straight through the gap: the HUD looked for the
-banner element inside the instrument panel, did not find it, and silently fell back to the
-panel itself, so the first banner replaced all ten gauges with a line of text. A DOM
-environment such as `happy-dom` would let the panel wiring be tested, and would catch that
-whole class of fault.
+One smoke test starts the game against the real page in `happy-dom` and checks that it
+comes up, draws, and puts its first card on the screen. That is there because the wiring
+broke twice without anything noticing: a HUD that wrote its banner over its own gauges,
+and a variable read while the module was still being evaluated, which left a blank screen.
+Four hundred passing tests said nothing either time, because nothing loaded the page.
 
-The renderer is a harder case and probably wants screenshot comparison rather than unit
-tests, which is a job for the lab.
+What is still uncovered is whether any of it looks right. That wants screenshot
+comparison, which is a job for the lab.
 
 ## Penalties are only for contact
 
