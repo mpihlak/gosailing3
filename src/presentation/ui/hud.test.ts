@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createPolar, CRUISER_35 } from '@/domain/polars'
-import { clock, countdown, targetVmgRatio, velocityMadeGood } from './hud'
+import { clock, countdown, targetVmgRatio, timing, velocityMadeGood } from './hud'
 
 const polar = createPolar(CRUISER_35)
 const TWS = 12
@@ -117,5 +117,32 @@ describe('countdown', () => {
       expect(Math.ceil(left)).toBeGreaterThanOrEqual(left)
       expect(countdown(left) >= clock(left)).toBe(true)
     }
+  })
+})
+
+describe('timing', () => {
+  it('reads to a hundredth, which is what a tight finish needs', () => {
+    expect(timing(112.34)).toBe('1:52.34')
+    expect(timing(5.07)).toBe('0:05.07')
+    expect(timing(0)).toBe('0:00.00')
+  })
+
+  it('pads both halves, so a column of them lines up', () => {
+    expect(timing(61.5)).toBe('1:01.50')
+    expect(timing(600)).toBe('10:00.00')
+  })
+
+  it('rolls into the next minute rather than reading sixty seconds', () => {
+    expect(timing(59.999)).toBe('1:00.00')
+    expect(timing(119.999)).toBe('2:00.00')
+  })
+
+  it('does not go negative', () => {
+    expect(timing(-4)).toBe('0:00.00')
+  })
+
+  it('separates two boats a tick apart', () => {
+    // One simulation step is about seventeen milliseconds, so it shows.
+    expect(timing(112.0)).not.toBe(timing(112 + 1 / 60))
   })
 })

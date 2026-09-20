@@ -126,6 +126,19 @@ export function countdown(seconds: Seconds): string {
   return minutesAndSeconds(Math.ceil(Math.max(0, seconds)))
 }
 
+/**
+ * Minutes, seconds and hundredths, for a results sheet where two boats can be a length
+ * apart. The simulation steps sixty times a second, so the last digit is as fine as the
+ * game can tell: two boats crossing in the same tick will read the same.
+ */
+export function timing(seconds: Seconds): string {
+  const hundredths = Math.round(Math.max(0, seconds) * 100)
+  const minutes = Math.floor(hundredths / 6000)
+  const rest = hundredths - minutes * 6000
+  const whole = Math.floor(rest / 100)
+  return `${minutes}:${String(whole).padStart(2, '0')}.${String(rest % 100).padStart(2, '0')}`
+}
+
 function minutesAndSeconds(whole: number): string {
   const minutes = Math.floor(whole / 60)
   return `${minutes}:${String(whole % 60).padStart(2, '0')}`

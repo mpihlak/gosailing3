@@ -16,7 +16,14 @@ import { createCamera, follow, type Camera } from '@/presentation/view/camera'
 import { drawScene, PALETTE, resizeSurface, TrailStore, type BoatStyle } from '@/presentation/render'
 import { Helm, type HelmCommand } from '@/presentation/input'
 import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
-import { clock, Hud, StandingsBoard, targetVmgRatio, velocityMadeGood } from '@/presentation/ui'
+import {
+  clock,
+  Hud,
+  StandingsBoard,
+  targetVmgRatio,
+  timing,
+  velocityMadeGood,
+} from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
 import { duel, GAME_PACE, PLAYER_ID, randomSeed } from './scenario'
 
@@ -360,7 +367,7 @@ function showResults(): void {
       const name = simulation.names[boatId] ?? boatId
       const color = styles[boatId]?.hull ?? ''
       const mine = boatId === PLAYER_ID ? ' class="mine"' : ''
-      return `<tr${mine}><td>${progress?.place ?? ''}</td><td style="color: ${color}">${name}</td><td>${clock(elapsed)}</td></tr>`
+      return `<tr${mine}><td>${progress?.place ?? ''}</td><td style="color: ${color}">${name}</td><td>${timing(elapsed)}</td></tr>`
     })
     .join('')
 
