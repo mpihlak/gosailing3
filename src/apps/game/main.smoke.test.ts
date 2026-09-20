@@ -1,73 +1,20 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { mountPage, tapOverlay } from './page.harness'
 
 /**
- * Starts the game against the real page and checks that it comes up.
- *
- * Everything below the app is tested without a browser, which is what keeps it fast;
- * the wiring between them is not, and twice that has cost a blank screen — once a HUD
- * that wrote its banner over its own gauges, once a variable read while the module was
- * still being evaluated. Neither showed up in four hundred passing tests, because
- * nothing loaded the page.
- *
- * This is deliberately shallow. It does not check that anything looks right; it checks
- * that the thing runs, draws, and puts its first card up.
+ * Starts the game against the real page and checks that it comes up: that it runs, draws,
+ * and puts its first card up. Why this level is tested at all is in the harness.
  */
 
 /** Every canvas call the game makes, so the test can see that it drew something. */
 const drawn: string[] = []
 
-function recordingContext(): CanvasRenderingContext2D {
-  const own: Record<string, unknown> = {}
-  return new Proxy(own, {
-    get(target, property: string) {
-      if (property === 'canvas') return { width: 1200, height: 800 }
-      if (property in target) return target[property]
-      if (property === 'createLinearGradient' || property === 'createRadialGradient') {
-        return () => ({ addColorStop: () => undefined })
-      }
-      return (...args: unknown[]) => {
-        drawn.push(property)
-        return args
-      }
-    },
-    set(target, property: string, value) {
-      target[property] = value
-      return true
-    },
-  }) as unknown as CanvasRenderingContext2D
-}
-
-function layOutThePage(): void {
-  const page = readFileSync(resolve(import.meta.dirname, '../../../index.html'), 'utf8')
-  const body = page.slice(page.indexOf('<body>') + 6, page.indexOf('</body>'))
-  // The page loads the game itself; here the test imports it, so the tag comes out.
-  document.body.innerHTML = body.replace(/<script[\s\S]*?<\/script>/g, '')
-}
-
 beforeAll(async () => {
-  layOutThePage()
-
-  const element = window.HTMLElement.prototype
-  Object.defineProperty(element, 'clientWidth', { get: () => 1200, configurable: true })
-  Object.defineProperty(element, 'clientHeight', { get: () => 800, configurable: true })
-  element.getBoundingClientRect = () =>
-    ({ left: 0, top: 0, right: 1200, bottom: 800, width: 1200, height: 800, x: 0, y: 0 }) as DOMRect
-  window.HTMLCanvasElement.prototype.getContext = (() => recordingContext()) as never
-
-  // A handful of frames, then stop, so the loop does not run for ever.
-  let frames = 0
-  window.requestAnimationFrame = ((run: FrameRequestCallback) => {
-    if (frames < 4) {
-      frames += 1
-      run(frames * 16)
-    }
-    return frames
-  }) as typeof window.requestAnimationFrame
-
+  const page = mountPage({ width: 1200, height: 800, record: drawn })
   await import('./main')
+  // A handful of frames, enough to fill the instruments in.
+  for (let n = 1; n <= 4; n += 1) page.frame(n * 16)
 })
 
 describe('the game, started against the real page', () => {
@@ -106,8 +53,7 @@ describe('the game, started against the real page', () => {
   })
 
   it('starts the race when the card is tapped', () => {
-    const overlay = document.querySelector<HTMLElement>('#overlay')
-    overlay?.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true }))
-    expect(overlay?.dataset.visible).toBe('false')
+    tapOverlay()
+    expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')
   })
 })
