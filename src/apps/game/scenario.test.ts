@@ -87,3 +87,59 @@ describe('the starting arrangement', () => {
     expect(sim.world.race.progress[OPPONENT_ID]?.status).toBe('prestart')
   })
 })
+
+describe('the race finishing', () => {
+  function sailItOut(seed: string) {
+    const sim = createSimulation(duel(seed))
+    const helms = Object.fromEntries(sim.world.boats.map((boat) => [boat.id, new Skipper()]))
+    const { world } = runHeadless(sim.ctx, sim.world, helms, {
+      maxTicks: 60 * 60 * 60,
+      until: (state) => state.race.phase === 'complete',
+    })
+    return { sim, world }
+  }
+
+  it.each(['alpha', 'bravo', 'charlie'])('gets both boats home in seed %s', (seed) => {
+    const { world } = sailItOut(seed)
+    expect(world.race.phase).toBe('complete')
+    expect(world.race.finishOrder).toHaveLength(2)
+  })
+
+  it('places them in the order they crossed, with a time each', () => {
+    const { world } = sailItOut('alpha')
+    const places = world.race.finishOrder.map((id) => world.race.progress[id]?.place)
+    expect(places).toEqual([1, 2])
+
+    for (const boatId of world.race.finishOrder) {
+      const progress = world.race.progress[boatId]
+      expect(progress?.status).toBe('finished')
+      expect(progress?.finishTime).toBeGreaterThan(0)
+    }
+  })
+
+  it('has a name for each of them to put on the results', () => {
+    const { sim, world } = sailItOut('alpha')
+    const names = world.race.finishOrder.map((id) => sim.names[id])
+    expect(names).toEqual(expect.arrayContaining(['Player', 'Computer']))
+  })
+
+  it('takes a couple of minutes of the player\'s time, both boats', () => {
+    const { world } = sailItOut('alpha')
+    for (const boatId of world.race.finishOrder) {
+      const elapsed = (world.race.progress[boatId]?.finishTime ?? 0) / GAME_PACE
+      expect(elapsed).toBeGreaterThan(60)
+      expect(elapsed).toBeLessThan(300)
+    }
+  })
+
+  it('does not call the race complete while one of them is still out there', () => {
+    // The player alone finishing is not the end of it: the results wait for the fleet.
+    const sim = createSimulation(duel('alpha'))
+    const { world } = runHeadless(sim.ctx, sim.world, { [PLAYER_ID]: new Skipper() }, {
+      maxTicks: 60 * 60 * 30,
+      until: (state) => state.race.progress[PLAYER_ID]?.status === 'finished',
+    })
+    expect(world.race.progress[PLAYER_ID]?.status).toBe('finished')
+    expect(world.race.phase).not.toBe('complete')
+  })
+})

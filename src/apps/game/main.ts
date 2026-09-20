@@ -279,15 +279,15 @@ function announce(event: TimedEvent): void {
     case 'contact':
       return hud.showBanner(`Contact with the ${event.otherId}`, 'warn')
     case 'boatFinished': {
+      // Her own finish is worth saying, but the race is not over until the rest of the
+      // fleet is home, and it carries on until it is.
       const elapsed = (runner.world.race.progress[PLAYER_ID]?.finishTime ?? 0) / GAME_PACE
-      running = false
-      showOverlay(
-        'Finished',
-        `Elapsed <b>${clock(elapsed)}</b>.
-         <br /><b>Space</b> to carry on watching · <b>R</b> to race again.`,
-      )
-      return
+      return hud.showBanner(`Finished in ${clock(elapsed)}`, 'good', 3200)
     }
+    case 'raceFinished':
+      running = false
+      showResults()
+      return
     default:
       return
   }
@@ -316,6 +316,27 @@ function specOfPlayer() {
   const spec = simulation.ctx.specs[PLAYER_ID]
   if (!spec) throw new Error('the player has no boat')
   return spec
+}
+
+/** The finishing order, once the last boat is home. */
+function showResults(): void {
+  const { race } = runner.world
+  const rows = race.finishOrder
+    .map((boatId) => {
+      const progress = race.progress[boatId]
+      const elapsed = (progress?.finishTime ?? 0) / GAME_PACE
+      const name = simulation.names[boatId] ?? boatId
+      const mine = boatId === PLAYER_ID ? ' class="mine"' : ''
+      return `<tr${mine}><td>${progress?.place ?? ''}</td><td>${name}</td><td>${clock(elapsed)}</td></tr>`
+    })
+    .join('')
+
+  overlay.innerHTML = `<div class="card">
+    <h1>Results</h1>
+    <table class="results">${rows}</table>
+    <p>Press <b>R</b> to race again.</p>
+  </div>`
+  overlay.dataset.visible = 'true'
 }
 
 function showOverlay(title: string, body: string): void {
