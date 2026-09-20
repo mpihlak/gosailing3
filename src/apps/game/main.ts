@@ -5,6 +5,7 @@ import {
   type InputSource,
   createSimulation,
   standings,
+  windAt,
   interpolateWorld,
   raceTime,
   timeToStart,
@@ -193,7 +194,13 @@ function frame(timestamp: number): void {
     })
   }
 
-  const wind = simulation.ctx.wind.sample(player?.position ?? camera.center, world.time)
+  // What she is sailing in, shadows included, which is what the instruments should read.
+  const wind = windAt(
+    simulation.ctx,
+    runner.world,
+    player?.position ?? camera.center,
+    player?.id,
+  )
   const target = nextMark()
   drawScene(surface.ctx, {
     ctx: simulation.ctx,

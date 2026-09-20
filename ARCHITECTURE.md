@@ -47,6 +47,13 @@ when the field is built, so a replay can be scrubbed backwards and a test can ju
 straight to minute nine. Layers compose: a base wind, an oscillation, a gradient across
 the course, and gusts that drift down it.
 
+Wind shadows are the exception, and are kept out of the field on purpose. A boat takes
+the wind out of the water behind her, so a shadow depends on the fleet, which is state.
+Putting it in the field would cost the field its independence from the simulation, and
+with it the scrubbable replay. `shade` applies the fleet's shadows over a natural sample
+instead, and `sim/wind.ts` is where the two are put together — so the physics, the
+instruments and the arrows on the water all ask one question and get one answer.
+
 **polars** interpolates measured boat speed from a table. Angles closer to the wind than
 the table measures are derived from the beat target.
 

@@ -1,9 +1,10 @@
 import type { BoatId } from '@/domain/boat'
 import type { Mark } from '@/domain/course'
-import type { SimContext, WorldState } from '@/sim'
+import { shadowersIn, windAt, type SimContext, type WorldState } from '@/sim'
 import type { Camera } from '@/presentation/view/camera'
 import { drawWater } from './layers/water'
 import { drawWindField } from './layers/wind'
+import { drawShadows } from './layers/shadows'
 import { drawCourse } from './layers/course'
 import { drawBoats, type BoatStyle, type TrailStore } from './layers/boats'
 import {
@@ -41,9 +42,16 @@ export interface SceneView {
 export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): void {
   const { ctx, world, camera, trails, playerId, targetMark, started } = view
   const windDirection = ctx.wind.sample(camera.center, world.time).direction
+  const fleet = shadowersIn(ctx, world)
 
   drawWater(canvas, camera)
-  drawWindField(canvas, camera, ctx.wind, world.time, view.medianWindSpeed)
+  drawShadows(canvas, camera, fleet, windDirection)
+  drawWindField(
+    canvas,
+    camera,
+    (at) => windAt(ctx, world, at),
+    view.medianWindSpeed,
+  )
   drawCourse(canvas, {
     course: ctx.course,
     camera,

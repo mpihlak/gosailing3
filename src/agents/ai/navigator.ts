@@ -50,6 +50,13 @@ export interface NavigationPlan {
   readonly startPhase?: StartPhase
 }
 
+/*
+ * TODO: she knows nothing of wind shadows. She will sail into another boat's dirty air
+ * and sit in it, and she will never use her own to hold anyone off. Most of what match
+ * racing is turns on that, and `shade` in domain/wind is the same function a tactical
+ * tier would ask.
+ */
+
 /**
  * Decides where a boat should be pointing. It knows nothing about rudders: it produces a
  * bearing, and the helm works out how to get there. Splitting them this way means tactics

@@ -1,6 +1,7 @@
 import { toRadians } from '@/foundation/geom'
 import { clamp } from '@/foundation/units'
-import type { WindField } from '@/domain/wind'
+import type { Vec2 } from '@/foundation/geom'
+import type { WindSample } from '@/domain/wind'
 import { visibleBounds, worldToScreen, type Camera } from '@/presentation/view/camera'
 import { PALETTE } from '../palette'
 
@@ -12,8 +13,8 @@ import { PALETTE } from '../palette'
 export function drawWindField(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
-  wind: WindField,
-  time: number,
+  /** The wind anywhere on the course, shadows and all: the arrows show what is sailed in. */
+  sample: (at: Vec2) => WindSample,
   medianSpeed: number,
 ): void {
   const view = visibleBounds(camera)
@@ -26,14 +27,14 @@ export function drawWindField(
 
   for (let x = view.min.x + stepX / 2; x < view.max.x; x += stepX) {
     for (let y = view.min.y + stepY / 2; y < view.max.y; y += stepY) {
-      const sample = wind.sample({ x, y }, time)
+      const here = sample({ x, y })
       const screen = worldToScreen(camera, { x, y })
-      const relative = clamp(sample.speed / Math.max(medianSpeed, 1), 0.5, 1.6)
+      const relative = clamp(here.speed / Math.max(medianSpeed, 1), 0.5, 1.6)
 
       ctx.save()
       ctx.translate(screen.x, screen.y)
       // Arrows point the way the wind is going, which is away from where it comes from.
-      ctx.rotate(toRadians(sample.direction + 180))
+      ctx.rotate(toRadians(here.direction + 180))
       ctx.strokeStyle = relative > 1.12 ? PALETTE.windStrong : PALETTE.wind
       ctx.lineWidth = relative > 1.12 ? 2 : 1.4
 

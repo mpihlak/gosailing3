@@ -15,7 +15,9 @@ import {
   type Hull,
 } from '@/domain/collision'
 import { lineEndBodies } from '@/domain/course'
+import { shade } from '@/domain/wind'
 import { encounter } from '@/domain/rules'
+import { shadowersIn } from './wind'
 import { penalise, stepRace } from './race'
 import type { SimEvent, TimedEvent } from './events'
 import type { InputFrame, SimContext, WorldState } from './world'
@@ -38,9 +40,18 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
   const tick = world.tick + 1
   const time = world.time + dt
 
+  // Shadows come from where the fleet was at the start of the tick, so every boat is
+  // judged against the same picture and the order they are stepped in does not matter.
+  const fleet = shadowersIn(ctx, world)
+
   const sailed = world.boats.map((boat) => {
     const input: BoatInput = inputs[boat.id] ?? NEUTRAL_INPUT
-    const wind = ctx.wind.sample(boat.position, time)
+    const natural = ctx.wind.sample(boat.position, time)
+    const wind = shade(
+      natural,
+      boat.position,
+      fleet.filter((shadower) => shadower.id !== boat.id),
+    )
     return stepBoat(boat, input, specFor(ctx, boat.id), { wind }, dt)
   })
 

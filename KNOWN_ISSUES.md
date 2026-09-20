@@ -82,3 +82,13 @@ turn counted over seven minutes of sailing went unnoticed until someone watched 
 and thought her turn looked wrong.
 
 TODO: a recorder wrapping the runner, and a lab scene to scrub it.
+
+## The AI does not see wind shadows
+
+Boats take the wind out of the water behind them, and the AI takes no account of it. She
+will sail into another boat's dirty air and stay there, and she will never place her own
+to hold anyone off. Covering an opponent is most of what match racing is, so she is
+playing a different game from the one the rules describe.
+
+`shade` in `domain/wind` is the same function a tactical tier would consult, so the piece
+is there; deciding what to do about it is the work.
