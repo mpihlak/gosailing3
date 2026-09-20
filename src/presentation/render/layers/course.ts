@@ -11,6 +11,7 @@ export interface CourseView {
   /** The angle the laylines are drawn at, which is a track over the ground rather than
    * a heading. */
   readonly laylineAngle: Degrees
+  readonly showLaylines: boolean
   readonly started: boolean
   /** The mark the player is working toward, drawn with its laylines. */
   readonly targetMark?: Mark
@@ -19,7 +20,9 @@ export interface CourseView {
 export function drawCourse(ctx: CanvasRenderingContext2D, view: CourseView): void {
   const { course, camera, started, targetMark, windDirection, laylineAngle } = view
 
-  if (targetMark) drawLaylines(ctx, camera, targetMark, windDirection, laylineAngle)
+  if (targetMark && view.showLaylines) {
+    drawLaylines(ctx, camera, targetMark, windDirection, laylineAngle)
+  }
 
   const startStage = course.stages.find((stage) => stage.kind === 'start')
   if (startStage?.kind === 'start') {

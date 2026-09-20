@@ -2,7 +2,15 @@ import { clamp } from '@/foundation/units'
 import type { BoatInput } from '@/domain/boat'
 import type { InputSource } from '@/sim'
 
-export type HelmCommand = 'toggleRun' | 'restart' | 'help' | 'faster' | 'slower' | 'normalRate'
+export type HelmCommand =
+  | 'toggleRun'
+  | 'restart'
+  | 'help'
+  | 'faster'
+  | 'slower'
+  | 'normalRate'
+  | 'toggleShadows'
+  | 'toggleLaylines'
 
 export interface HelmOptions {
   readonly onCommand?: (command: HelmCommand) => void
@@ -97,6 +105,8 @@ function commandFor(key: string): HelmCommand | null {
   if (key === ' ' || key === 'Spacebar') return 'toggleRun'
   if (key === 'r' || key === 'R') return 'restart'
   if (key === 'h' || key === 'H' || key === '?') return 'help'
+  if (key === 'w' || key === 'W') return 'toggleShadows'
+  if (key === 'l' || key === 'L') return 'toggleLaylines'
   // Accept the key both shifted and not, so it works without reaching for shift.
   if (key === '+' || key === '=') return 'faster'
   if (key === '-' || key === '_') return 'slower'

@@ -26,6 +26,8 @@ npm run dev      # http://localhost:5173
 | ← → or A D | Steer |
 | Space | Start the countdown, and pause |
 | R | A new race, with a new wind |
+| W | Show or hide the wind shadows |
+| L | Show or hide the laylines |
 | H | Controls |
 
 The gun is thirty seconds after you start. Cross the line, leave the orange mark to port,

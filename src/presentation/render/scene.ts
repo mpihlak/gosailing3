@@ -28,6 +28,9 @@ export interface SceneView {
   /** The angles the telltales are read against, from the polar, for either leg. */
   readonly beatAngle: number
   readonly runAngle: number
+  /** What the player has asked to see. The wind still does what it does either way. */
+  readonly showShadows: boolean
+  readonly showLaylines: boolean
   /** The angle the laylines are drawn at: a track, which is wider. */
   readonly laylineAngle: number
   /** The player's seconds, for animation. Physics uses the world's own clock. */
@@ -46,7 +49,7 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
   const fleet = shadowersIn(ctx, world)
 
   drawWater(canvas, camera)
-  drawShadows(canvas, camera, fleet, windDirection, view.displayTime)
+  if (view.showShadows) drawShadows(canvas, camera, fleet, windDirection, view.displayTime)
   drawWindField(
     canvas,
     camera,
@@ -58,6 +61,7 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
     camera,
     windDirection,
     laylineAngle: view.laylineAngle,
+    showLaylines: view.showLaylines,
     started,
     ...(targetMark ? { targetMark } : {}),
   })

@@ -70,6 +70,10 @@ let trails = new TrailStore()
 let sources: Record<string, InputSource> = {}
 let styles: Record<string, BoatStyle> = {}
 let board: StandingsBoard
+// What the player has asked to see. Kept across races, being a preference and not a
+// part of any one of them.
+let showShadows = true
+let showLaylines = true
 let running = false
 let lastFrame = 0
 let debugRate = STARTING_DEBUG_RATE
@@ -132,9 +136,19 @@ function handleCommand(command: HelmCommand): void {
   if (command === 'help') {
     showOverlay(
       'Controls',
-      '<b>← →</b> steer · <b>Space</b> pause · <b>R</b> new race<br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal',
+      `<b>← →</b> steer · <b>Space</b> pause · <b>R</b> new race
+       <br /><b>W</b> wind shadows · <b>L</b> laylines
+       <br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal`,
     )
     running = false
+  }
+  if (command === 'toggleShadows') {
+    showShadows = !showShadows
+    hud.showBanner(`Wind shadows ${showShadows ? 'on' : 'off'}`, 'info', 1400)
+  }
+  if (command === 'toggleLaylines') {
+    showLaylines = !showLaylines
+    hud.showBanner(`Laylines ${showLaylines ? 'on' : 'off'}`, 'info', 1400)
   }
   if (command === 'faster' || command === 'slower' || command === 'normalRate') {
     debugRate =
@@ -215,6 +229,8 @@ function frame(timestamp: number): void {
     panelAnchor,
     beatAngle: specOfPlayer().polar.beatAngle(wind.speed),
     runAngle: specOfPlayer().polar.runAngle(wind.speed),
+    showShadows,
+    showLaylines,
     laylineAngle: LAYLINE_ANGLE,
     ...(target === undefined ? {} : { targetMark: target }),
   })
