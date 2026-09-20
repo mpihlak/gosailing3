@@ -80,7 +80,10 @@ export class Hud {
     this.set('targetVmg', `${Math.round(vmgRatio * 100)}%`)
     // Wind speed has its own gauge beside the angle, so this one carries the direction.
     this.set('wind', `${Math.round(normalizeBearing(windDirection))}°`)
-    this.set('timer', timeToStart > 0 ? `−${clock(timeToStart)}` : clock(Math.max(0, raceTime)))
+    this.set(
+      'timer',
+      timeToStart > 0 ? `−${countdown(timeToStart)}` : clock(Math.max(0, raceTime)),
+    )
     this.set('line', distanceToLine === undefined ? '—' : `${Math.round(distanceToLine)}m`)
     this.set('status', status)
     this.set('rate', formatRate(timeScale))
@@ -108,8 +111,22 @@ export class Hud {
   }
 }
 
+/** Time gone: rounded down, because at 1:52 she has completed 1:52. */
 export function clock(seconds: Seconds): string {
-  const whole = Math.max(0, Math.floor(seconds))
+  return minutesAndSeconds(Math.floor(Math.max(0, seconds)))
+}
+
+/**
+ * Time still to run: rounded up, so 0:01 means up to a second is left and 0:00 means the
+ * gun has gone. Rounded down it read 0:00 for the whole of the last second before the
+ * start — a second of telling the player the race had begun when it had not, and at the
+ * pace the game runs at, thirteen meters of boat.
+ */
+export function countdown(seconds: Seconds): string {
+  return minutesAndSeconds(Math.ceil(Math.max(0, seconds)))
+}
+
+function minutesAndSeconds(whole: number): string {
   const minutes = Math.floor(whole / 60)
   return `${minutes}:${String(whole % 60).padStart(2, '0')}`
 }

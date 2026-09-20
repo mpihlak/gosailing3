@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createPolar, CRUISER_35 } from '@/domain/polars'
-import { clock, targetVmgRatio, velocityMadeGood } from './hud'
+import { clock, countdown, targetVmgRatio, velocityMadeGood } from './hud'
 
 const polar = createPolar(CRUISER_35)
 const TWS = 12
@@ -84,5 +84,38 @@ describe('clock', () => {
 
   it('does not go negative', () => {
     expect(clock(-5)).toBe('0:00')
+  })
+})
+
+describe('countdown', () => {
+  it('rounds up, so the last second before the gun still reads a second', () => {
+    expect(countdown(0.1)).toBe('0:01')
+    expect(countdown(0.9)).toBe('0:01')
+    expect(countdown(1)).toBe('0:01')
+    expect(countdown(1.1)).toBe('0:02')
+  })
+
+  it('reads zero only once there is no time left', () => {
+    expect(countdown(0)).toBe('0:00')
+    expect(countdown(-3)).toBe('0:00')
+  })
+
+  it('never reads zero while time remains, which is the whole point of it', () => {
+    for (let left = 0.01; left < 30; left += 0.01) {
+      expect(countdown(left)).not.toBe('0:00')
+    }
+  })
+
+  it('carries minutes', () => {
+    expect(countdown(60)).toBe('1:00')
+    expect(countdown(89.5)).toBe('1:30')
+  })
+
+  it('is never behind the clock it counts down to', () => {
+    // Rounding up can only ever show the same or more time than remains, never less.
+    for (let left = 0.1; left < 120; left += 0.1) {
+      expect(Math.ceil(left)).toBeGreaterThanOrEqual(left)
+      expect(countdown(left) >= clock(left)).toBe(true)
+    }
   })
 })
