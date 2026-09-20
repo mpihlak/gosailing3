@@ -58,8 +58,7 @@ export function duel(seed: number | string): ScenarioSpec {
       {
         id: OPPONENT_ID,
         name: 'Opponent',
-        // No hand on her helm yet: she holds what she was given and sails away west.
-        controller: 'idle',
+        controller: 'ai',
         position: opponentBerth,
         heading: alongLine + 180,
       },

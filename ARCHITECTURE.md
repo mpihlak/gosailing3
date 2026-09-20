@@ -92,6 +92,13 @@ The AI is split so each tier tests on its own: **helm** holds a bearing, **navig
 decides which bearing, and a **skipper** joins them. Tactics can be tested against a fixed
 wind with no physics in the picture.
 
+Getting off the line is its own problem with more than one answer, so it is a
+`StartStrategy` rather than part of the navigator: given the boat, the wind, the line and
+the time to the gun, it asks for a bearing. `trialStart` sails one headlessly and reports
+what the start looked like — when she crossed, where on the line, on which tack, at what
+speed, and whether she was recalled — so a strategy can be judged on outcomes rather than
+on the shape of its code.
+
 `rules` and `netcode` are not built. Both are designed for: rules read snapshots and
 events, and the `InputSource` seam means a remote player looks like any other helm.
 
@@ -109,6 +116,7 @@ plain DOM — a leaderboard is a table, not something drawn by hand on a canvas.
 | A wind effect | A `WindModifier`, composed in `domain/wind/presets.ts` |
 | A boat class | A `PolarTable` and a `BoatSpec` |
 | An AI behavior | A tier in `agents/ai`, tested against a fixed wind |
+| A way of starting | A `StartStrategy` in `agents/ai/start`, judged with `trialStart` |
 | A racing rule | A pure function over a snapshot and events, in `agents/rules` |
 | An instrument | A field in `presentation/ui/hud.ts` |
 

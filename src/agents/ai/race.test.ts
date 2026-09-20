@@ -10,7 +10,9 @@ function sailRace(seed: string, options: { laps?: number; windSpeed?: number } =
     boats: [{ id: 'ai', name: 'Robot', controller: 'ai' }],
     course: { legLength: 700, lineLength: 260, ...(options.laps ? { laps: options.laps } : {}) },
     wind: { direction: 0, speed: options.windSpeed ?? 12 },
-    config: { startSequence: 60 },
+    // The countdown the game itself runs. The start strategy needs room to reach out and
+    // come back; a short sequence is its own problem, recorded in the strategy's tests.
+    config: { startSequence: 120 },
     duration: 2400,
   })
 

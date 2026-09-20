@@ -11,9 +11,10 @@ import {
 } from '@/foundation/geom'
 import type { Degrees, Meters } from '@/foundation/units'
 import type { BoatSpec, BoatState } from '@/domain/boat'
-import { lineMidpoint, pastMark, sideOfMark, type CourseStage, type RaceLine } from '@/domain/course'
+import { lineMidpoint, pastMark, sideOfMark, type CourseStage } from '@/domain/course'
 import type { WindSample } from '@/domain/wind'
 import { raceTime, type SimContext, type WorldState } from '@/sim'
+import type { StartPhase, StartStrategy } from './start'
 
 /**
  * How wide to leave the mark when passing it. It has to cover the boat's own length and
@@ -31,7 +32,9 @@ const CORRIDOR_MAX: Meters = 320
 
 export interface NavigationPlan {
   readonly bearing: Degrees
-  readonly reason: 'holding' | 'startRun' | 'beating' | 'running' | 'fetching' | 'rounding'
+  readonly reason: 'starting' | 'beating' | 'running' | 'fetching' | 'rounding' | 'holding'
+  /** Set while a start strategy is in charge, for the lab and the tests to read. */
+  readonly startPhase?: StartPhase
 }
 
 /**
@@ -45,51 +48,29 @@ export function planCourse(
   boat: BoatState,
   spec: BoatSpec,
   wind: WindSample,
+  start: StartStrategy,
 ): NavigationPlan {
   const progress = world.race.progress[boat.id]
   const stage = progress && ctx.course.stages[progress.stageIndex]
   if (!stage) return { bearing: boat.heading, reason: 'holding' }
 
-  if (stage.kind === 'start') return planStart(ctx, world, boat, spec, wind, stage.line)
+  if (stage.kind === 'start') {
+    // Getting off the line is its own problem, and there is more than one way to go
+    // about it, so it belongs to a strategy rather than to the navigator.
+    const plan = start.plan({
+      boat,
+      spec,
+      wind,
+      line: stage.line,
+      timeToStart: -raceTime(ctx, world),
+      gunFired: raceTime(ctx, world) >= 0,
+    })
+    return { bearing: plan.bearing, reason: 'starting', startPhase: plan.phase }
+  }
   if (stage.kind === 'mark') return planMark(boat, spec, wind, stage, progress.passedMark)
   return planFor(boat, spec, wind, lineMidpoint(stage.line), 'running')
 }
 
-/**
- * Wait to leeward of the line, then start the run so as to arrive at the line as the gun
- * goes. Approximate, and deliberately a shade late: being early is a penalty, being late
- * is only slow.
- */
-function planStart(
-  ctx: SimContext,
-  world: WorldState,
-  boat: BoatState,
-  spec: BoatSpec,
-  wind: WindSample,
-  line: RaceLine,
-): NavigationPlan {
-  const target = lineMidpoint(line)
-  const holdingPoint = add(target, scale(line.normal, -110))
-  const secondsToGun = -raceTime(ctx, world)
-
-  if (secondsToGun <= 0) return planFor(boat, spec, wind, target, 'startRun')
-
-  const runDistance = distance(boat.position, target)
-  const speed = Math.max(boat.speed * 0.514, 1)
-  // Beating to the line covers ground more slowly than the straight-line distance suggests.
-  const secondsNeeded = (runDistance / speed) * 1.25
-
-  if (secondsNeeded >= secondsToGun) return planFor(boat, spec, wind, target, 'startRun')
-  return planFor(boat, spec, wind, holdingPoint, 'holding')
-}
-
-/**
- * Round the mark in two moves: go past it on the side that leaves it where the rules
- * require, then come back the other side of it onto the next leg. Both targets are
- * points to sail to, so `planFor` keeps the boat to angles she can actually hold — an
- * earlier version steered around an arc and sailed her into the no-go zone beside the
- * mark, where she stopped and stayed.
- */
 function planMark(
   boat: BoatState,
   spec: BoatSpec,
