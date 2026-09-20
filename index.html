@@ -7,6 +7,14 @@
     <title>Go Sailing</title>
     <style>
       :root {
+        /* The narrow layout's budget. The layout test reads these. */
+        --gauge-narrow: 68px;
+        --gauge-narrow-wide: 106px;
+        --gauge-gap-narrow: 4px;
+        --hud-pad-narrow: 8px;
+        --gauge-height-narrow: 48px;
+        --standings-width: 150px;
+        --tiller-height: 56px;
         --ink: #eaf2f8;
         --dim: #8aa7ba;
         --panel: rgba(8, 28, 44, 0.82);
@@ -32,11 +40,13 @@
         touch-action: none;
         display: block;
       }
-      #hud {
+      #bottom {
         position: absolute;
         left: 0;
         right: 0;
         bottom: 0;
+      }
+      #hud {
         padding: 10px max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-bottom));
         display: flex;
         gap: 6px;
@@ -88,10 +98,44 @@
         border: 1px solid var(--edge);
         border-radius: 10px;
         padding: 6px 4px;
-        min-width: 150px;
+        min-width: var(--standings-width);
         backdrop-filter: blur(8px);
         pointer-events: none;
       }
+      /* The tiller. Pull it over and she turns; let go and it comes back amidships. */
+      #tiller {
+        display: none;
+        position: relative;
+        height: var(--tiller-height);
+        margin: 0 max(10px, env(safe-area-inset-left)) 6px max(10px, env(safe-area-inset-right));
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--edge);
+        backdrop-filter: blur(8px);
+        touch-action: none;
+        user-select: none;
+      }
+      #tiller::before {
+        content: '';
+        position: absolute;
+        left: calc(50% - 1px);
+        top: 12px;
+        bottom: 12px;
+        width: 2px;
+        background: rgba(255, 255, 255, 0.16);
+      }
+      #tiller .grip {
+        position: absolute;
+        top: 5px;
+        bottom: 5px;
+        left: calc(50% - 34px);
+        width: 68px;
+        border-radius: 999px;
+        background: rgba(79, 163, 221, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        transition: transform 0.16s ease-out;
+      }
+      #tiller.holding .grip { transition: none; background: rgba(79, 163, 221, 0.66); }
       .crew {
         display: flex;
         align-items: center;
@@ -168,10 +212,23 @@
       .card b { color: var(--ink); }
       /* A phone held upright. The instruments go on two rows: what she is doing on top,
          where the race stands underneath. */
+      @media (pointer: coarse), (max-width: 560px) {
+        #tiller { display: block; }
+      }
       @media (max-width: 560px) {
-        #hud { gap: 4px; padding: 8px max(8px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-bottom)); }
-        .gauge { width: 68px; padding: 5px 3px; }
-        .gauge.wide { width: 106px; }
+        /* Both rows start at the same edge rather than each centring on its own. */
+        #hud {
+          justify-content: flex-start;
+          gap: var(--gauge-gap-narrow);
+          padding: var(--hud-pad-narrow) max(var(--hud-pad-narrow), env(safe-area-inset-left))
+            max(10px, env(safe-area-inset-bottom));
+        }
+        .gauge {
+          width: var(--gauge-narrow);
+          min-height: var(--gauge-height-narrow);
+          padding: 5px 3px;
+        }
+        .gauge.wide { width: var(--gauge-narrow-wide); }
         .gauge .label { font-size: 9px; letter-spacing: 0.03em; }
         .gauge .value { font-size: 15px; }
         [data-field='timer'] .value { font-size: 19px; }
@@ -195,6 +252,8 @@
     <canvas id="stage"></canvas>
     <div data-banner data-visible="false"></div>
     <div id="standings"></div>
+    <div id="bottom">
+    <div id="tiller"><div class="grip"></div></div>
     <div id="hud">
       <div class="gauge" data-field="timer"><span class="label">Timer</span><span class="value">—</span></div>
       <div class="gauge" data-field="speed"><span class="label">Speed</span><span class="value">—</span></div>
@@ -206,6 +265,7 @@
       <div class="gauge" data-field="line"><span class="label">To line</span><span class="value">—</span></div>
       <div class="row-break"></div>
       <div class="gauge wide" data-field="status"><span class="label">Next</span><span class="value">—</span></div>
+    </div>
     </div>
     <div id="overlay" data-visible="false"></div>
     <script type="module" src="/src/apps/game/main.ts"></script>

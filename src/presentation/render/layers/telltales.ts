@@ -60,8 +60,8 @@ export function telltalesFor(
   }
 }
 
-const PANEL_WIDTH = 164
-const PANEL_HEIGHT = 84
+export const PANEL_WIDTH = 164
+export const PANEL_HEIGHT = 84
 const RIBBON_LENGTH = 62
 /** How far a fully lifted telltale swings up from streaming aft. */
 const LIFT_ANGLE = 68

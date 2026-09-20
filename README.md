@@ -30,7 +30,9 @@ npm run dev      # http://localhost:5173
 | L | Show or hide the laylines |
 | H | Controls |
 
-On a phone, touch the left or right of the screen to steer, and tap the card to start.
+On a phone, pull the tiller at the foot of the screen to steer — hold it over and she
+keeps turning, let go and it centres. Tap the water to stop and carry on, and tap the card
+to start.
 
 The gun is thirty seconds after you start. Cross the line, leave the orange mark to port,
 and come back through the line to finish. You start alongside one opponent, lying stern to

@@ -15,7 +15,7 @@ import {
 } from '@/sim'
 import { createCamera, follow, zoomForBoats, type Camera } from '@/presentation/view/camera'
 import { drawScene, PALETTE, resizeSurface, TrailStore, type BoatStyle } from '@/presentation/render'
-import { Helm, type HelmCommand } from '@/presentation/input'
+import { Helm, Tiller, type HelmCommand } from '@/presentation/input'
 import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
 import {
   clock,
@@ -64,8 +64,9 @@ const LAYLINE_ANGLE = 45
 
 /** How to sail her, written once so no two cards can drift apart. */
 const CONTROLS = BY_TOUCH
-  ? `Touch the <b>left</b> or <b>right</b> of the screen to steer.
-     <br />Tap this card to start.`
+  ? `Pull the <b>tiller</b> at the foot of the screen to steer — hold it over and she
+     keeps turning, let go and it centres.
+     <br />Tap the water to stop and carry on. Tap this card to start.`
   : `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start and pause · <b>R</b> new race
      <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>H</b> or <b>?</b> these keys
      <br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal speed`
@@ -104,6 +105,13 @@ let measuredAt = ''
 
 const helm = new Helm({ onCommand: handleCommand })
 helm.attach(canvas)
+
+const tillerBar = document.querySelector<HTMLElement>('#tiller')
+if (tillerBar) {
+  const tiller = new Tiller()
+  tiller.attach(tillerBar)
+  helm.tiller = tiller
+}
 overlay.addEventListener('pointerup', () => onCardTap?.())
 
 start(randomSeed())
@@ -196,18 +204,26 @@ function measurePanels(width: number, height: number): void {
 
   const canvasBox = canvas.getBoundingClientRect()
 
-  const last = document.querySelector('[data-field="status"]')
-  if (last) {
-    const inset = canvasBox.right - last.getBoundingClientRect().right
-    standingsPanel.style.right = `${Math.max(8, Math.round(inset))}px`
+  /*
+   * Lined up with the outermost instruments, whichever they are: the panel is one row on
+   * a laptop and two on a phone, and reorders itself between them, so naming a gauge
+   * would be naming the wrong one half the time.
+   */
+  const gauges = [...document.querySelectorAll('#hud [data-field]')]
+    .map((gauge) => gauge.getBoundingClientRect())
+    .filter((box) => box.width > 0)
+
+  if (gauges.length > 0) {
+    const rightmost = Math.max(...gauges.map((box) => box.right))
+    standingsPanel.style.right = `${Math.max(8, Math.round(canvasBox.right - rightmost))}px`
   }
 
   // The board's own top, so whatever the stylesheet says about safe areas, the telltales
   // agree with it rather than guessing.
   const board = standingsPanel.getBoundingClientRect()
-  const first = document.querySelector('[data-field="timer"]')
+  const leftmost = gauges.length > 0 ? Math.min(...gauges.map((box) => box.left)) : 16
   panelAnchor = {
-    left: first ? Math.max(8, first.getBoundingClientRect().left - canvasBox.left) : 16,
+    left: Math.max(8, Math.round(leftmost - canvasBox.left)),
     top: Math.max(8, Math.round(board.top - canvasBox.top)),
   }
 }

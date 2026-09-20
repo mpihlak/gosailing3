@@ -1,6 +1,7 @@
 import { clamp } from '@/foundation/units'
 import type { BoatInput } from '@/domain/boat'
 import type { InputSource } from '@/sim'
+import type { Tiller } from './tiller'
 
 export type HelmCommand =
   | 'toggleRun'
@@ -22,17 +23,17 @@ export interface HelmOptions {
  */
 export class Helm implements InputSource {
   private readonly held = new Set<string>()
-  private pointerRudder = 0
   private detachers: (() => void)[] = []
+  /** The tiller, when there is one. A keyboard and a thumb both end up here. */
+  tiller: Tiller | undefined
   /** True once a touch has been seen, which is how the on-screen hints decide to appear. */
   touchDetected = false
 
   constructor(private readonly options: HelmOptions = {}) {}
 
   get rudder(): number {
-    const keyboard =
-      (this.held.has('left') ? -1 : 0) + (this.held.has('right') ? 1 : 0)
-    return clamp(keyboard + this.pointerRudder, -1, 1)
+    const keyboard = (this.held.has('left') ? -1 : 0) + (this.held.has('right') ? 1 : 0)
+    return clamp(keyboard + (this.tiller?.rudder ?? 0), -1, 1)
   }
 
   inputFor(): BoatInput {
@@ -60,26 +61,34 @@ export class Helm implements InputSource {
       if (side) this.held.delete(side)
     }
 
-    const steerFromPointer = (event: PointerEvent) => {
-      if (event.pointerType === 'touch') this.touchDetected = true
-      const bounds = target.getBoundingClientRect()
-      const fraction = (event.clientX - bounds.left) / bounds.width
-      this.pointerRudder = fraction < 0.4 ? -1 : fraction > 0.6 ? 1 : 0
+    /*
+     * A touch on the water is not steering — that is the tiller's job — so it is taken
+     * as asking to stop or carry on. Only a tap: a drag is somebody's thumb moving, not
+     * somebody asking for anything.
+     */
+    let touchedAt: { x: number; y: number; at: number } | undefined
+
+    const noteTouch = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return
+      this.touchDetected = true
+      touchedAt = { x: event.clientX, y: event.clientY, at: event.timeStamp }
     }
-    const releasePointer = () => {
-      this.pointerRudder = 0
+    const finishTouch = (event: PointerEvent) => {
+      if (!touchedAt || event.pointerType !== 'touch') return
+      const moved = Math.hypot(event.clientX - touchedAt.x, event.clientY - touchedAt.y)
+      const held = event.timeStamp - touchedAt.at
+      touchedAt = undefined
+      if (moved < 12 && held < 400) this.options.onCommand?.('toggleRun')
     }
 
     window.addEventListener('keydown', keyDown)
     window.addEventListener('keyup', keyUp)
     window.addEventListener('blur', () => this.held.clear())
-    target.addEventListener('pointerdown', steerFromPointer)
-    target.addEventListener('pointermove', (event) => {
-      if (event.buttons > 0 || event.pointerType === 'touch') steerFromPointer(event)
+    target.addEventListener('pointerdown', noteTouch)
+    target.addEventListener('pointerup', finishTouch)
+    target.addEventListener('pointercancel', () => {
+      touchedAt = undefined
     })
-    target.addEventListener('pointerup', releasePointer)
-    target.addEventListener('pointercancel', releasePointer)
-    target.addEventListener('pointerleave', releasePointer)
 
     this.detachers = [
       () => window.removeEventListener('keydown', keyDown),
@@ -91,7 +100,6 @@ export class Helm implements InputSource {
     for (const detach of this.detachers) detach()
     this.detachers = []
     this.held.clear()
-    this.pointerRudder = 0
   }
 }
 
