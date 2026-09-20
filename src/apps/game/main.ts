@@ -56,6 +56,11 @@ const STARTING_DEBUG_RATE = 1
  */
 const LAYLINE_ANGLE = 45
 
+/** The keys, written once so the ready card and the help card cannot drift apart. */
+const CONTROLS = `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start and pause · <b>R</b> new race
+   <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>H</b> or <b>?</b> these keys
+   <br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal speed`
+
 const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hullBlue, trail: PALETTE.trailBlue, trailWidth: 2 }
 
 /** Colors for the boats the player is racing against, handed out in order. */
@@ -117,7 +122,7 @@ function start(seed: string, immediate = false): void {
      <b style="color: ${PALETTE.hullRed}">Red</b>.
      <br />The gun is in thirty seconds. Cross the line, leave the orange mark to port,
      and come back through the line to finish.
-     <br /><b>← →</b> or <b>A D</b> to steer · <b>Space</b> to start and pause · <b>R</b> for a new race`,
+     <br /><br />${CONTROLS}`,
   )
 }
 
@@ -134,12 +139,7 @@ function handleCommand(command: HelmCommand): void {
     else showOverlay('Paused', 'Press <b>Space</b> to carry on.')
   }
   if (command === 'help') {
-    showOverlay(
-      'Controls',
-      `<b>← →</b> steer · <b>Space</b> pause · <b>R</b> new race
-       <br /><b>W</b> wind shadows · <b>L</b> laylines
-       <br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal`,
-    )
+    showOverlay('Controls', CONTROLS)
     running = false
   }
   if (command === 'toggleShadows') {
