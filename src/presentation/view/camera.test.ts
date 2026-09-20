@@ -3,6 +3,7 @@ import fc from 'fast-check'
 import { vec } from '@/foundation/geom'
 import {
   clampToBounds,
+  zoomForBoats,
   createCamera,
   follow,
   screenToWorld,
@@ -127,5 +128,34 @@ describe('follow', () => {
     const withLead = follow(camera, vec(0, 120), 1, { lead: vec(0, 150) })
     const without = follow(camera, vec(0, 120), 1)
     expect(withLead.center.y).toBeGreaterThan(without.center.y)
+  })
+})
+
+describe('zoomForBoats', () => {
+  const BOAT = 10.7
+  const floor = { boatLength: BOAT, leastPixels: 20 }
+
+  it('leaves a big screen alone', () => {
+    // There is room for the water asked for, and the boat is big enough anyway.
+    expect(zoomForBoats(VIEWPORT, 420, floor)).toBeCloseTo(zoomFor(VIEWPORT, 420))
+  })
+
+  it('stops a boat shrinking to nothing on a phone held upright', () => {
+    const phone = { width: 390, height: 844 }
+    // Four hundred meters across three hundred and ninety pixels is a ten pixel boat.
+    expect(zoomFor(phone, 420) * BOAT).toBeLessThan(11)
+    expect(zoomForBoats(phone, 420, floor) * BOAT).toBeGreaterThanOrEqual(20)
+  })
+
+  it('shows less water rather than a smaller boat', () => {
+    const phone = { width: 390, height: 844 }
+    const camera = { center: vec(0, 0), pixelsPerMeter: zoomForBoats(phone, 420, floor), viewport: phone }
+    const view = visibleBounds(camera)
+    expect(view.max.x - view.min.x).toBeLessThan(420)
+    expect(view.max.x - view.min.x).toBeGreaterThan(150)
+  })
+
+  it('does nothing without a boat to measure against', () => {
+    expect(zoomForBoats(VIEWPORT, 420)).toBe(zoomFor(VIEWPORT, 420))
   })
 })

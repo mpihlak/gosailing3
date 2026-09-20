@@ -136,7 +136,9 @@
         transition: opacity 0.2s ease;
         padding: 20px;
       }
-      #overlay[data-visible='true'] { opacity: 1; }
+      #overlay[data-visible='true'] { opacity: 1; pointer-events: auto; cursor: pointer; }
+      /* Splits the instruments into two rows where there is no room for one. */
+      .row-break { display: none; }
       .card {
         background: var(--panel);
         border: 1px solid var(--edge);
@@ -164,10 +166,28 @@
       .results tr.mine td { color: var(--ink); font-weight: 600; }
       .card p { margin: 0; color: var(--dim); line-height: 1.6; font-size: 14px; }
       .card b { color: var(--ink); }
-      @media (max-width: 520px) {
-        .gauge { width: 70px; padding: 5px 5px; }
-        .gauge .value { font-size: 16px; }
-        .gauge.wide { width: 108px; }
+      /* A phone held upright. The instruments go on two rows: what she is doing on top,
+         where the race stands underneath. */
+      @media (max-width: 560px) {
+        #hud { gap: 4px; padding: 8px max(8px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-bottom)); }
+        .gauge { width: 68px; padding: 5px 3px; }
+        .gauge.wide { width: 106px; }
+        .gauge .label { font-size: 9px; letter-spacing: 0.03em; }
+        .gauge .value { font-size: 15px; }
+        [data-field='timer'] .value { font-size: 19px; }
+
+        /* No room for the wind direction; the telltales and the arrows say it better. */
+        [data-field='wind'] { display: none; }
+
+        [data-field='speed'],
+        [data-field='twa'],
+        [data-field='tws'],
+        [data-field='vmg'],
+        [data-field='targetVmg'] { order: 1; }
+        .row-break { display: block; order: 2; flex-basis: 100%; height: 0; }
+        [data-field='timer'],
+        [data-field='line'],
+        [data-field='status'] { order: 3; }
       }
     </style>
   </head>
@@ -184,6 +204,7 @@
       <div class="gauge" data-field="vmg"><span class="label">VMG</span><span class="value">—</span></div>
       <div class="gauge" data-field="targetVmg"><span class="label">Target VMG</span><span class="value">—</span></div>
       <div class="gauge" data-field="line"><span class="label">To line</span><span class="value">—</span></div>
+      <div class="row-break"></div>
       <div class="gauge wide" data-field="status"><span class="label">Next</span><span class="value">—</span></div>
     </div>
     <div id="overlay" data-visible="false"></div>

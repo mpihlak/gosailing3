@@ -13,7 +13,7 @@ import {
   type Simulation,
   type TimedEvent,
 } from '@/sim'
-import { createCamera, follow, type Camera } from '@/presentation/view/camera'
+import { createCamera, follow, zoomForBoats, type Camera } from '@/presentation/view/camera'
 import { drawScene, PALETTE, resizeSurface, TrailStore, type BoatStyle } from '@/presentation/render'
 import { Helm, type HelmCommand } from '@/presentation/input'
 import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
@@ -38,6 +38,11 @@ const standingsPanel = requireElement<HTMLElement>('#standings')
 
 /** How much water to show across the short edge of the screen. */
 const METERS_ACROSS = 420
+/** However small the screen, the boat is drawn at least this long. */
+const LEAST_BOAT_PIXELS = 20
+
+/** Whether this is a finger rather than a mouse, which decides what the cards say. */
+const BY_TOUCH = window.matchMedia('(pointer: coarse)').matches
 
 /**
  * A debugging aid: watch the race faster or slower than it is meant to be played. It is
@@ -57,10 +62,13 @@ const STARTING_DEBUG_RATE = 1
  */
 const LAYLINE_ANGLE = 45
 
-/** The keys, written once so the ready card and the help card cannot drift apart. */
-const CONTROLS = `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start and pause · <b>R</b> new race
-   <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>H</b> or <b>?</b> these keys
-   <br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal speed`
+/** How to sail her, written once so no two cards can drift apart. */
+const CONTROLS = BY_TOUCH
+  ? `Touch the <b>left</b> or <b>right</b> of the screen to steer.
+     <br />Tap this card to start.`
+  : `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start and pause · <b>R</b> new race
+     <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>H</b> or <b>?</b> these keys
+     <br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal speed`
 
 const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hullBlue, trail: PALETTE.trailBlue, trailWidth: 2 }
 
@@ -109,7 +117,7 @@ function start(seed: string, immediate = false): void {
 
   const surface = resizeSurface(canvas)
   const player = playerBoat(runner.world.boats)
-  camera = createCamera(surface.viewport, player?.position ?? vec(0, 0), METERS_ACROSS)
+  camera = createCamera(surface.viewport, player?.position ?? vec(0, 0), METERS_ACROSS, boatFloor())
 
   if (immediate) {
     running = true
@@ -124,6 +132,7 @@ function start(seed: string, immediate = false): void {
      <br />The gun is in thirty seconds. Cross the line, leave the orange mark to port,
      and come back through the line to finish.
      <br /><br />${CONTROLS}`,
+    () => handleCommand('toggleRun'),
   )
 }
 
@@ -137,10 +146,14 @@ function handleCommand(command: HelmCommand): void {
   if (command === 'toggleRun') {
     running = !running
     if (running) hideOverlay()
-    else showOverlay('Paused', 'Press <b>Space</b> to carry on.')
+    else {
+      showOverlay('Paused', BY_TOUCH ? 'Tap to carry on.' : 'Press <b>Space</b> to carry on.', () =>
+        handleCommand('toggleRun'),
+      )
+    }
   }
   if (command === 'help') {
-    showOverlay('Controls', CONTROLS)
+    showOverlay('Controls', CONTROLS, () => handleCommand('toggleRun'))
     running = false
   }
   if (command === 'toggleShadows') {
@@ -193,7 +206,13 @@ function measurePanels(width: number, height: number): void {
 
 function frame(timestamp: number): void {
   const surface = resizeSurface(canvas)
-  camera = { ...camera, viewport: surface.viewport }
+  // Recomputed rather than kept, so turning the phone or dragging the window resizes the
+  // view rather than leaving it at whatever it was when the race began.
+  camera = {
+    ...camera,
+    viewport: surface.viewport,
+    pixelsPerMeter: zoomForBoats(surface.viewport, METERS_ACROSS, boatFloor()),
+  }
   measurePanels(surface.viewport.width, surface.viewport.height)
 
   const elapsed = lastFrame === 0 ? 0 : (timestamp - lastFrame) / 1000
@@ -380,6 +399,10 @@ function startLineDistance(player: BoatState): number | undefined {
   return distanceToLine(stage.line, bowPosition(player, specOfPlayer()))
 }
 
+function boatFloor() {
+  return { boatLength: simulation.ctx.specs[PLAYER_ID]?.length ?? 10, leastPixels: LEAST_BOAT_PIXELS }
+}
+
 function playerBoat(boats: readonly BoatState[]): BoatState | undefined {
   return boats.find((boat) => boat.id === PLAYER_ID)
 }
@@ -407,19 +430,26 @@ function showResults(): void {
   overlay.innerHTML = `<div class="card">
     <h1>Results</h1>
     <table class="results">${rows}</table>
-    <p>Press <b>R</b> to race again.</p>
+    <p>${BY_TOUCH ? 'Tap for another race.' : 'Press <b>R</b> to race again.'}</p>
   </div>`
   overlay.dataset.visible = 'true'
 }
 
-function showOverlay(title: string, body: string): void {
+/** What tapping the card does. There is no keyboard on a phone, so it has to do something. */
+let onCardTap: (() => void) | undefined
+
+function showOverlay(title: string, body: string, onTap?: () => void): void {
   overlay.innerHTML = `<div class="card"><h1>${title}</h1><p>${body}</p></div>`
   overlay.dataset.visible = 'true'
+  onCardTap = onTap
 }
 
 function hideOverlay(): void {
   overlay.dataset.visible = 'false'
+  onCardTap = undefined
 }
+
+overlay.addEventListener('pointerup', () => onCardTap?.())
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector)

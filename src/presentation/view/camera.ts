@@ -73,12 +73,33 @@ export function zoomFor(viewport: Viewport, desiredMetersAcross: Meters): number
   return shortestEdge / desiredMetersAcross
 }
 
+/**
+ * Never draw a boat smaller than this, whatever else the zoom would like. On a phone
+ * held upright the short edge is the width, and asking for four hundred meters across it
+ * left a ten meter boat ten pixels long.
+ */
+export interface BoatFloor {
+  readonly boatLength: Meters
+  readonly leastPixels: number
+}
+
+export function zoomForBoats(
+  viewport: Viewport,
+  desiredMetersAcross: Meters,
+  floor?: BoatFloor,
+): number {
+  const water = zoomFor(viewport, desiredMetersAcross)
+  if (!floor || floor.boatLength <= 0) return water
+  return Math.max(water, floor.leastPixels / floor.boatLength)
+}
+
 export function createCamera(
   viewport: Viewport,
   center: Vec2,
   desiredMetersAcross: Meters,
+  floor?: BoatFloor,
 ): Camera {
-  return { center, viewport, pixelsPerMeter: zoomFor(viewport, desiredMetersAcross) }
+  return { center, viewport, pixelsPerMeter: zoomForBoats(viewport, desiredMetersAcross, floor) }
 }
 
 /** Zoom that fits an area entirely on screen, for an overview or a small course. */
