@@ -112,10 +112,72 @@ describe('contacts', () => {
   })
 
   it('charges one turn for one coming together, however long they stay locked', () => {
+    // Two hulls that stay into each other touch and part many times a second. Two full
+    // minutes of it is still one incident and one turn.
+    const locked = () =>
+      createSimulation({
+        name: 'locked',
+        seed: 'lock',
+        boats: [
+          { id: 'a', name: 'Alpha', position: vec(-1, -200), heading: 20 },
+          { id: 'b', name: 'Bravo', position: vec(1, -200), heading: 20 },
+        ],
+        wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+        config: { startSequence: 0 },
+      })
+
+    for (const minutes of [0.25, 1, 2]) {
+      const sim = locked()
+      const { world: after, events } = runHeadless(sim.ctx, sim.world, {}, {
+        maxTicks: Math.round(60 * 60 * minutes),
+      })
+      const turns = Object.values(after.race.progress).reduce((sum, boat) => sum + boat.penalties, 0)
+      expect(turns).toBe(1)
+      expect(events.filter((event) => event.kind === 'penalised')).toHaveLength(1)
+      expect(events.filter((event) => event.kind === 'contact')).toHaveLength(1)
+    }
+  })
+
+  it('does not weld two boats together when they meet', () => {
+    // Bow to bow, wedged. Charging them speed every tick they stayed in contact once
+    // held a pair at a standstill for the rest of the race.
+    const sim = createSimulation({
+      name: 'wedged',
+      seed: 'wedge',
+      boats: [
+        { id: 'a', name: 'Alpha', position: vec(-1, -200), heading: 45 },
+        { id: 'b', name: 'Bravo', position: vec(1, -200), heading: 315 },
+      ],
+      wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+      config: { startSequence: 0 },
+    })
+    const after = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 30 }).world
+    for (const boat of after.boats) expect(boat.speed).toBeGreaterThan(3)
+  })
+
+  it('keeps the incident open while they are still in each other\'s company', () => {
     const { ctx, world } = collidingFleet()
-    const after = runHeadless(ctx, world, {}, { maxTicks: 60 * 20 }).world
-    const total = Object.values(after.race.progress).reduce((sum, boat) => sum + boat.penalties, 0)
-    expect(total).toBeLessThanOrEqual(2)
+    const after = runHeadless(ctx, world, {}, { maxTicks: 60 * 10 }).world
+    expect(after.incidents).toHaveLength(1)
+  })
+
+  it('closes the incident once they have come properly apart', () => {
+    // Touching to begin with, then sailing away from one another.
+    const sim = createSimulation({
+      name: 'parting',
+      seed: 'part',
+      boats: [
+        { id: 'a', name: 'Alpha', position: vec(-1, -200), heading: 270 },
+        { id: 'b', name: 'Bravo', position: vec(1, -200), heading: 90 },
+      ],
+      wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+      config: { startSequence: 0 },
+    })
+    const touched = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 5 }).world
+    expect(touched.incidents).toHaveLength(1)
+
+    const parted = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 20 }).world
+    expect(parted.incidents).toHaveLength(0)
   })
 
   it('lets a boat pass close by a mark without calling it a touch', () => {

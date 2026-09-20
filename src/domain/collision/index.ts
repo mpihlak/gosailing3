@@ -49,6 +49,12 @@ export interface Contact {
   /** Where they touch, on the surface of the other body. */
   readonly point: Vec2
   readonly overlap: Meters
+  /**
+   * Clear water between the two, negative when they are into each other. Reported so a
+   * caller can tell a pair still involved with one another from a pair that has come
+   * properly apart.
+   */
+  readonly separation: Meters
   /** Whether the other body gives way rather than stopping the boat. */
   readonly soft: boolean
 }
@@ -63,8 +69,9 @@ function contactFrom(
   reach: Meters,
   otherRadius: Meters,
   soft: boolean,
+  margin: Meters,
 ): Contact | null {
-  if (gap >= reach) return null
+  if (gap >= reach + margin) return null
 
   // Dead centre on top of each other leaves no meaningful direction; push north.
   const normal = gap === 0 ? { x: 0, y: 1 } : normalize(sub(onBoat, onOther))
@@ -75,11 +82,17 @@ function contactFrom(
     normal,
     point: add(onOther, scale(normal, otherRadius)),
     overlap: reach - gap,
+    separation: gap - reach,
     soft,
   }
 }
 
-function hullTouchesDisc(hull: Hull, disc: Disc, kind: ContactKind): Contact | null {
+function hullTouchesDisc(
+  hull: Hull,
+  disc: Disc,
+  kind: ContactKind,
+  margin: Meters,
+): Contact | null {
   const nearest = closestPointOnSegment(hull.centreline, disc.position)
   const gap = Math.hypot(nearest.x - disc.position.x, nearest.y - disc.position.y)
   return contactFrom(
@@ -92,10 +105,11 @@ function hullTouchesDisc(hull: Hull, disc: Disc, kind: ContactKind): Contact | n
     hull.radius + disc.radius,
     disc.radius,
     disc.solid !== true,
+    margin,
   )
 }
 
-function hullTouchesHull(first: Hull, second: Hull): Contact | null {
+function hullTouchesHull(first: Hull, second: Hull, margin: Meters): Contact | null {
   const closest = closestBetweenSegments(first.centreline, second.centreline)
   return contactFrom(
     first.id,
@@ -107,6 +121,7 @@ function hullTouchesHull(first: Hull, second: Hull): Contact | null {
     first.radius + second.radius,
     second.radius,
     false, // hulls stop each other
+    margin,
   )
 }
 
@@ -114,31 +129,42 @@ export interface ContactScene {
   readonly boats: readonly Hull[]
   readonly marks?: readonly Disc[]
   readonly obstacles?: readonly Disc[]
+  /**
+   * Also report pairs this close to touching. Nothing about the physics changes; it lets
+   * a caller see a pair still in each other's company, which is how one incident is told
+   * from the next.
+   */
+  readonly margin?: Meters
+}
+
+/** Whether a reported pair is actually into each other, rather than merely close. */
+export function isTouching(contact: Contact): boolean {
+  return contact.separation < 0
 }
 
 /**
- * Every overlap in the scene this tick. Detection only: what a contact costs a boat is a
+ * Every overlap in the scene this tick, and, if a margin is given, every near miss too. Detection only: what a contact costs a boat is a
  * racing question, not a geometric one, so the simulation decides that.
  *
  * A straight pairwise sweep. A fleet is tens of boats, not thousands, so a spatial index
  * would cost more to maintain than it saves.
  */
 export function detectContacts(scene: ContactScene): Contact[] {
-  const { boats, marks = [], obstacles = [] } = scene
+  const { boats, marks = [], obstacles = [], margin = 0 } = scene
   const contacts: Contact[] = []
 
   for (let i = 0; i < boats.length; i++) {
     const boat = boats[i] as Hull
     for (let j = i + 1; j < boats.length; j++) {
-      const contact = hullTouchesHull(boat, boats[j] as Hull)
+      const contact = hullTouchesHull(boat, boats[j] as Hull, margin)
       if (contact) contacts.push(contact)
     }
     for (const mark of marks) {
-      const contact = hullTouchesDisc(boat, mark, 'mark')
+      const contact = hullTouchesDisc(boat, mark, 'mark', margin)
       if (contact) contacts.push(contact)
     }
     for (const obstacle of obstacles) {
-      const contact = hullTouchesDisc(boat, obstacle, 'obstacle')
+      const contact = hullTouchesDisc(boat, obstacle, 'obstacle', margin)
       if (contact) contacts.push(contact)
     }
   }

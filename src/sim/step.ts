@@ -7,14 +7,19 @@ import {
   type BoatState,
   NEUTRAL_INPUT,
 } from '@/domain/boat'
-import { detectContacts, separationFor, type Contact, type Hull } from '@/domain/collision'
+import {
+  detectContacts,
+  isTouching,
+  separationFor,
+  type Contact,
+  type Hull,
+} from '@/domain/collision'
 import { lineEndBodies } from '@/domain/course'
 import { encounter } from '@/domain/rules'
 import { penalise, stepRace } from './race'
 import type { SimEvent, TimedEvent } from './events'
 import type { InputFrame, SimContext, WorldState } from './world'
 import { raceTime, specFor } from './world'
-import type { Seconds } from '@/foundation/units'
 
 export interface StepResult {
   readonly world: WorldState
@@ -39,7 +44,7 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
     return stepBoat(boat, input, specFor(ctx, boat.id), { wind }, dt)
   })
 
-  const { boats, contacts, keys } = resolveContacts(ctx, sailed, world.contacts)
+  const { boats, contacts, nearby, keys } = resolveContacts(ctx, sailed, world.contacts)
 
   const { race, events: raceEvents } = stepRace(world.race, {
     course: ctx.course,
@@ -50,21 +55,28 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
   })
 
   // A contact is news on the tick it starts, not for every tick the boats stay locked.
-  const fresh = contacts.filter((contact) => !world.contacts.includes(keyOf(contact)))
   const progress = { ...race.progress }
   const penaltyEvents: SimEvent[] = []
 
   /*
-   * One incident, one turn. Two hulls locked together touch, come apart and touch again
-   * many times a second, and judging each of those separately once ran a boat up to nine
-   * hundred outstanding penalties. A pair is judged once and then left alone for a while.
+   * One coming-together, one turn. Two hulls locked together touch and part many times a
+   * second, and judging each of those separately once ran a boat up to nine hundred and
+   * fifty outstanding penalties. An incident opens when a pair touches and stays open
+   * while they are anywhere near each other; only once they have come properly apart can
+   * the next touch be a fresh one.
    */
-  const incidents = recentIncidents(world.incidents, time)
+  const incidents: string[] = []
+  const opened: Contact[] = []
+  for (const contact of nearby) {
+    const key = incidentKey(contact)
+    if (world.incidents.includes(key) && !incidents.includes(key)) incidents.push(key)
+  }
 
-  for (const contact of fresh) {
-    const incident = incidentKey(contact)
-    if (incidents[incident] !== undefined) continue
-    incidents[incident] = time
+  for (const contact of contacts) {
+    const key = incidentKey(contact)
+    if (incidents.includes(key)) continue
+    incidents.push(key)
+    opened.push(contact)
 
     if (contact.kind !== 'boat') {
       // Touching a mark is her own affair, whoever else was about.
@@ -89,7 +101,7 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
   const events: TimedEvent[] = [
     ...raceEvents.map((event) => ({ ...event, tick, time })),
     ...penaltyEvents.map((event) => ({ ...event, tick, time })),
-    ...fresh.map(
+    ...opened.map(
       (contact) =>
         ({
           kind: 'contact',
@@ -108,21 +120,6 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
   }
 }
 
-/** How long a pair stays judged, so one coming-together is one penalty. */
-const INCIDENT_COOLDOWN: Seconds = 10
-
-/** Incidents still within the cooldown. Anything older is forgotten. */
-function recentIncidents(
-  incidents: Readonly<Record<string, Seconds>>,
-  time: Seconds,
-): Record<string, Seconds> {
-  const kept: Record<string, Seconds> = {}
-  for (const [key, at] of Object.entries(incidents)) {
-    if (time - at < INCIDENT_COOLDOWN) kept[key] = at
-  }
-  return kept
-}
-
 /** Names the pair, not the order they were found in, so one touch is one incident. */
 function incidentKey(contact: Contact): string {
   return contact.kind === 'boat'
@@ -136,7 +133,10 @@ function keyOf(contact: Contact): string {
 
 interface ContactResolution {
   readonly boats: BoatState[]
+  /** Pairs actually into each other. */
   readonly contacts: Contact[]
+  /** Those, and the pairs close enough to still count as the same incident. */
+  readonly nearby: Contact[]
   readonly keys: string[]
 }
 
@@ -158,7 +158,11 @@ function resolveContacts(
     return { id: boat.id, centreline: hullCentreline(boat, spec), radius: hullRadius(spec) }
   })
 
-  const contacts = detectContacts({
+  // A boat length of clear water between them ends an incident.
+  const clearance = Math.max(...boats.map((boat) => specFor(ctx, boat.id).length), 0)
+
+  const nearby = detectContacts({
+    margin: clearance,
     boats: hulls,
     // Rounding marks and the ends of the start line alike: all of them are marks of the
     // course, and all of them can be hit.
@@ -172,9 +176,10 @@ function resolveContacts(
     ],
     obstacles: ctx.course.obstacles.map((obstacle) => ({ ...obstacle, solid: true })),
   })
+  const contacts = nearby.filter(isTouching)
 
   if (contacts.length === 0) {
-    return { boats: [...boats], contacts, keys: [] }
+    return { boats: [...boats], contacts, nearby, keys: [] }
   }
 
   const byId = new Map(boats.map((boat) => [boat.id, boat]))
@@ -186,11 +191,17 @@ function resolveContacts(
     const isNew = !ongoing.includes(keyOf(contact))
     const soft = contact.soft
     const loss = soft ? ctx.config.markContactSpeedLoss : ctx.config.contactSpeedLoss
-    // Something solid goes on taking the way off a boat for as long as she leans on it,
-    // or she grinds straight through: separating her by the overlap each tick does not
-    // touch the speed that put her there. A buoy only charges her once, on the way past —
-    // repeating that pinned boats motionless against marks.
-    const slowing = isNew || !soft ? 1 - loss : 1
+    /*
+     * Something fixed goes on taking the way off a boat for as long as she leans on it,
+     * or she grinds straight through: separating her by the overlap each tick does not
+     * touch the speed that put her there.
+     *
+     * Two boats are not fixed, and charging them both every tick welded them together —
+     * a pair wedged bow to bow ground each other to a standstill and stayed there for
+     * the rest of the race. They pay once and sail on.
+     */
+    const fixed = !soft && other === undefined
+    const slowing = isNew || fixed ? 1 - loss : 1
 
     byId.set(contact.boatId, {
       ...boat,
@@ -209,6 +220,7 @@ function resolveContacts(
   return {
     boats: boats.map((boat) => byId.get(boat.id) ?? boat),
     contacts,
+    nearby,
     keys: contacts.map(keyOf),
   }
 }

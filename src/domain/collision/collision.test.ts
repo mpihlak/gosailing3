@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { vec } from '@/foundation/geom'
 import { CRUISER_35_SPEC, hullCentreline, hullRadius, spawnBoat } from '@/domain/boat'
-import { detectContacts, separationFor, type Disc, type Hull } from './index'
+import { detectContacts, isTouching, separationFor, type Disc, type Hull } from './index'
 
 const SPEC = CRUISER_35_SPEC
 const WIND = { direction: 0, speed: 12 }
@@ -151,5 +151,28 @@ describe('separationFor', () => {
   it('makes the boat give way entirely to something fixed', () => {
     const [contact] = detectContacts({ boats: [hull('a', 2, 0)], marks: [MARK] })
     expect(separationFor(contact!, false).x).toBeCloseTo(TOUCHING_ABEAM - 2)
+  })
+})
+
+describe('near misses', () => {
+  it('reports nothing near without a margin', () => {
+    expect(detectContacts({ boats: [hull('a', 0, 0), hull('b', 8, 0)] })).toEqual([])
+  })
+
+  it('reports a pair within the margin, and says they are not touching', () => {
+    const [close] = detectContacts({ boats: [hull('a', 0, 0), hull('b', 8, 0)], margin: 12 })
+    expect(close).toBeDefined()
+    expect(close!.separation).toBeCloseTo(8 - SPEC.beam)
+    expect(isTouching(close!)).toBe(false)
+  })
+
+  it('still says a pair into each other is touching', () => {
+    const [overlapping] = detectContacts({ boats: [hull('a', 0, 0), hull('b', 2, 0)], margin: 12 })
+    expect(overlapping!.separation).toBeLessThan(0)
+    expect(isTouching(overlapping!)).toBe(true)
+  })
+
+  it('leaves a pair beyond the margin out altogether', () => {
+    expect(detectContacts({ boats: [hull('a', 0, 0), hull('b', 40, 0)], margin: 12 })).toEqual([])
   })
 })

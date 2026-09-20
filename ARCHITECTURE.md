@@ -62,7 +62,8 @@ shape is a different list of stages, not new code in the race logic.
 than agent knowledge because two callers need the same answer: the simulation, to decide
 who is penalised, and the AI, to keep clear in the first place.
 
-**collision** reports overlaps. A hull is a capsule — its centreline plus half its beam —
+**collision** reports overlaps, and near misses when asked for a margin — which is how
+one coming-together is told from the next. A hull is a capsule — its centreline plus half its beam —
 because a boat is three times longer than it is wide and a circle round its middle is
 wrong in both directions at once. Marks and obstacles are discs, and each says whether it
 is solid or gives way. What a contact costs is a racing question, decided in `sim`.
