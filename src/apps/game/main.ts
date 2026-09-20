@@ -339,10 +339,14 @@ function stylesFor(sim: Simulation): Record<string, BoatStyle> {
 }
 
 function announce(event: TimedEvent): void {
-  // An event that names a boat is only news when it names this one. Without this the
-  // player is told about a rival's mark rounding, and handed a finish card when she
-  // crosses the line.
-  if ('boatId' in event && event.boatId !== PLAYER_ID) return
+  const mine = !('boatId' in event) || event.boatId === PLAYER_ID
+  /*
+   * What happens to a rival is mostly not news: told about all of it, the player gets a
+   * report of her mark rounding and a finish card when she crosses the line. Her penalty
+   * is the exception. It decides who wins, and nothing else on the water shows it — a
+   * mark gives way rather than stopping her, so she sails through it and sails on.
+   */
+  if (!mine && event.kind !== 'penalised') return
 
   switch (event.kind) {
     case 'raceStarted':
@@ -355,14 +359,12 @@ function announce(event: TimedEvent): void {
       return hud.showBanner(`Started ${event.late.toFixed(1)}s after the gun`, 'info')
     case 'markRounded':
       return hud.showBanner('Mark rounded — head for the line', 'good')
-    case 'penalised':
-      return hud.showBanner(
-        event.rule === undefined
-          ? 'Penalty — you touched a mark. One turn owed.'
-          : `Penalty — rule ${event.rule}. One turn owed.`,
-        'warn',
-        3600,
-      )
+    case 'penalised': {
+      const cause = event.rule === undefined ? 'touched a mark' : `broke rule ${event.rule}`
+      return mine
+        ? hud.showBanner(`Penalty — you ${cause}. One turn owed.`, 'warn', 3600)
+        : hud.showBanner(`${nameOf(event.boatId)} ${cause} — one turn owed`, 'info', 3000)
+    }
     case 'penaltiesCancelled':
       return hud.showBanner('Penalties cancel — nothing owed', 'good', 2600)
     case 'penaltyCleared':
@@ -392,6 +394,10 @@ function announce(event: TimedEvent): void {
     default:
       return
   }
+}
+
+function nameOf(boatId: string): string {
+  return simulation.names[boatId] ?? boatId
 }
 
 function nextMark(): Mark | undefined {
