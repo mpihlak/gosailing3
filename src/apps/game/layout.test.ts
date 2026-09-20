@@ -128,6 +128,30 @@ describe('the instruments once the row is too wide for the screen', () => {
 })
 
 describe('the board at the foot of the screen', () => {
+  it('lines its left edge up with the telltales', () => {
+    // The clock is centered, so the telltales start half a clock, the two gauges between
+    // them and their own width in from the middle. The board is offset by the same sum.
+    expect(PAGE).toMatch(
+      /--telltales-offset:\s*calc\(\s*var\(--timer-width\) \/ 2 \+ var\(--gauge-width\) \* 2 \+ var\(--gauge-gap\) \* 3 \+\s*var\(--panel-width\)\s*\)/,
+    )
+    expect(PAGE).toMatch(
+      /#standings\s*\{[^}]*margin-left: calc\(50% - var\(--telltales-offset\)\)/,
+    )
+  })
+
+  it('stays on the screen at the narrowest width that still uses one row', () => {
+    const offset = wide.timer / 2 + wide.gauge * 2 + wide.gap * 3 + panelWidth
+    const left = wide.until / 2 - offset
+    expect(left).toBeGreaterThanOrEqual(wide.padding)
+    expect(left + wide.standings).toBeLessThanOrEqual(wide.until - wide.padding)
+  })
+
+  it('goes under the tiller where there is one, and takes the left edge back', () => {
+    expect(PAGE).toMatch(/#tiller \{ display: block; order: 1; \}\s*#standings \{ order: 2; \}/)
+    const stacked = PAGE.match(new RegExp(`@media \\(max-width: ${wide.until}px\\)([\\s\\S]*?)\\n      \\}`))
+    expect(stacked?.[1] ?? '').toMatch(/#standings \{ margin-left: 0; \}/)
+  })
+
   it('fits across a phone', () => {
     expect(narrow.standings).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
   })
@@ -137,14 +161,12 @@ describe('the board at the foot of the screen', () => {
     expect(narrow.standings).toBeGreaterThanOrEqual(150)
   })
 
-  it('sits above the tiller rather than under it', () => {
-    expect(PAGE).toMatch(/<div id="standings"><\/div>\s*<div id="tiller">/)
-  })
+
 })
 
 describe('what is left for the water', () => {
   const aboveTheWater = NOTCH + narrow.padding + narrow.gaugeHeight + 6 + panelHeight
-  const belowTheWater = standingsHeight + 8 + tillerHeight + 10 + HOME_INDICATOR
+  const belowTheWater = tillerHeight + 8 + standingsHeight + HOME_INDICATOR
 
   it('leaves most of the screen to sail in', () => {
     const water = SCREEN.height - belowTheWater - aboveTheWater
