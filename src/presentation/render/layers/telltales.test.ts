@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { bestAngle, telltalesApply, telltalesFor } from './telltales'
+import {
+  bestAngle,
+  drawTelltales,
+  PANEL_HEIGHT,
+  PANEL_WIDTH,
+  telltalesApply,
+  telltalesFor,
+} from './telltales'
 
 const BEAT = 38
 const RUN = 150
@@ -116,5 +123,62 @@ describe('when they are shown', () => {
   it('says nothing coming down before the gun, where there is no angle worth holding', () => {
     expect(telltalesApply(120, false)).toBe(false)
     expect(telltalesApply(-175, false)).toBe(false)
+  })
+})
+
+
+/** Every point the panel paints, so a test can see where the cloth actually goes. */
+function tracingContext(points: { x: number; y: number }[]): CanvasRenderingContext2D {
+  const own: Record<string, unknown> = {}
+  const plot = (...args: number[]) => {
+    for (let i = 0; i + 1 < args.length; i += 2) {
+      points.push({ x: args[i] as number, y: args[i + 1] as number })
+    }
+  }
+  return new Proxy(own, {
+    get(target, property: string) {
+      if (property in target) return target[property]
+      return (...args: unknown[]) => {
+        // Only the calls that place ink: arc carries a radius and two angles after the
+        // center, so it is cut back to the pair that is a position.
+        if (['moveTo', 'lineTo', 'quadraticCurveTo'].includes(property)) plot(...(args as number[]))
+        if (property === 'arc') plot(...(args.slice(0, 2) as number[]))
+        return undefined
+      }
+    },
+    set(target, property: string, value) {
+      target[property] = value
+      return true
+    },
+  }) as unknown as CanvasRenderingContext2D
+}
+
+describe('the panel they are drawn in', () => {
+  const anchor = { left: 200, top: 120 }
+
+  /*
+   * A lifted telltale used to swing clean out of the top of its panel. Nothing showed it
+   * while the panel sat in the corner of the screen with only water above it. Put the
+   * panel under the instruments, as a phone does, and the ribbon flies into the clock.
+   */
+  it('keeps the cloth inside the box, however hard it is flogging', () => {
+    for (const side of ['port', 'starboard'] as const) {
+      for (let time = 0; time < 2; time += 0.05) {
+        const points: { x: number; y: number }[] = []
+        drawTelltales(
+          tracingContext(points),
+          { windwardLift: 1, leewardLift: 1, windwardSide: side },
+          time,
+          anchor,
+        )
+        expect(points.length).toBeGreaterThan(0)
+        for (const point of points) {
+          expect(point.x).toBeGreaterThanOrEqual(anchor.left)
+          expect(point.x).toBeLessThanOrEqual(anchor.left + PANEL_WIDTH)
+          expect(point.y).toBeGreaterThanOrEqual(anchor.top)
+          expect(point.y).toBeLessThanOrEqual(anchor.top + PANEL_HEIGHT)
+        }
+      }
+    }
   })
 })

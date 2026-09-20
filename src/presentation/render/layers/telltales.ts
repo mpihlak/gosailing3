@@ -60,11 +60,18 @@ export function telltalesFor(
   }
 }
 
-export const PANEL_WIDTH = 164
-export const PANEL_HEIGHT = 84
-const RIBBON_LENGTH = 62
-/** How far a fully lifted telltale swings up from streaming aft. */
-const LIFT_ANGLE = 68
+export const PANEL_WIDTH = 140
+export const PANEL_HEIGHT = 60
+const RIBBON_LENGTH = 46
+/**
+ * How far a fully lifted telltale swings up from streaming aft.
+ *
+ * Capped by the panel rather than chosen for looks: the panel now sits under the
+ * instruments on a phone, so a ribbon that swings outside it lands in the clock. The
+ * flutter carries the rest of the message — a lifted telltale flogs, a streaming one
+ * barely stirs.
+ */
+const LIFT_ANGLE = 32
 
 /**
  * The flutter runs on the player's clock, not the simulation's. The game steps its
@@ -94,9 +101,9 @@ export function drawTelltales(
   anchor: PanelAnchor,
 ): void {
   const { left, top } = anchor
-  const luffX = left + 34
-  const windwardY = top + 26
-  const leewardY = top + 58
+  const luffX = left + 28
+  const windwardY = top + 28
+  const leewardY = top + 47
 
   ctx.save()
 
@@ -109,8 +116,8 @@ export function drawTelltales(
 
   // The luff they are tied to.
   ctx.beginPath()
-  ctx.moveTo(luffX, top + 14)
-  ctx.lineTo(luffX, top + PANEL_HEIGHT - 14)
+  ctx.moveTo(luffX, top + 16)
+  ctx.lineTo(luffX, top + PANEL_HEIGHT - 6)
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'
   ctx.lineWidth = 2
   ctx.stroke()
@@ -153,7 +160,7 @@ function drawRibbon(
     tipY,
   )
   ctx.strokeStyle = color
-  ctx.lineWidth = 3.5
+  ctx.lineWidth = 3
   ctx.lineCap = 'round'
   ctx.stroke()
 

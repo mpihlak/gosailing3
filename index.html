@@ -7,13 +7,25 @@
     <title>Go Sailing</title>
     <style>
       :root {
+        /* The two corner panels are one box drawn two ways: the telltales on the canvas,
+           the board in the page. The layout test checks these against the renderer. */
+        --panel-width: 140px;
+        --panel-height: 60px;
+        /* The one-row layout's budget, and the width it stops fitting at. */
+        --gauge-width: 86px;
+        --timer-width: 150px;
+        --gauge-gap: 6px;
+        --edge-pad: 12px;
+        --one-row-until: 840px;
+        --standings-width: 186px;
+        --standings-height: 58px;
         /* The narrow layout's budget. The layout test reads these. */
-        --gauge-narrow: 68px;
-        --gauge-narrow-wide: 106px;
+        --gauge-narrow: 64px;
+        --gauge-narrow-timer: 90px;
         --gauge-gap-narrow: 4px;
-        --hud-pad-narrow: 8px;
-        --gauge-height-narrow: 48px;
-        --standings-width: 150px;
+        --edge-pad-narrow: 8px;
+        --gauge-height-narrow: 46px;
+        --standings-narrow: 176px;
         --tiller-height: 56px;
         --ink: #eaf2f8;
         --dim: #8aa7ba;
@@ -21,6 +33,7 @@
         --edge: rgba(255, 255, 255, 0.12);
         --warn: #ffb347;
         --good: #7ee08a;
+        --penalty: #e0564b;
         font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
       }
       * { box-sizing: border-box; }
@@ -40,19 +53,46 @@
         touch-action: none;
         display: block;
       }
-      #bottom {
+      /* Everything the player steers by sits at the top, in one column: the instruments
+         across, and whatever the race has to say to them underneath. */
+      #top {
         position: absolute;
+        top: 0;
         left: 0;
         right: 0;
-        bottom: 0;
-      }
-      #hud {
-        padding: 10px max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-bottom));
         display: flex;
-        gap: 6px;
-        justify-content: center;
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: center;
         pointer-events: none;
+        padding: max(var(--edge-pad), env(safe-area-inset-top))
+          max(var(--edge-pad), env(safe-area-inset-right)) 0
+          max(var(--edge-pad), env(safe-area-inset-left));
+      }
+      /*
+       * Three columns with the clock in the middle one, so it sits on the center line of
+       * the screen whatever is beside it. The instruments close on it from both sides,
+       * which keeps the telltales next to the speed rather than out at the edge.
+       */
+      #hud {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: start;
+        gap: var(--gauge-gap);
+        width: 100%;
+      }
+      .side {
+        display: flex;
+        gap: var(--gauge-gap);
+        align-items: flex-start;
+      }
+      .side.left { justify-content: flex-end; }
+      .side.right { justify-content: flex-start; }
+      /* The telltales are drawn on the canvas. This reserves their place in the row and
+         is what the renderer measures, so the two cannot drift apart. */
+      #telltales {
+        flex: 0 0 auto;
+        width: var(--panel-width);
+        height: var(--panel-height);
       }
       .gauge {
         background: var(--panel);
@@ -60,9 +100,9 @@
         border-radius: 10px;
         padding: 6px 8px;
         /* Fixed, not minimum: a gauge that grows with its digits shifts the whole row,
-           and the telltales are lined up against the first one. */
+           and the timer is meant to sit in the middle of the screen. */
         flex: 0 0 auto;
-        width: 86px;
+        width: var(--gauge-width);
         text-align: center;
         backdrop-filter: blur(8px);
       }
@@ -72,6 +112,9 @@
         letter-spacing: 0.09em;
         text-transform: uppercase;
         color: var(--dim);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .gauge .value {
         display: block;
@@ -83,31 +126,35 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      .gauge .label {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .gauge.wide { width: 136px; }
-      [data-field='timer'] .value { font-size: 24px; }
-      #standings {
+      .gauge.timer { width: var(--timer-width); }
+      .gauge.timer .value { font-size: 34px; line-height: 1.1; }
+      /* The board and, under it, the tiller. Neither is steered by, so both are out of
+         the way at the foot of the screen. */
+      #bottom {
         position: absolute;
-        top: max(14px, env(safe-area-inset-top));
-        right: max(14px, env(safe-area-inset-right));
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+        padding: 0 max(var(--edge-pad), env(safe-area-inset-right))
+          max(var(--edge-pad), env(safe-area-inset-bottom))
+          max(var(--edge-pad), env(safe-area-inset-left));
+      }
+      #standings {
+        width: var(--standings-width);
+        min-height: var(--standings-height);
+        margin-bottom: 8px;
         background: var(--panel);
         border: 1px solid var(--edge);
         border-radius: 10px;
         padding: 6px 4px;
-        min-width: var(--standings-width);
         backdrop-filter: blur(8px);
-        pointer-events: none;
       }
-      /* The tiller. Pull it over and she turns; let go and it comes back amidships. */
       #tiller {
         display: none;
         position: relative;
         height: var(--tiller-height);
-        margin: 0 max(10px, env(safe-area-inset-left)) 6px max(10px, env(safe-area-inset-right));
+        pointer-events: auto;
         border-radius: 999px;
         background: var(--panel);
         border: 1px solid var(--edge);
@@ -139,23 +186,31 @@
       .crew {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 3px 9px;
+        gap: 6px;
+        padding: 3px 7px;
         font-size: 13px;
         color: var(--dim);
         white-space: nowrap;
       }
       .crew.mine { color: var(--ink); font-weight: 600; }
       .crew .pos { width: 1em; text-align: right; font-variant-numeric: tabular-nums; }
-      .crew .who { flex: 1; }
+      .crew .who { flex: 0 0 auto; }
       .crew.home .who::after { content: ' ✓'; color: var(--good); }
-      .crew .pen { min-width: 2.5em; text-align: right; }
-      .crew .turns { color: var(--warn); letter-spacing: 1px; }
+      /* What she is sailing for now. Quieter than her name, which is what you look for. */
+      .crew .doing {
+        flex: 1;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 400;
+        color: var(--dim);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .crew.ocs .doing { color: var(--warn); font-weight: 600; }
+      .crew .pen { min-width: 2.2em; text-align: right; }
+      .crew .turns { color: var(--penalty); font-weight: 600; }
       [data-banner] {
-        position: absolute;
-        top: max(16px, env(safe-area-inset-top));
-        left: 50%;
-        transform: translateX(-50%);
+        margin-top: 8px;
         padding: 9px 18px;
         border-radius: 999px;
         background: var(--panel);
@@ -164,6 +219,9 @@
         opacity: 0;
         transition: opacity 0.25s ease;
         white-space: nowrap;
+        max-width: 92vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       [data-banner][data-visible='true'] { opacity: 1; }
       [data-banner][data-tone='warn'] { color: var(--warn); }
@@ -181,7 +239,6 @@
         padding: 20px;
       }
       #overlay[data-visible='true'] { opacity: 1; pointer-events: auto; cursor: pointer; }
-      /* Splits the instruments into two rows where there is no room for one. */
       .row-break { display: none; }
       .card {
         background: var(--panel);
@@ -210,62 +267,84 @@
       .results tr.mine td { color: var(--ink); font-weight: 600; }
       .card p { margin: 0; color: var(--dim); line-height: 1.6; font-size: 14px; }
       .card b { color: var(--ink); }
-      /* A phone held upright. The instruments go on two rows: what she is doing on top,
-         where the race stands underneath. */
+      /*
+       * Too narrow for the telltales to sit in the row with the instruments. Everything
+       * goes back to one centered line and the telltales wrap below it, which is still
+       * directly under the speed and the angle they are read with.
+       */
+      @media (max-width: 840px) {
+        #hud {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          row-gap: 6px;
+        }
+        .side { display: contents; }
+        [data-field='speed'] { order: 1; }
+        [data-field='twa'] { order: 2; }
+        .gauge.timer { order: 3; }
+        [data-field='tws'] { order: 4; }
+        [data-field='targetVmg'] { order: 5; }
+        /* Always breaks the line, so the telltales go under the instruments at every
+           width in this mode and never tack themselves onto the end of the row. */
+        .row-break { display: block; flex-basis: 100%; height: 0; order: 6; }
+        /* The auto margin beats the centering on that line alone, putting the telltales
+           against the same edge as the board at the foot of the screen. */
+        #telltales { order: 7; margin-right: auto; }
+      }
       @media (pointer: coarse), (max-width: 560px) {
         #tiller { display: block; }
       }
+      /* A phone held upright. */
       @media (max-width: 560px) {
-        /* Both rows start at the same edge rather than each centring on its own. */
-        #hud {
-          justify-content: flex-start;
-          gap: var(--gauge-gap-narrow);
-          padding: var(--hud-pad-narrow) max(var(--hud-pad-narrow), env(safe-area-inset-left))
-            max(10px, env(safe-area-inset-bottom));
+        #top {
+          padding: max(var(--edge-pad-narrow), env(safe-area-inset-top))
+            max(var(--edge-pad-narrow), env(safe-area-inset-right)) 0
+            max(var(--edge-pad-narrow), env(safe-area-inset-left));
         }
+        #hud { gap: var(--gauge-gap-narrow); }
+        #bottom {
+          padding: 0 max(var(--edge-pad-narrow), env(safe-area-inset-right))
+            max(var(--edge-pad-narrow), env(safe-area-inset-bottom))
+            max(var(--edge-pad-narrow), env(safe-area-inset-left));
+        }
+        #standings { width: var(--standings-narrow); }
         .gauge {
           width: var(--gauge-narrow);
           min-height: var(--gauge-height-narrow);
           padding: 5px 3px;
         }
-        .gauge.wide { width: var(--gauge-narrow-wide); }
         .gauge .label { font-size: 9px; letter-spacing: 0.03em; }
         .gauge .value { font-size: 15px; }
-        [data-field='timer'] .value { font-size: 19px; }
-
-        /* No room for the wind direction; the telltales and the arrows say it better. */
-        [data-field='wind'] { display: none; }
-
-        [data-field='speed'],
-        [data-field='twa'],
-        [data-field='tws'],
-        [data-field='vmg'],
-        [data-field='targetVmg'] { order: 1; }
-        .row-break { display: block; order: 2; flex-basis: 100%; height: 0; }
-        [data-field='timer'],
-        [data-field='line'],
-        [data-field='status'] { order: 3; }
+        .gauge.timer { width: var(--gauge-narrow-timer); }
+        .gauge.timer .value { font-size: 26px; }
+        [data-banner] { font-size: 14px; padding: 7px 14px; }
       }
     </style>
   </head>
   <body>
     <canvas id="stage"></canvas>
-    <div data-banner data-visible="false"></div>
-    <div id="standings"></div>
-    <div id="bottom">
-    <div id="tiller"><div class="grip"></div></div>
-    <div id="hud">
-      <div class="gauge" data-field="timer"><span class="label">Timer</span><span class="value">—</span></div>
-      <div class="gauge" data-field="speed"><span class="label">Speed</span><span class="value">—</span></div>
-      <div class="gauge" data-field="twa"><span class="label">TWA</span><span class="value">—</span></div>
-      <div class="gauge" data-field="tws"><span class="label">TWS</span><span class="value">—</span></div>
-      <div class="gauge" data-field="wind"><span class="label">TWD</span><span class="value">—</span></div>
-      <div class="gauge" data-field="vmg"><span class="label">VMG</span><span class="value">—</span></div>
-      <div class="gauge" data-field="targetVmg"><span class="label">Target VMG</span><span class="value">—</span></div>
-      <div class="gauge" data-field="line"><span class="label">To line</span><span class="value">—</span></div>
-      <div class="row-break"></div>
-      <div class="gauge wide" data-field="status"><span class="label">Next</span><span class="value">—</span></div>
+    <div id="top">
+      <div id="hud">
+        <div class="side left">
+          <div id="telltales"></div>
+          <div class="gauge" data-field="speed"><span class="label">Speed</span><span class="value">—</span></div>
+          <div class="gauge" data-field="twa"><span class="label">TWA</span><span class="value">—</span></div>
+        </div>
+        <div class="gauge timer" data-field="timer">
+          <span class="label">Timer</span><span class="value">—</span>
+        </div>
+        <div class="side right">
+          <div class="gauge" data-field="tws"><span class="label">TWS</span><span class="value">—</span></div>
+          <div class="gauge" data-field="targetVmg"><span class="label">%VMG</span><span class="value">—</span></div>
+        </div>
+        <div class="row-break"></div>
+      </div>
+      <div data-banner data-visible="false"></div>
     </div>
+    <div id="bottom">
+      <div id="standings"></div>
+      <div id="tiller"><div class="grip"></div></div>
     </div>
     <div id="overlay" data-visible="false"></div>
     <script type="module" src="/src/apps/game/main.ts"></script>

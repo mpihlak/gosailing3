@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { PANEL_HEIGHT, PANEL_WIDTH } from '@/presentation/render/layers/telltales'
 
 /**
- * Does it all fit on a phone.
+ * Does it all fit.
  *
  * This is arithmetic against the stylesheet's own numbers, not a rendered page: the tests
  * run without a browser and nothing here lays anything out. It cannot tell you that a box
@@ -15,7 +15,7 @@ import { PANEL_HEIGHT, PANEL_WIDTH } from '@/presentation/render/layers/telltale
 
 const PAGE = readFileSync(resolve(import.meta.dirname, '../../../index.html'), 'utf8')
 
-/** One of the sizes the narrow layout is budgeted with, read from the stylesheet. */
+/** One of the sizes the layout is budgeted with, read from the stylesheet. */
 function css(property: string): number {
   const found = PAGE.match(new RegExp(`--${property}:\\s*(\\d+(?:\\.\\d+)?)px`))
   if (!found) throw new Error(`the stylesheet no longer defines --${property}`)
@@ -28,70 +28,131 @@ const SCREEN = { width: 390, height: 844 }
 const NOTCH = 47
 const HOME_INDICATOR = 34
 
-const gauge = css('gauge-narrow')
-const wideGauge = css('gauge-narrow-wide')
-const gap = css('gauge-gap-narrow')
-const padding = css('hud-pad-narrow')
-const gaugeHeight = css('gauge-height-narrow')
-const standingsWidth = css('standings-width')
+const panelWidth = css('panel-width')
+const panelHeight = css('panel-height')
 const tillerHeight = css('tiller-height')
+const standingsHeight = css('standings-height')
 
-const row = (normal: number, wide = 0): number =>
-  normal * gauge + wide * wideGauge + (normal + wide - 1) * gap
+const wide = {
+  gauge: css('gauge-width'),
+  timer: css('timer-width'),
+  gap: css('gauge-gap'),
+  padding: css('edge-pad'),
+  standings: css('standings-width'),
+  until: css('one-row-until'),
+}
 
-describe('the instruments on a phone', () => {
-  it('fits what she is doing on one row', () => {
-    // Speed, TWA, TWS, VMG, Target VMG. The wind direction gauge is hidden here.
-    expect(row(5)).toBeLessThanOrEqual(SCREEN.width - padding * 2)
+const narrow = {
+  gauge: css('gauge-narrow'),
+  timer: css('gauge-narrow-timer'),
+  gap: css('gauge-gap-narrow'),
+  padding: css('edge-pad-narrow'),
+  gaugeHeight: css('gauge-height-narrow'),
+  standings: css('standings-narrow'),
+}
+
+/** Speed, TWA, the clock, TWS and %VMG, all on one line. */
+function instruments(size: { gauge: number; timer: number; gap: number }): number {
+  return size.gauge * 4 + size.timer + size.gap * 4
+}
+
+describe('the telltales', () => {
+  it('are the same box on the canvas as the page keeps for them', () => {
+    // One is painted by the renderer, the other is a div in the instrument row. A change
+    // to either that the other does not follow moves the panel off its slot.
+    expect(panelWidth).toBe(PANEL_WIDTH)
+    expect(panelHeight).toBe(PANEL_HEIGHT)
   })
 
-  it('fits where the race stands on the row below', () => {
-    // Timer, To line, and the wider Next.
-    expect(row(2, 1)).toBeLessThanOrEqual(SCREEN.width - padding * 2)
-  })
-
-  it('hides the wind direction, which is what makes the first row fit', () => {
-    expect(PAGE).toMatch(/\[data-field='wind'\]\s*\{\s*display:\s*none/)
-    expect(row(6)).toBeGreaterThan(SCREEN.width - padding * 2)
-  })
-
-  it('starts both rows at the same edge', () => {
-    expect(PAGE).toMatch(/#hud\s*\{[^}]*justify-content:\s*flex-start/)
+  it('sit next to the speed, not out at the edge of the screen', () => {
+    const order = [...PAGE.matchAll(/(id="telltales"|data-field="(speed|twa|tws|targetVmg)")/g)].map(
+      (found) => found[2] ?? 'telltales',
+    )
+    expect(order).toEqual(['telltales', 'speed', 'twa', 'tws', 'targetVmg'])
   })
 })
 
-describe('the panels in the corners', () => {
-  const telltalesLeft = padding
-  const telltalesRight = telltalesLeft + PANEL_WIDTH
-  // The board is lined up with the outermost gauge, which on a phone ends the top row.
-  const standingsRight = padding + row(5)
-  const standingsLeft = standingsRight - standingsWidth
+describe('the instruments on one row', () => {
+  /*
+   * Three grid columns, the clock in the middle one. Both side columns are 1fr, so each
+   * is as wide as the one that needs more — the telltales, the speed and the angle.
+   */
+  const side = panelWidth + wide.gauge * 2 + wide.gap * 2
+  const content = side * 2 + wide.timer + wide.gap * 2 + wide.padding * 2
 
-  it('does not have the telltales and the board on top of each other', () => {
-    expect(standingsLeft).toBeGreaterThan(telltalesRight)
+  it('fits the whole row down to the width it gives up at', () => {
+    expect(content).toBeLessThanOrEqual(wide.until)
   })
 
-  it('leaves a clear gap between them rather than touching', () => {
-    expect(standingsLeft - telltalesRight).toBeGreaterThanOrEqual(16)
+  it('keeps the clock on the center line, with the sides closing in on it', () => {
+    expect(PAGE).toMatch(/#hud\s*\{[^}]*grid-template-columns:\s*1fr auto 1fr/)
+    expect(PAGE).toMatch(/\.side\.left\s*\{[^}]*justify-content:\s*flex-end/)
+    expect(PAGE).toMatch(/\.side\.right\s*\{[^}]*justify-content:\s*flex-start/)
   })
 
-  it('keeps them both on the screen', () => {
-    expect(telltalesLeft).toBeGreaterThanOrEqual(0)
-    expect(standingsRight).toBeLessThanOrEqual(SCREEN.width)
+  it('draws the clock larger than the gauges beside it', () => {
+    expect(wide.timer).toBeGreaterThan(wide.gauge)
+    expect(narrow.timer).toBeGreaterThan(narrow.gauge)
+  })
+})
+
+describe('the instruments once the row is too wide for the screen', () => {
+  const stacked = new RegExp(`@media \\(max-width: ${wide.until}px\\)([\\s\\S]*?)\\n      \\}`)
+
+  it('drops the telltales onto a line of their own', () => {
+    const rules = PAGE.match(stacked)?.[1] ?? ''
+    expect(rules).toMatch(/\.row-break\s*\{[^}]*flex-basis: 100%/)
+    expect(rules).toMatch(/#telltales\s*\{\s*order: 7/)
+  })
+
+  it('puts the telltales against the left edge, where the board is', () => {
+    const rules = PAGE.match(stacked)?.[1] ?? ''
+    expect(rules).toMatch(/#telltales\s*\{[^}]*margin-right: auto/)
+    // Both edges are inset by the same custom property, so the two line up.
+    expect(PAGE).toMatch(/#top\s*\{[^}]*max\(var\(--edge-pad\), env\(safe-area-inset-left\)\)/)
+    expect(PAGE).toMatch(/#bottom\s*\{[^}]*max\(var\(--edge-pad\), env\(safe-area-inset-left\)\)/)
+  })
+
+  it('still fits the five instruments across the narrowest screen', () => {
+    expect(instruments(narrow)).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
+  })
+
+  it('fits them at the wider sizes too, right down to where the narrow ones take over', () => {
+    // The sizes only shrink at 560px, so everything above that uses the wide budget.
+    expect(instruments(wide)).toBeLessThanOrEqual(561 - wide.padding * 2)
+  })
+
+  it('leaves the telltales room on the line below', () => {
+    expect(panelWidth).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
+  })
+})
+
+describe('the board at the foot of the screen', () => {
+  it('fits across a phone', () => {
+    expect(narrow.standings).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
+  })
+
+  it('has room for a name and what she is sailing for', () => {
+    // Place, name, the doing column and a penalty flag, at 13px and 11px.
+    expect(narrow.standings).toBeGreaterThanOrEqual(150)
+  })
+
+  it('sits above the tiller rather than under it', () => {
+    expect(PAGE).toMatch(/<div id="standings"><\/div>\s*<div id="tiller">/)
   })
 })
 
 describe('what is left for the water', () => {
-  const belowTheWater = tillerHeight + 6 + gaugeHeight * 2 + gap + padding + HOME_INDICATOR
-  const aboveTheWater = NOTCH + PANEL_HEIGHT
+  const aboveTheWater = NOTCH + narrow.padding + narrow.gaugeHeight + 6 + panelHeight
+  const belowTheWater = standingsHeight + 8 + tillerHeight + 10 + HOME_INDICATOR
 
   it('leaves most of the screen to sail in', () => {
     const water = SCREEN.height - belowTheWater - aboveTheWater
     expect(water).toBeGreaterThan(SCREEN.height * 0.45)
   })
 
-  it('keeps the tiller clear of the home indicator', () => {
-    expect(belowTheWater).toBeLessThan(SCREEN.height / 3)
+  it('keeps the instruments out of the top third', () => {
+    expect(aboveTheWater).toBeLessThan(SCREEN.height / 3)
   })
 
   it('gives the tiller a thumb-sized bar', () => {

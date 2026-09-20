@@ -1,14 +1,11 @@
-import { normalizeBearing, normalizeSigned, toRadians } from '@/foundation/geom'
+import { normalizeSigned, toRadians } from '@/foundation/geom'
 import { clamp, type Degrees, type Knots, type Seconds } from '@/foundation/units'
 import type { Polar } from '@/domain/polars'
 
 export interface Instruments {
   readonly speed: Knots
   readonly twa: Degrees
-  readonly windDirection: Degrees
   readonly windSpeed: Knots
-  /** Speed made good toward the next mark's side of the course. */
-  readonly vmg: Knots
   /** VMG as a fraction of the best available in this wind. */
   readonly vmgRatio: number
   /**
@@ -18,22 +15,10 @@ export interface Instruments {
    */
   readonly timeToStart: Seconds
   readonly raceTime: Seconds
-  readonly distanceToLine?: number
-  readonly status: string
   readonly place?: number
 }
 
-const FIELDS = [
-  'speed',
-  'twa',
-  'tws',
-  'vmg',
-  'targetVmg',
-  'wind',
-  'timer',
-  'line',
-  'status',
-] as const
+const FIELDS = ['speed', 'twa', 'tws', 'targetVmg', 'timer'] as const
 type Field = (typeof FIELDS)[number]
 
 export class Hud {
@@ -55,32 +40,16 @@ export class Hud {
   }
 
   update(instruments: Instruments): void {
-    const {
-      speed,
-      twa,
-      vmg,
-      vmgRatio,
-      windDirection,
-      windSpeed,
-      timeToStart,
-      raceTime,
-      distanceToLine,
-      status,
-    } = instruments
+    const { speed, twa, vmgRatio, windSpeed, timeToStart, raceTime } = instruments
 
     this.set('speed', `${speed.toFixed(1)}`)
     this.set('twa', `${Math.round(Math.abs(twa))}° ${twa >= 0 ? 'P' : 'S'}`)
     this.set('tws', windSpeed.toFixed(1))
-    this.set('vmg', vmg.toFixed(1))
     this.set('targetVmg', `${Math.round(vmgRatio * 100)}%`)
-    // Wind speed has its own gauge beside the angle, so this one carries the direction.
-    this.set('wind', `${Math.round(normalizeBearing(windDirection))}°`)
     this.set(
       'timer',
       timeToStart > 0 ? `−${countdown(timeToStart)}` : clock(Math.max(0, raceTime)),
     )
-    this.set('line', distanceToLine === undefined ? '—' : `${Math.round(distanceToLine)}m`)
-    this.set('status', status)
   }
 
   showBanner(text: string, tone: 'info' | 'warn' | 'good' = 'info', holdMs = 2600): void {

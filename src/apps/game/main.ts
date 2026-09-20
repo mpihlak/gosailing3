@@ -1,6 +1,6 @@
 import { vec } from '@/foundation/geom'
-import { bowPosition, type BoatState } from '@/domain/boat'
-import { distanceToLine, type Mark } from '@/domain/course'
+import type { BoatState } from '@/domain/boat'
+import type { Mark } from '@/domain/course'
 import {
   type InputSource,
   createSimulation,
@@ -20,10 +20,10 @@ import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/
 import {
   clock,
   Hud,
+  OCS,
   StandingsBoard,
   targetVmgRatio,
   timing,
-  velocityMadeGood,
 } from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
 import { duel, GAME_PACE, PLAYER_ID, randomSeed } from './scenario'
@@ -35,6 +35,8 @@ const hud = new Hud(
 )
 const overlay = requireElement<HTMLElement>('#overlay')
 const standingsPanel = requireElement<HTMLElement>('#standings')
+/** The telltales are drawn on the canvas; this is the place the page keeps for them. */
+const telltalesSlot = requireElement<HTMLElement>('#telltales')
 
 /** How much water to show across the short edge of the screen. */
 const METERS_ACROSS = 420
@@ -92,7 +94,7 @@ let showLaylines = true
 let running = false
 let lastFrame = 0
 let debugRate = STARTING_DEBUG_RATE
-/** Where the telltales sit: at the top of the screen, lined up with the first gauge. */
+/** Where the telltales sit, measured off the place the page keeps for them. */
 let panelAnchor = { left: 16, top: 16 }
 /**
  * What tapping the card does. There is no keyboard on a phone, so it has to do
@@ -192,10 +194,10 @@ function handleCommand(command: HelmCommand): void {
 }
 
 /**
- * Line the two corner panels up with the instruments: the telltales with the left of the
- * first gauge, the standings with the right of the last, both at the top of the screen.
- * Reading a layout is not free, so it is done when the viewport changes and not every
- * frame.
+ * Put the telltales where the page has left room for them. The stylesheet decides where
+ * that is — beside the instruments on a laptop, under them on a phone — so the renderer
+ * follows the layout rather than repeating its arithmetic. Reading a layout is not free,
+ * so it is done when the viewport changes and not every frame.
  */
 function measurePanels(width: number, height: number): void {
   const key = `${width}x${height}`
@@ -203,28 +205,10 @@ function measurePanels(width: number, height: number): void {
   measuredAt = key
 
   const canvasBox = canvas.getBoundingClientRect()
-
-  /*
-   * Lined up with the outermost instruments, whichever they are: the panel is one row on
-   * a laptop and two on a phone, and reorders itself between them, so naming a gauge
-   * would be naming the wrong one half the time.
-   */
-  const gauges = [...document.querySelectorAll('#hud [data-field]')]
-    .map((gauge) => gauge.getBoundingClientRect())
-    .filter((box) => box.width > 0)
-
-  if (gauges.length > 0) {
-    const rightmost = Math.max(...gauges.map((box) => box.right))
-    standingsPanel.style.right = `${Math.max(8, Math.round(canvasBox.right - rightmost))}px`
-  }
-
-  // The board's own top, so whatever the stylesheet says about safe areas, the telltales
-  // agree with it rather than guessing.
-  const board = standingsPanel.getBoundingClientRect()
-  const leftmost = gauges.length > 0 ? Math.min(...gauges.map((box) => box.left)) : 16
+  const slot = telltalesSlot.getBoundingClientRect()
   panelAnchor = {
-    left: Math.max(8, Math.round(leftmost - canvasBox.left)),
-    top: Math.max(8, Math.round(board.top - canvasBox.top)),
+    left: Math.max(0, Math.round(slot.left - canvasBox.left)),
+    top: Math.max(0, Math.round(slot.top - canvasBox.top)),
   }
 }
 
@@ -288,41 +272,41 @@ function frame(timestamp: number): void {
     ...(target === undefined ? {} : { targetMark: target }),
   })
 
-  if (player) updateInstruments(player, wind.direction, wind.speed)
-  board.update(standings(simulation.ctx, runner.world), PLAYER_ID)
+  if (player) updateInstruments(player, wind.speed)
+  board.update(standings(simulation.ctx, runner.world), PLAYER_ID, whatEachBoatIsDoing())
   requestAnimationFrame(frame)
 }
 
-function updateInstruments(player: BoatState, windDirection: number, windSpeed: number): void {
+function updateInstruments(player: BoatState, windSpeed: number): void {
   const spec = specOfPlayer()
   const progress = runner.world.race.progress[PLAYER_ID]
 
-  const toLine = startLineDistance(player)
   hud.update({
     speed: player.speed,
     twa: player.twa,
-    windDirection,
     windSpeed,
-    vmg: Math.abs(velocityMadeGood(player.speed, player.twa)),
     vmgRatio: targetVmgRatio(spec.polar, player.speed, player.twa, windSpeed),
     timeToStart: timeToStart(simulation.ctx, runner.world) / GAME_PACE,
     raceTime: raceTime(simulation.ctx, runner.world) / GAME_PACE,
-    status: statusText(),
-    ...(toLine === undefined ? {} : { distanceToLine: toLine }),
     ...(progress?.place === undefined ? {} : { place: progress.place }),
   })
 }
 
-function statusText(): string {
-  const progress = runner.world.race.progress[PLAYER_ID]
-  if (!progress) return '—'
-  if (progress.status === 'overEarly') return 'OVER EARLY'
-  if (progress.status === 'finished') return 'FINISHED'
+function whatEachBoatIsDoing(): Record<string, string> {
+  return Object.fromEntries(runner.world.boats.map((boat) => [boat.id, doingText(boat.id)]))
+}
+
+/** What a boat is sailing for now, said the way the board says it. */
+function doingText(boatId: string): string {
+  const progress = runner.world.race.progress[boatId]
+  if (!progress) return ''
+  if (progress.status === 'overEarly') return OCS
+  if (progress.status === 'finished') return 'finished'
   const stage = simulation.ctx.course.stages[progress.stageIndex]
-  if (!stage) return 'FINISHED'
-  if (stage.kind === 'start') return 'To the line'
-  if (stage.kind === 'mark') return `To ${stage.mark.name.toLowerCase()}`
-  return 'To the finish'
+  if (!stage) return 'finished'
+  if (stage.kind === 'start') return 'to start'
+  if (stage.kind === 'mark') return `to ${stage.mark.name.toLowerCase()}`
+  return 'to finish'
 }
 
 /**
@@ -412,15 +396,6 @@ function nextMark(): Mark | undefined {
   const progress = runner.world.race.progress[PLAYER_ID]
   const stage = progress && simulation.ctx.course.stages[progress.stageIndex]
   return stage?.kind === 'mark' ? stage.mark : undefined
-}
-
-/** Distance from the bow to the line, shown only while it still matters. */
-function startLineDistance(player: BoatState): number | undefined {
-  const progress = runner.world.race.progress[PLAYER_ID]
-  if (!progress || progress.stageIndex !== 0) return undefined
-  const stage = simulation.ctx.course.stages[0]
-  if (stage?.kind !== 'start') return undefined
-  return distanceToLine(stage.line, bowPosition(player, specOfPlayer()))
 }
 
 function boatFloor() {

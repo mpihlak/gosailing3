@@ -90,16 +90,19 @@ describe('the game, started against the real page', () => {
   })
 
   it('fills in the instruments rather than leaving them blank', () => {
+    // Speed, TWA, the clock, TWS and %VMG.
     const values = [...document.querySelectorAll('#hud .value')].map((cell) => cell.textContent)
-    expect(values.length).toBeGreaterThan(5)
+    expect(values.length).toBe(5)
     expect(values.every((value) => value !== null && value !== '')).toBe(true)
     expect(values.filter((value) => value === '—').length).toBeLessThan(2)
   })
 
-  it('puts both boats on the standings board', () => {
+  it('puts both boats on the board, with what each is sailing for', () => {
     const board = document.querySelector<HTMLElement>('#standings')
     expect(board?.textContent).toContain('Blue')
     expect(board?.textContent).toContain('Red')
+    const doing = [...document.querySelectorAll('#standings .doing')].map((it) => it.textContent)
+    expect(doing).toEqual(['to start', 'to start'])
   })
 
   it('starts the race when the card is tapped', () => {

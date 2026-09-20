@@ -1,7 +1,10 @@
 import type { BoatId } from '@/domain/boat'
 import type { Standing } from '@/sim'
 
-/** The board in the corner: who is where, and who owes turns. */
+/** On the course side of the line at the gun, and owing a return to clear it. */
+export const OCS = 'OCS'
+
+/** The board at the foot of the screen: who is where, what for, and who owes turns. */
 export class StandingsBoard {
   private shown = ''
 
@@ -12,20 +15,29 @@ export class StandingsBoard {
     private readonly colors: Readonly<Record<BoatId, string>> = {},
   ) {}
 
-  update(standings: readonly Standing[], playerId: BoatId): void {
+  /** `doing` is what each boat is sailing for now, in the words the player reads. */
+  update(
+    standings: readonly Standing[],
+    playerId: BoatId,
+    doing: Readonly<Record<BoatId, string>>,
+  ): void {
     // The board changes rarely and the frame is every sixteen milliseconds, so it is
     // rebuilt only when it would look different.
-    const key = standings.map((s) => `${s.boatId}${s.place}${s.penalties}${s.finished}`).join('|')
+    const key = standings
+      .map((s) => `${s.boatId}${s.place}${s.penalties}${s.finished}${doing[s.boatId] ?? ''}`)
+      .join('|')
     if (key === this.shown) return
     this.shown = key
 
     this.root.innerHTML = standings
       .map((standing) => {
         const name = this.names[standing.boatId] ?? standing.boatId
+        const says = doing[standing.boatId] ?? ''
         const classes = [
           'crew',
           standing.boatId === playerId ? 'mine' : '',
           standing.finished ? 'home' : '',
+          says === OCS ? 'ocs' : '',
         ]
           .filter(Boolean)
           .join(' ')
@@ -33,6 +45,7 @@ export class StandingsBoard {
         return `<div class="${classes}">
           <span class="pos">${standing.place}</span>
           <span class="who"${color ? ` style="color: ${color}"` : ''}>${name}</span>
+          <span class="doing">${says}</span>
           <span class="pen">${turns(standing.penalties)}</span>
         </div>`
       })
@@ -40,8 +53,11 @@ export class StandingsBoard {
   }
 }
 
-/** One dot per turn owed. Nothing at all when she owes none, so it reads as a warning. */
+/**
+ * A red flag against a boat that owes turns, with the count beside it once she owes more
+ * than one. Nothing at all when she owes none, so the flag itself is the warning.
+ */
 function turns(penalties: number): string {
   if (penalties <= 0) return ''
-  return `<span class="turns">${'●'.repeat(Math.min(penalties, 4))}${penalties > 4 ? `+${penalties - 4}` : ''}</span>`
+  return `<span class="turns">⚑${penalties > 1 ? `×${penalties}` : ''}</span>`
 }
