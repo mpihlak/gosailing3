@@ -6,6 +6,16 @@ import { visibleBounds, worldToScreen, type Camera } from '@/presentation/view/c
 import { PALETTE } from '../palette'
 
 /**
+ * How far apart the arrows are drawn, measured on the screen rather than on the water.
+ *
+ * Stepping by a fraction of the visible water instead tied the spacing to the shape of
+ * the window. A phone, zoomed in far enough to keep the boat a usable size, shows about
+ * a third of the width a laptop does, so the same fraction put the arrows three times as
+ * close together and filled the screen with them.
+ */
+const SPACING = 200
+
+/**
  * Arrows sampled across the view. They are the only way to see a gust coming or to read
  * which side of the course is paying, so they are drawn as part of the water rather
  * than as an instrument.
@@ -18,17 +28,15 @@ export function drawWindField(
   medianSpeed: number,
 ): void {
   const view = visibleBounds(camera)
-  const columns = 7
-  const stepX = (view.max.x - view.min.x) / columns
-  const stepY = stepX
-  // A canvas with no area would step nowhere, and the loop below would never end.
-  if (!(stepX > 0)) return
+  const step = SPACING / camera.pixelsPerMeter
+  // A camera with no zoom would step nowhere, and the loop below would never end.
+  if (!(step > 0)) return
 
   ctx.save()
   ctx.lineCap = 'round'
 
-  for (let x = view.min.x + stepX / 2; x < view.max.x; x += stepX) {
-    for (let y = view.min.y + stepY / 2; y < view.max.y; y += stepY) {
+  for (let x = view.min.x + step / 2; x < view.max.x; x += step) {
+    for (let y = view.min.y + step / 2; y < view.max.y; y += step) {
       const here = sample({ x, y })
       const screen = worldToScreen(camera, { x, y })
       const relative = clamp(here.speed / Math.max(medianSpeed, 1), 0.5, 1.6)
