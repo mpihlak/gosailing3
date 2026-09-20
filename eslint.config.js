@@ -68,6 +68,17 @@ export default tseslint.config(
   {
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
+      /*
+       * A module-level `let` read by a function that runs during evaluation throws on a
+       * dead zone the compiler cannot see: the reference is inside a function, so it is
+       * not textually before the declaration as far as the types are concerned. It left
+       * the game a blank screen once.
+       */
+      'no-use-before-define': 'off',
+      '@typescript-eslint/no-use-before-define': [
+        'error',
+        { functions: false, classes: false, variables: true, typedefs: false, enums: false },
+      ],
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },

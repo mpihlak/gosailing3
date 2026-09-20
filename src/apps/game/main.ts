@@ -93,10 +93,18 @@ let lastFrame = 0
 let debugRate = STARTING_DEBUG_RATE
 /** Where the telltales sit: at the top of the screen, lined up with the first gauge. */
 let panelAnchor = { left: 16, top: 16 }
+/**
+ * What tapping the card does. There is no keyboard on a phone, so it has to do
+ * something. Declared here with the rest of the state and not beside the function that
+ * sets it: the first card goes up while this module is still being evaluated, and a let
+ * further down the file is not yet alive to be assigned to.
+ */
+let onCardTap: (() => void) | undefined
 let measuredAt = ''
 
 const helm = new Helm({ onCommand: handleCommand })
 helm.attach(canvas)
+overlay.addEventListener('pointerup', () => onCardTap?.())
 
 start(randomSeed())
 requestAnimationFrame(frame)
@@ -435,9 +443,6 @@ function showResults(): void {
   overlay.dataset.visible = 'true'
 }
 
-/** What tapping the card does. There is no keyboard on a phone, so it has to do something. */
-let onCardTap: (() => void) | undefined
-
 function showOverlay(title: string, body: string, onTap?: () => void): void {
   overlay.innerHTML = `<div class="card"><h1>${title}</h1><p>${body}</p></div>`
   overlay.dataset.visible = 'true'
@@ -449,7 +454,6 @@ function hideOverlay(): void {
   onCardTap = undefined
 }
 
-overlay.addEventListener('pointerup', () => onCardTap?.())
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector)
