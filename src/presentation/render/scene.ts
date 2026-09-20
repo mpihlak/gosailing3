@@ -25,8 +25,9 @@ export interface SceneView {
   readonly targetMark?: Mark
   readonly started: boolean
   readonly medianWindSpeed: number
-  /** The target angle the telltales are read against: a heading, from the polar. */
+  /** The angles the telltales are read against, from the polar, for either leg. */
   readonly beatAngle: number
+  readonly runAngle: number
   /** The angle the laylines are drawn at: a track, which is wider. */
   readonly laylineAngle: number
   /** The player's seconds, for animation. Physics uses the world's own clock. */
@@ -64,10 +65,10 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
 
   // Screen furniture rather than something on the water, so it goes on last.
   const player = playerId ? world.boats.find((boat) => boat.id === playerId) : undefined
-  if (player && telltalesApply(player.twa)) {
+  if (player && telltalesApply(player.twa, started)) {
     drawTelltales(
       canvas,
-      telltalesFor(player.twa, view.beatAngle),
+      telltalesFor(player.twa, view.beatAngle, view.runAngle),
       view.displayTime,
       view.panelAnchor,
     )

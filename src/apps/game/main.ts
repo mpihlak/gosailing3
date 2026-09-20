@@ -214,6 +214,7 @@ function frame(timestamp: number): void {
     displayTime: world.time / GAME_PACE,
     panelAnchor,
     beatAngle: specOfPlayer().polar.beatAngle(wind.speed),
+    runAngle: specOfPlayer().polar.runAngle(wind.speed),
     laylineAngle: LAYLINE_ANGLE,
     ...(target === undefined ? {} : { targetMark: target }),
   })

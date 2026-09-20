@@ -1,75 +1,120 @@
 import { describe, it, expect } from 'vitest'
-import { telltalesApply, telltalesFor } from './telltales'
+import { bestAngle, telltalesApply, telltalesFor } from './telltales'
 
 const BEAT = 38
+const RUN = 150
 
-describe('telltalesFor', () => {
-  it('streams both of them when the boat is on the target angle', () => {
-    const state = telltalesFor(BEAT, BEAT)
-    expect(state.windwardLift).toBe(0)
-    expect(state.leewardLift).toBe(0)
-  })
+/** Read against whichever angle applies at that point of sail. */
+const at = (twa: number) => telltalesFor(twa, BEAT, RUN)
 
-  it('forgives a couple of degrees either side, as a helm wanders', () => {
-    expect(telltalesFor(BEAT + 2, BEAT).leewardLift).toBe(0)
-    expect(telltalesFor(BEAT - 2, BEAT).windwardLift).toBe(0)
+describe('going up', () => {
+  it('streams both of them on the beat angle', () => {
+    expect(at(BEAT).windwardLift).toBe(0)
+    expect(at(BEAT).leewardLift).toBe(0)
   })
 
   it('lifts the windward one when she is pinched too high', () => {
-    const state = telltalesFor(BEAT - 8, BEAT)
+    const state = at(BEAT - 6)
     expect(state.windwardLift).toBeGreaterThan(0)
     expect(state.leewardLift).toBe(0)
   })
 
   it('lifts the leeward one when she is sailing too low', () => {
-    const state = telltalesFor(BEAT + 8, BEAT)
+    const state = at(BEAT + 6)
+    expect(state.leewardLift).toBeGreaterThan(0)
+    expect(state.windwardLift).toBe(0)
+  })
+})
+
+describe('coming down', () => {
+  it('streams both of them on the running angle', () => {
+    expect(at(RUN).windwardLift).toBe(0)
+    expect(at(RUN).leewardLift).toBe(0)
+  })
+
+  it('lifts the windward one when she is not deep enough', () => {
+    // Sailing higher than her best running angle is too high, just as on a beat.
+    const state = at(RUN - 8)
+    expect(state.windwardLift).toBeGreaterThan(0)
+    expect(state.leewardLift).toBe(0)
+  })
+
+  it('lifts the leeward one when she is too deep', () => {
+    const state = at(RUN + 8)
     expect(state.leewardLift).toBeGreaterThan(0)
     expect(state.windwardLift).toBe(0)
   })
 
+  it('reads the same on both gybes', () => {
+    for (const twa of [120, 140, 150, 165, 178]) {
+      expect(at(-twa).windwardLift).toBeCloseTo(at(twa).windwardLift)
+      expect(at(-twa).leewardLift).toBeCloseTo(at(twa).leewardLift)
+    }
+  })
+})
+
+describe('the angle they are read against', () => {
+  it('is the beat angle going up and the running angle coming down', () => {
+    expect(bestAngle(40, BEAT, RUN)).toBe(BEAT)
+    expect(bestAngle(150, BEAT, RUN)).toBe(RUN)
+    expect(bestAngle(-40, BEAT, RUN)).toBe(BEAT)
+    expect(bestAngle(-150, BEAT, RUN)).toBe(RUN)
+  })
+
+  it('follows the wind, so the same angle can be right in one breeze and wrong in another', () => {
+    expect(telltalesFor(38, 38, RUN).windwardLift).toBe(0)
+    expect(telltalesFor(38, 44, RUN).windwardLift).toBeGreaterThan(0)
+    expect(telltalesFor(150, BEAT, 150).leewardLift).toBe(0)
+    expect(telltalesFor(150, BEAT, 140).leewardLift).toBeGreaterThan(0)
+  })
+})
+
+describe('how readily they lift', () => {
+  it('forgives a degree or so of wandering', () => {
+    expect(at(BEAT + 1).leewardLift).toBe(0)
+    expect(at(RUN - 1).windwardLift).toBe(0)
+  })
+
+  it('shows a few degrees off, which is the point of steering by them', () => {
+    expect(at(BEAT - 4).windwardLift).toBeGreaterThan(0.2)
+    expect(at(RUN + 4).leewardLift).toBeGreaterThan(0.2)
+  })
+
+  it('lifts further the further off she is, up to fully lifted', () => {
+    expect(at(BEAT - 8).windwardLift).toBeGreaterThan(at(BEAT - 4).windwardLift)
+    expect(at(BEAT - 30).windwardLift).toBe(1)
+    expect(at(RUN + 30).leewardLift).toBe(1)
+  })
+
   it('never lifts both at once, since she cannot be high and low together', () => {
-    for (let twa = 10; twa <= 89; twa += 1) {
-      const state = telltalesFor(twa, BEAT)
+    for (let twa = 5; twa <= 180; twa += 1) {
+      const state = at(twa)
       expect(Math.min(state.windwardLift, state.leewardLift)).toBe(0)
     }
   })
 
-  it('lifts further the further off the angle she is, up to fully lifted', () => {
-    expect(telltalesFor(BEAT - 12, BEAT).windwardLift).toBeGreaterThan(
-      telltalesFor(BEAT - 6, BEAT).windwardLift,
-    )
-    expect(telltalesFor(BEAT - 40, BEAT).windwardLift).toBe(1)
-    expect(telltalesFor(BEAT + 40, BEAT).leewardLift).toBe(1)
-  })
-
-  it('puts the windward telltale on the side the wind is coming from', () => {
-    // Positive true wind angle means the wind crosses from port, which is port tack.
-    expect(telltalesFor(40, BEAT).windwardSide).toBe('port')
-    expect(telltalesFor(-40, BEAT).windwardSide).toBe('starboard')
-  })
-
-  it('reads the same on either tack', () => {
-    for (const twa of [20, 33, 38, 45, 70]) {
-      expect(telltalesFor(-twa, BEAT).windwardLift).toBeCloseTo(telltalesFor(twa, BEAT).windwardLift)
-      expect(telltalesFor(-twa, BEAT).leewardLift).toBeCloseTo(telltalesFor(twa, BEAT).leewardLift)
-    }
-  })
-
-  it('follows the target angle when the breeze changes it', () => {
-    // Thirty-eight degrees is on the money in one breeze and pinching in another.
-    expect(telltalesFor(38, 38).windwardLift).toBe(0)
-    expect(telltalesFor(38, 44).windwardLift).toBeGreaterThan(0)
+  it('puts the windward telltale on the side the wind comes from, on either leg', () => {
+    expect(at(40).windwardSide).toBe('port')
+    expect(at(-40).windwardSide).toBe('starboard')
+    expect(at(150).windwardSide).toBe('port')
+    expect(at(-150).windwardSide).toBe('starboard')
   })
 })
 
-describe('telltalesApply', () => {
-  it('reads them upwind and across the wind', () => {
-    expect(telltalesApply(40)).toBe(true)
-    expect(telltalesApply(-75)).toBe(true)
+describe('when they are shown', () => {
+  it('reads them all the way round once she is racing', () => {
+    expect(telltalesApply(40, true)).toBe(true)
+    expect(telltalesApply(150, true)).toBe(true)
+    expect(telltalesApply(-175, true)).toBe(true)
   })
 
-  it('does not once she is off the wind, where they say nothing', () => {
-    expect(telltalesApply(120)).toBe(false)
-    expect(telltalesApply(-175)).toBe(false)
+  it('reads them going up before the gun, where a beat is still a beat', () => {
+    expect(telltalesApply(40, false)).toBe(true)
+    expect(telltalesApply(-75, false)).toBe(true)
+  })
+
+  it('says nothing coming down before the gun, where there is no angle worth holding', () => {
+    expect(telltalesApply(120, false)).toBe(false)
+    expect(telltalesApply(-175, false)).toBe(false)
   })
 })

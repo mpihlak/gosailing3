@@ -2,11 +2,14 @@ import { clamp, type Degrees, type Seconds } from '@/foundation/units'
 import { PALETTE } from '../palette'
 
 /**
- * Telltales on the luff of the headsail. Both streaming aft means the sail is working;
- * the windward one lifts when the boat is pinched too close to the wind, and the leeward
- * one lifts when she has been allowed to sail too low. They are the instrument a sailor
- * actually steers a beat by, which the polar percentage on the panel is not: that says
- * how she is doing, this says which way to move the helm.
+ * Telltales on the luff of the headsail. Both streaming aft means she is sailing her best
+ * angle; the windward one lifts when she is too high, and the leeward one when she is too
+ * low. They are the instrument a sailor actually steers by, which the polar percentage on
+ * the panel is not: that says how she is doing, this says which way to move the helm.
+ *
+ * The angle they are read against is whichever makes the most of the wind she is in — the
+ * beat angle going up, the running angle coming down. So they say the same thing on both
+ * legs: you are not making your best speed toward the mark, and here is the way to fix it.
  */
 export interface TelltaleState {
   /** 0 streaming straight aft, 1 lifted and flogging. */
@@ -16,22 +19,37 @@ export interface TelltaleState {
   readonly windwardSide: 'port' | 'starboard'
 }
 
-/** Degrees either side of the target angle that still count as on it. */
-const ON_TARGET: Degrees = 2.5
-/** How far past the deadband the boat has to stray for a telltale to be fully lifted. */
-const FULLY_LIFTED_AT: Degrees = 11
+/** Degrees either side of the best angle that still count as on it. */
+const ON_TARGET: Degrees = 1.5
+/** How far past that she has to stray for a telltale to be fully lifted. */
+const FULLY_LIFTED_AT: Degrees = 7
+/** Beyond this angle to the wind she is coming down rather than going up. */
+const RUNNING_BEYOND: Degrees = 90
 
 /**
- * Whether telltales say anything worth reading. Off the wind the headsail stops being
- * steered by them, so showing a pegged leeward telltale on a run would be noise.
+ * Whether they say anything worth reading.
+ *
+ * Before the gun there is no mark to be making for and no best angle to be off, so
+ * coming down the line they are meaningless; going up she is still sailing a beat and
+ * they mean what they always do. Once she is racing, both legs have an angle worth
+ * holding and they are read all the way round.
  */
-export function telltalesApply(twa: Degrees): boolean {
-  return Math.abs(twa) < 90
+export function telltalesApply(twa: Degrees, racing: boolean): boolean {
+  return racing || Math.abs(twa) < RUNNING_BEYOND
 }
 
-export function telltalesFor(twa: Degrees, beatAngle: Degrees): TelltaleState {
-  // Negative means she is pinching, positive means she is footing.
-  const error = Math.abs(twa) - beatAngle
+/** The angle that makes the most of the wind she is in, going up or coming down. */
+export function bestAngle(twa: Degrees, beatAngle: Degrees, runAngle: Degrees): Degrees {
+  return Math.abs(twa) < RUNNING_BEYOND ? beatAngle : runAngle
+}
+
+export function telltalesFor(
+  twa: Degrees,
+  beatAngle: Degrees,
+  runAngle: Degrees,
+): TelltaleState {
+  // Negative means she is sailing higher than her best angle, positive that she is lower.
+  const error = Math.abs(twa) - bestAngle(twa, beatAngle, runAngle)
   const lift = clamp((Math.abs(error) - ON_TARGET) / FULLY_LIFTED_AT, 0, 1)
 
   return {
