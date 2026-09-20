@@ -26,18 +26,6 @@ const FULLY_LIFTED_AT: Degrees = 7
 /** Beyond this angle to the wind she is coming down rather than going up. */
 const RUNNING_BEYOND: Degrees = 90
 
-/**
- * Whether they say anything worth reading.
- *
- * Before the gun there is no mark to be making for and no best angle to be off, so
- * coming down the line they are meaningless; going up she is still sailing a beat and
- * they mean what they always do. Once she is racing, both legs have an angle worth
- * holding and they are read all the way round.
- */
-export function telltalesApply(twa: Degrees, racing: boolean): boolean {
-  return racing || Math.abs(twa) < RUNNING_BEYOND
-}
-
 /** The angle that makes the most of the wind she is in, going up or coming down. */
 export function bestAngle(twa: Degrees, beatAngle: Degrees, runAngle: Degrees): Degrees {
   return Math.abs(twa) < RUNNING_BEYOND ? beatAngle : runAngle

@@ -7,12 +7,7 @@ import { drawWindField } from './layers/wind'
 import { drawShadows } from './layers/shadows'
 import { drawCourse } from './layers/course'
 import { drawBoats, type BoatStyle, type TrailStore } from './layers/boats'
-import {
-  drawTelltales,
-  telltalesApply,
-  telltalesFor,
-  type PanelAnchor,
-} from './layers/telltales'
+import { drawTelltales, telltalesFor, type PanelAnchor } from './layers/telltales'
 
 export interface SceneView {
   readonly ctx: SimContext
@@ -69,7 +64,7 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
 
   // Screen furniture rather than something on the water, so it goes on last.
   const player = playerId ? world.boats.find((boat) => boat.id === playerId) : undefined
-  if (player && telltalesApply(player.twa, started)) {
+  if (player) {
     drawTelltales(
       canvas,
       telltalesFor(player.twa, view.beatAngle, view.runAngle),

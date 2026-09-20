@@ -4,7 +4,6 @@ import {
   drawTelltales,
   PANEL_HEIGHT,
   PANEL_WIDTH,
-  telltalesApply,
   telltalesFor,
 } from './telltales'
 
@@ -107,25 +106,6 @@ describe('how readily they lift', () => {
     expect(at(-150).windwardSide).toBe('starboard')
   })
 })
-
-describe('when they are shown', () => {
-  it('reads them all the way round once she is racing', () => {
-    expect(telltalesApply(40, true)).toBe(true)
-    expect(telltalesApply(150, true)).toBe(true)
-    expect(telltalesApply(-175, true)).toBe(true)
-  })
-
-  it('reads them going up before the gun, where a beat is still a beat', () => {
-    expect(telltalesApply(40, false)).toBe(true)
-    expect(telltalesApply(-75, false)).toBe(true)
-  })
-
-  it('says nothing coming down before the gun, where there is no angle worth holding', () => {
-    expect(telltalesApply(120, false)).toBe(false)
-    expect(telltalesApply(-175, false)).toBe(false)
-  })
-})
-
 
 /** Every point the panel paints, so a test can see where the cloth actually goes. */
 function tracingContext(points: { x: number; y: number }[]): CanvasRenderingContext2D {
