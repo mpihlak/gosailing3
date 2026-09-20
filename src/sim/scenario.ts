@@ -100,6 +100,7 @@ export function createSimulation(spec: ScenarioSpec): Simulation {
     boats,
     race: createRaceState(boats.map((boat) => boat.id)),
     contacts: [],
+    incidents: {},
   }
 
   return { spec, ctx: { course, wind, specs, config }, world, wind, names, controllers }

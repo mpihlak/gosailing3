@@ -1,5 +1,6 @@
 import type { BoatId, Tack } from '@/domain/boat'
 import type { ContactKind } from '@/domain/collision'
+import type { RightOfWayRule } from '@/domain/rules'
 import type { Seconds } from '@/foundation/units'
 
 /**
@@ -19,6 +20,18 @@ export type SimEvent =
   | { readonly kind: 'boatFinished'; readonly boatId: BoatId; readonly place: number }
   | { readonly kind: 'raceFinished' }
   | { readonly kind: 'tacked'; readonly boatId: BoatId; readonly from: Tack; readonly to: Tack }
+  /** A turn owed, for a right-of-way rule broken or a mark touched. */
+  | {
+      readonly kind: 'penalised'
+      readonly boatId: BoatId
+      readonly otherId: string
+      readonly rule?: RightOfWayRule
+    }
+  /** Match racing: her opponent's outstanding turn and this one cancel each other. */
+  | { readonly kind: 'penaltiesCancelled'; readonly boatId: BoatId; readonly otherId: string }
+  | { readonly kind: 'penaltyCleared'; readonly boatId: BoatId; readonly remaining: number }
+  /** She crossed the finishing line owing turns, so she has not finished. */
+  | { readonly kind: 'finishRefused'; readonly boatId: BoatId; readonly penalties: number }
   | {
       readonly kind: 'contact'
       readonly boatId: BoatId

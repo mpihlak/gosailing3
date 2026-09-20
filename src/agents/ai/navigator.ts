@@ -10,8 +10,14 @@ import {
   type Vec2,
 } from '@/foundation/geom'
 import type { Degrees, Meters } from '@/foundation/units'
-import type { BoatSpec, BoatState } from '@/domain/boat'
-import { lineMidpoint, pastMark, sideOfMark, type CourseStage } from '@/domain/course'
+import { tackOf, type BoatSpec, type BoatState } from '@/domain/boat'
+import {
+  lineEndBodies,
+  lineMidpoint,
+  pastMark,
+  sideOfMark,
+  type CourseStage,
+} from '@/domain/course'
 import type { WindSample } from '@/domain/wind'
 import { raceTime, type SimContext, type WorldState } from '@/sim'
 import type { StartPhase, StartStrategy } from './start'
@@ -32,7 +38,14 @@ const CORRIDOR_MAX: Meters = 320
 
 export interface NavigationPlan {
   readonly bearing: Degrees
-  readonly reason: 'starting' | 'beating' | 'running' | 'fetching' | 'rounding' | 'holding'
+  readonly reason:
+    | 'starting'
+    | 'beating'
+    | 'running'
+    | 'fetching'
+    | 'rounding'
+    | 'penalty'
+    | 'holding'
   /** Set while a start strategy is in charge, for the lab and the tests to read. */
   readonly startPhase?: StartPhase
 }
@@ -53,6 +66,17 @@ export function planCourse(
   const progress = world.race.progress[boat.id]
   const stage = progress && ctx.course.stages[progress.stageIndex]
   if (!stage) return { bearing: boat.heading, reason: 'holding' }
+
+  /*
+   * Turns owed are carried rather than paid at once: this is match racing, where an
+   * opponent's penalty cancels yours, and a turn spent early is a chance thrown away.
+   * They come due on the last leg, because she may not finish owing any.
+   */
+  if (progress.penalties > 0 && stage.kind === 'finish' && clearToTurn(ctx, world, boat, spec)) {
+    const direction = progress.penaltyTurn?.direction ?? (tackOf(boat.twa) === 'port' ? 1 : -1)
+    // Aiming a quarter turn ahead keeps the helm hard over all the way round.
+    return { bearing: normalizeBearing(boat.heading + direction * 90), reason: 'penalty' }
+  }
 
   if (stage.kind === 'start') {
     // Getting off the line is its own problem, and there is more than one way to go
@@ -162,4 +186,28 @@ function crossTrack(position: Vec2, destination: Vec2, direct: Degrees): Meters 
 export function stageOf(ctx: SimContext, world: WorldState, boatId: string): CourseStage | undefined {
   const progress = world.race.progress[boatId]
   return progress ? ctx.course.stages[progress.stageIndex] : undefined
+}
+
+/**
+ * Whether there is room to spin. She has to keep clear of other boats while taking a
+ * penalty, and hitting a mark in the middle of a turn would only earn her another.
+ */
+function clearToTurn(
+  ctx: SimContext,
+  world: WorldState,
+  boat: BoatState,
+  spec: BoatSpec,
+): boolean {
+  const room = spec.length * 4
+
+  for (const other of world.boats) {
+    if (other.id !== boat.id && distance(boat.position, other.position) < room) return false
+  }
+  for (const mark of ctx.course.marks) {
+    if (distance(boat.position, mark.position) < room) return false
+  }
+  for (const end of lineEndBodies(ctx.course.stages)) {
+    if (distance(boat.position, end.position) < room) return false
+  }
+  return true
 }

@@ -46,6 +46,8 @@ export interface WorldState {
   readonly race: RaceState
   /** Overlaps still in progress, so one long scrape reports as one contact. */
   readonly contacts: readonly string[]
+  /** When each pair of boats was last judged, so one incident costs one turn. */
+  readonly incidents: Readonly<Record<string, Seconds>>
 }
 
 export type InputFrame = Readonly<Record<BoatId, BoatInput>>

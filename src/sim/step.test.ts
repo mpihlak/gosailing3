@@ -86,11 +86,36 @@ describe('contacts', () => {
     expect(events.filter((event) => event.kind === 'contact')).toHaveLength(1)
   })
 
-  it('counts a penalty against each boat involved', () => {
-    const { ctx, world } = collidingFleet()
-    const after = runHeadless(ctx, world, {}, { maxTicks: 5 }).world
+  it('puts the turn on the boat that had to keep clear, and not on the other', () => {
+    // A steady northerly, so which tack they are on is the rule's answer and not the
+    // seed's: the shifting wind a race normally gets would decide it for us.
+    const sim = createSimulation({
+      name: 'right of way',
+      seed: 'row',
+      boats: [
+        { id: 'a', name: 'Alpha', position: vec(-1.5, -100), heading: 10 },
+        { id: 'b', name: 'Bravo', position: vec(1.5, -100), heading: 10 },
+      ],
+      wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+    })
+    const { world: after, events } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 5 })
+
+    // Overlapped on port tack, so leeward is the starboard side. Bravo lies there, which
+    // makes Alpha the windward boat and the one in the wrong.
+    expect(events.find((event) => event.kind === 'penalised')).toMatchObject({
+      boatId: 'a',
+      otherId: 'b',
+      rule: 11,
+    })
     expect(after.race.progress.a?.penalties).toBe(1)
-    expect(after.race.progress.b?.penalties).toBe(1)
+    expect(after.race.progress.b?.penalties).toBe(0)
+  })
+
+  it('charges one turn for one coming together, however long they stay locked', () => {
+    const { ctx, world } = collidingFleet()
+    const after = runHeadless(ctx, world, {}, { maxTicks: 60 * 20 }).world
+    const total = Object.values(after.race.progress).reduce((sum, boat) => sum + boat.penalties, 0)
+    expect(total).toBeLessThanOrEqual(2)
   })
 
   it('lets a boat pass close by a mark without calling it a touch', () => {

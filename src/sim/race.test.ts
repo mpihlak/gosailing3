@@ -179,6 +179,7 @@ describe('the start', () => {
       stageIndex: 0,
       passedMark: false,
       clearedPreStart: false,
+      clearedToFinish: false,
       penalties: 0,
       distanceSailed: 0,
     }

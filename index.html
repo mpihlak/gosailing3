@@ -80,6 +80,33 @@
       }
       .gauge.wide { width: 136px; }
       [data-field='timer'] .value { font-size: 24px; }
+      #standings {
+        position: absolute;
+        top: max(14px, env(safe-area-inset-top));
+        right: max(14px, env(safe-area-inset-right));
+        background: var(--panel);
+        border: 1px solid var(--edge);
+        border-radius: 10px;
+        padding: 6px 4px;
+        min-width: 150px;
+        backdrop-filter: blur(8px);
+        pointer-events: none;
+      }
+      .crew {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 9px;
+        font-size: 13px;
+        color: var(--dim);
+        white-space: nowrap;
+      }
+      .crew.mine { color: var(--ink); font-weight: 600; }
+      .crew .pos { width: 1em; text-align: right; font-variant-numeric: tabular-nums; }
+      .crew .who { flex: 1; }
+      .crew.home .who::after { content: ' ✓'; color: var(--good); }
+      .crew .pen { min-width: 2.5em; text-align: right; }
+      .crew .turns { color: var(--warn); letter-spacing: 1px; }
       [data-banner] {
         position: absolute;
         top: max(16px, env(safe-area-inset-top));
@@ -147,6 +174,7 @@
   <body>
     <canvas id="stage"></canvas>
     <div data-banner data-visible="false"></div>
+    <div id="standings"></div>
     <div id="hud">
       <div class="gauge" data-field="timer"><span class="label">Timer</span><span class="value">—</span></div>
       <div class="gauge" data-field="speed"><span class="label">Speed</span><span class="value">—</span></div>

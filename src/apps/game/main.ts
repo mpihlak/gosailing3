@@ -4,6 +4,7 @@ import { distanceToLine, type Mark } from '@/domain/course'
 import {
   type InputSource,
   createSimulation,
+  standings,
   interpolateWorld,
   raceTime,
   timeToStart,
@@ -15,7 +16,7 @@ import { createCamera, follow, type Camera } from '@/presentation/view/camera'
 import { drawScene, PALETTE, resizeSurface, TrailStore, type BoatStyle } from '@/presentation/render'
 import { Helm, type HelmCommand } from '@/presentation/input'
 import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
-import { clock, Hud, targetVmgRatio, velocityMadeGood } from '@/presentation/ui'
+import { clock, Hud, StandingsBoard, targetVmgRatio, velocityMadeGood } from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
 import { duel, GAME_PACE, PLAYER_ID, randomSeed } from './scenario'
 
@@ -60,6 +61,7 @@ let camera: Camera
 let trails = new TrailStore()
 let sources: Record<string, InputSource> = {}
 let styles: Record<string, BoatStyle> = {}
+let board: StandingsBoard
 let running = false
 let lastFrame = 0
 let debugRate = STARTING_DEBUG_RATE
@@ -79,6 +81,7 @@ function start(seed: string, immediate = false): void {
   trails = new TrailStore()
   sources = helmsFor(simulation)
   styles = stylesFor(simulation)
+  board = new StandingsBoard(requireElement<HTMLElement>('#standings'), simulation.names)
   running = false
   debugRate = STARTING_DEBUG_RATE
 
@@ -196,6 +199,7 @@ function frame(timestamp: number): void {
   })
 
   if (player) updateInstruments(player, wind.direction, wind.speed)
+  board.update(standings(simulation.ctx, runner.world), PLAYER_ID)
   requestAnimationFrame(frame)
 }
 
@@ -276,6 +280,28 @@ function announce(event: TimedEvent): void {
       return hud.showBanner(`Started ${event.late.toFixed(1)}s after the gun`, 'info')
     case 'markRounded':
       return hud.showBanner('Mark rounded — head for the line', 'good')
+    case 'penalised':
+      return hud.showBanner(
+        event.rule === undefined
+          ? 'Penalty — you touched a mark. One turn owed.'
+          : `Penalty — rule ${event.rule}. One turn owed.`,
+        'warn',
+        3600,
+      )
+    case 'penaltiesCancelled':
+      return hud.showBanner('Penalties cancel — nothing owed', 'good', 2600)
+    case 'penaltyCleared':
+      return hud.showBanner(
+        event.remaining > 0 ? `Turn taken — ${event.remaining} still owed` : 'Turn taken — you are clear',
+        'good',
+        2600,
+      )
+    case 'finishRefused':
+      return hud.showBanner(
+        'Penalty outstanding — take your turn and cross again',
+        'warn',
+        4200,
+      )
     case 'contact':
       return hud.showBanner(`Contact with the ${event.otherId}`, 'warn')
     case 'boatFinished': {

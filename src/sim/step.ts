@@ -9,10 +9,12 @@ import {
 } from '@/domain/boat'
 import { detectContacts, separationFor, type Contact, type Hull } from '@/domain/collision'
 import { lineEndBodies } from '@/domain/course'
-import { addPenalty, stepRace } from './race'
-import type { TimedEvent } from './events'
+import { encounter } from '@/domain/rules'
+import { penalise, stepRace } from './race'
+import type { SimEvent, TimedEvent } from './events'
 import type { InputFrame, SimContext, WorldState } from './world'
 import { raceTime, specFor } from './world'
+import type { Seconds } from '@/foundation/units'
 
 export interface StepResult {
   readonly world: WorldState
@@ -50,18 +52,43 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
   // A contact is news on the tick it starts, not for every tick the boats stay locked.
   const fresh = contacts.filter((contact) => !world.contacts.includes(keyOf(contact)))
   const progress = { ...race.progress }
+  const penaltyEvents: SimEvent[] = []
+
+  /*
+   * One incident, one turn. Two hulls locked together touch, come apart and touch again
+   * many times a second, and judging each of those separately once ran a boat up to nine
+   * hundred outstanding penalties. A pair is judged once and then left alone for a while.
+   */
+  const incidents = recentIncidents(world.incidents, time)
+
   for (const contact of fresh) {
-    // Both boats carry the penalty. Which of them was in the wrong is a question for
-    // the rules, and the rules are not the simulation's business.
-    const involved = contact.kind === 'boat' ? [contact.boatId, contact.otherId] : [contact.boatId]
-    for (const boatId of involved) {
-      const penalised = progress[boatId]
-      if (penalised) progress[boatId] = addPenalty(penalised)
+    const incident = incidentKey(contact)
+    if (incidents[incident] !== undefined) continue
+    incidents[incident] = time
+
+    if (contact.kind !== 'boat') {
+      // Touching a mark is her own affair, whoever else was about.
+      penalise(progress, contact.boatId, contact.otherId, penaltyEvents)
+      continue
     }
+
+    // Who had to keep clear is asked of the tick before they touched: by now the hulls
+    // have been pushed apart and the geometry that decided it is gone.
+    const before = (id: string) => world.boats.find((boat) => boat.id === id)
+    const one = before(contact.boatId)
+    const two = before(contact.otherId)
+    if (!one || !two) continue
+
+    const verdict = encounter(
+      { boat: one, spec: specFor(ctx, one.id) },
+      { boat: two, spec: specFor(ctx, two.id) },
+    )
+    penalise(progress, verdict.keepClear, verdict.rightOfWay, penaltyEvents, verdict.rule)
   }
 
   const events: TimedEvent[] = [
     ...raceEvents.map((event) => ({ ...event, tick, time })),
+    ...penaltyEvents.map((event) => ({ ...event, tick, time })),
     ...fresh.map(
       (contact) =>
         ({
@@ -76,9 +103,31 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
   ]
 
   return {
-    world: { tick, time, boats, race: { ...race, progress }, contacts: keys },
+    world: { tick, time, boats, race: { ...race, progress }, contacts: keys, incidents },
     events,
   }
+}
+
+/** How long a pair stays judged, so one coming-together is one penalty. */
+const INCIDENT_COOLDOWN: Seconds = 10
+
+/** Incidents still within the cooldown. Anything older is forgotten. */
+function recentIncidents(
+  incidents: Readonly<Record<string, Seconds>>,
+  time: Seconds,
+): Record<string, Seconds> {
+  const kept: Record<string, Seconds> = {}
+  for (const [key, at] of Object.entries(incidents)) {
+    if (time - at < INCIDENT_COOLDOWN) kept[key] = at
+  }
+  return kept
+}
+
+/** Names the pair, not the order they were found in, so one touch is one incident. */
+function incidentKey(contact: Contact): string {
+  return contact.kind === 'boat'
+    ? `boat:${[contact.boatId, contact.otherId].sort().join('~')}`
+    : keyOf(contact)
 }
 
 function keyOf(contact: Contact): string {

@@ -58,6 +58,10 @@ does the rest.
 **course** holds marks, lines and the ordered list of stages to sail. A different course
 shape is a different list of stages, not new code in the race logic.
 
+**rules** answers who has right of way, under rules 10, 11 and 12. It is domain rather
+than agent knowledge because two callers need the same answer: the simulation, to decide
+who is penalised, and the AI, to keep clear in the first place.
+
 **collision** reports overlaps. A hull is a capsule — its centreline plus half its beam —
 because a boat is three times longer than it is wide and a circle round its middle is
 wrong in both directions at once. Marks and obstacles are discs, and each says whether it
@@ -99,8 +103,8 @@ what the start looked like — when she crossed, where on the line, on which tac
 speed, and whether she was recalled — so a strategy can be judged on outcomes rather than
 on the shape of its code.
 
-`rules` and `netcode` are not built. Both are designed for: rules read snapshots and
-events, and the `InputSource` seam means a remote player looks like any other helm.
+`netcode` is not built. The `InputSource` seam means a remote player looks like any
+other helm when it is.
 
 ### presentation
 
@@ -117,7 +121,7 @@ plain DOM — a leaderboard is a table, not something drawn by hand on a canvas.
 | A boat class | A `PolarTable` and a `BoatSpec` |
 | An AI behavior | A tier in `agents/ai`, tested against a fixed wind |
 | A way of starting | A `StartStrategy` in `agents/ai/start`, judged with `trialStart` |
-| A racing rule | A pure function over a snapshot and events, in `agents/rules` |
+| A racing rule | A pure function over two boats, in `domain/rules` |
 | An instrument | A field in `presentation/ui/hud.ts` |
 
 ## What is not built

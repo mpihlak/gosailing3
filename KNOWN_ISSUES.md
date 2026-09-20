@@ -54,3 +54,17 @@ whole class of fault.
 
 The renderer is a harder case and probably wants screenshot comparison rather than unit
 tests, which is a job for the lab.
+
+## Penalties are only for contact
+
+A boat is judged when two hulls touch. Real umpiring penalises a boat who fails to keep
+clear whether or not there is contact, so an AI boat can force a right-of-way boat to
+dodge and pay nothing for it, and a player can do the same.
+
+Rules 13 (while tacking), 14 (avoiding contact) and 15 and 16, which limit what a
+right-of-way boat may do, are not in either. A boat who tacks into someone is judged on
+the tack she ends up on, and a right-of-way boat may hold her course into a collision and
+be blameless.
+
+Penalties cancelling one for one is defined between the two boats in the incident, which
+is what match racing means by it. With three boats or more it is undefined.

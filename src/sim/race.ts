@@ -1,5 +1,5 @@
-import { distance, type Segment, type Vec2 } from '@/foundation/geom'
-import type { Meters, Seconds } from '@/foundation/units'
+import { angleDelta, distance, type Segment, type Vec2 } from '@/foundation/geom'
+import type { Degrees, Meters, Seconds } from '@/foundation/units'
 import {
   bowPosition,
   hullCentreline,
@@ -17,6 +17,7 @@ import {
   type CourseStage,
   type RaceLine,
 } from '@/domain/course'
+import type { RightOfWayRule } from '@/domain/rules'
 import type { SimEvent } from './events'
 
 export type RacePhase = 'prestart' | 'racing' | 'complete'
@@ -37,8 +38,25 @@ export interface BoatProgress {
    * it has, she cannot start, however many times she crosses the line.
    */
   readonly clearedPreStart: boolean
+  /** Turns still owed. She may carry them, but she may not finish owing any. */
   readonly penalties: number
+  /**
+   * Whether her hull has been wholly on the course side of the finishing line since she
+   * last went over it. Only matters to a boat who takes a turn below the line: coming
+   * back with her bow alone is not coming back.
+   */
+  readonly clearedToFinish: boolean
+  /** A penalty turn under way: which way round she is going and how far she has got. */
+  readonly penaltyTurn?: PenaltyTurn
   readonly distanceSailed: Meters
+}
+
+export interface PenaltyTurn {
+  readonly direction: 1 | -1
+  /** Signed rotation since the turn began. */
+  readonly swept: Degrees
+  /** The furthest she has got round, so turning back can be seen. */
+  readonly peak: Degrees
 }
 
 export interface RaceState {
@@ -53,6 +71,13 @@ export interface RaceState {
  */
 const ROUNDING_RANGE: Meters = 120
 
+/** A penalty turn is a full circle, which necessarily takes in a tack and a gybe. */
+const FULL_TURN: Degrees = 360
+/** Heading changes smaller than this are steering, not turning. */
+const TURN_NOISE: Degrees = 0.02
+/** Turning back this far unwinds the turn: the rule asks for one direction. */
+const TURN_REVERSAL: Degrees = 25
+
 export function createRaceState(boatIds: readonly BoatId[]): RaceState {
   const progress: Record<BoatId, BoatProgress> = {}
   for (const boatId of boatIds) {
@@ -63,6 +88,7 @@ export function createRaceState(boatIds: readonly BoatId[]): RaceState {
       passedMark: false,
       clearedPreStart: false,
       penalties: 0,
+      clearedToFinish: false,
       distanceSailed: 0,
     }
   }
@@ -106,6 +132,8 @@ export function stepRace(race: RaceState, input: RaceStepInput): RaceStepResult 
       ...before,
       distanceSailed: before.distanceSailed + distance(previousState.position, boat.position),
     }
+
+    next = trackPenaltyTurn(next, previousState, boat, events)
 
     if (tackOf(previousState.twa) !== tackOf(boat.twa) && Math.abs(boat.twa) > 5) {
       events.push({
@@ -247,7 +275,23 @@ function advanceStage(input: StageInput): BoatProgress {
 
     case 'finish': {
       if (progress.status !== 'racing') return progress
-      if (crossedLine(stage.line, from, to) !== 'forward') return progress
+
+      // Rule 44.2: her hull shall be completely on the course side of the line before
+      // she finishes. Sailing the last leg she is wholly on it for minutes at a time;
+      // it only bites on a boat who has been over the line and taken a turn below it.
+      const clearedToFinish =
+        progress.clearedToFinish || hullClearOfLine(input.currentHull, stage.line, input.halfBeam)
+
+      if (crossedLine(stage.line, from, to) !== 'forward') return { ...progress, clearedToFinish }
+
+      if (progress.penalties > 0) {
+        // She may not finish owing turns. She takes them where she likes, but she has to
+        // come wholly back to the course side before crossing again.
+        events.push({ kind: 'finishRefused', boatId, penalties: progress.penalties })
+        return { ...progress, clearedToFinish: false }
+      }
+
+      if (!clearedToFinish) return progress
 
       finishOrder.push(boatId)
       const place = finishOrder.length
@@ -271,6 +315,78 @@ function hullClearOfLine(hull: Segment, line: RaceLine, halfBeam: Meters): boole
   return sideOfLine(line, hull.from) < -halfBeam && sideOfLine(line, hull.to) < -halfBeam
 }
 
-export function addPenalty(progress: BoatProgress): BoatProgress {
-  return { ...progress, penalties: progress.penalties + 1 }
+function withoutTurn(progress: BoatProgress): BoatProgress {
+  if (!progress.penaltyTurn) return progress
+  const cleared = { ...progress }
+  delete (cleared as { penaltyTurn?: PenaltyTurn }).penaltyTurn
+  return cleared
+}
+
+/**
+ * Watch a boat go round. A penalty turn is a full circle in one direction, and since a
+ * full circle passes head to wind and dead downwind it takes in the tack and the gybe
+ * the rule asks for without either having to be looked for.
+ *
+ * Turns carry over: a boat owing two who keeps going round to seven hundred and twenty
+ * degrees pays both without straightening up in between.
+ */
+function trackPenaltyTurn(
+  progress: BoatProgress,
+  previous: BoatState,
+  boat: BoatState,
+  events: SimEvent[],
+): BoatProgress {
+  if (progress.penalties <= 0) return withoutTurn(progress)
+
+  const turned = angleDelta(previous.heading, boat.heading)
+  if (Math.abs(turned) < TURN_NOISE) return progress
+
+  const turn = progress.penaltyTurn
+  if (!turn) {
+    const direction: 1 | -1 = turned > 0 ? 1 : -1
+    return { ...progress, penaltyTurn: { direction, swept: turned, peak: direction * turned } }
+  }
+
+  const swept = turn.swept + turned
+  const round = turn.direction * swept
+  const peak = Math.max(turn.peak, round)
+
+  if (round < peak - TURN_REVERSAL) return withoutTurn(progress)
+
+  if (round >= FULL_TURN) {
+    const penalties = progress.penalties - 1
+    events.push({ kind: 'penaltyCleared', boatId: progress.boatId, remaining: penalties })
+    const carried = round - FULL_TURN
+    return penalties > 0
+      ? {
+          ...progress,
+          penalties,
+          penaltyTurn: { direction: turn.direction, swept: turn.direction * carried, peak: carried },
+        }
+      : withoutTurn({ ...progress, penalties })
+  }
+
+  return { ...progress, penaltyTurn: { direction: turn.direction, swept, peak } }
+}
+
+/** A turn owed. In match racing an opponent's outstanding turn cancels it instead. */
+export function penalise(
+  progress: Record<BoatId, BoatProgress>,
+  offender: BoatId,
+  other: string,
+  events: SimEvent[],
+  rule?: RightOfWayRule,
+): void {
+  const theirs = progress[other]
+  if (theirs && theirs.penalties > 0) {
+    progress[other] = { ...theirs, penalties: theirs.penalties - 1 }
+    events.push({ kind: 'penaltiesCancelled', boatId: offender, otherId: other })
+    return
+  }
+
+  const mine = progress[offender]
+  if (mine) progress[offender] = { ...mine, penalties: mine.penalties + 1 }
+  events.push(rule === undefined
+    ? { kind: 'penalised', boatId: offender, otherId: other }
+    : { kind: 'penalised', boatId: offender, otherId: other, rule })
 }
