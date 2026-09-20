@@ -11,16 +11,16 @@ export const PALETTE = {
   mark: '#ff8a3d',
   markRing: 'rgba(255, 138, 61, 0.28)',
   committee: '#dfe6ec',
-  hull: '#f2f6f9',
+  // The two boats are named for their colors, so these are the names on the water.
+  // Light enough to carry against dark blue water, muted enough not to shout.
+  hullBlue: '#4fa3dd',
+  hullRed: '#c4655c',
   hullRival: '#9fb6c6',
-  // Muted rather than pillar-box: an opponent should be easy to pick out at a glance
-  // without pulling the eye off your own boat.
-  hullOpponent: '#c4655c',
   hullOutline: '#0b2233',
   sail: '#ffffff',
-  trail: 'rgba(255, 255, 255, 0.34)',
+  trailBlue: 'rgba(79, 163, 221, 0.36)',
+  trailRed: 'rgba(196, 101, 92, 0.32)',
   trailRival: 'rgba(160, 190, 210, 0.22)',
-  trailOpponent: 'rgba(196, 101, 92, 0.3)',
   penalty: '#ff5d5d',
   // The sides a sailor already knows by their lights: green to starboard, red to port.
   telltaleStarboard: '#4ade80',

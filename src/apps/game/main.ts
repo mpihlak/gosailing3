@@ -48,11 +48,11 @@ const STARTING_DEBUG_RATE = 1
  */
 const LAYLINE_ANGLE = 45
 
-const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hull, trail: PALETTE.trail, trailWidth: 2 }
+const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hullBlue, trail: PALETTE.trailBlue, trailWidth: 2 }
 
 /** Colors for the boats the player is racing against, handed out in order. */
 const OPPONENT_STYLES: BoatStyle[] = [
-  { hull: PALETTE.hullOpponent, trail: PALETTE.trailOpponent, trailWidth: 1.5 },
+  { hull: PALETTE.hullRed, trail: PALETTE.trailRed, trailWidth: 1.5 },
 ]
 
 let simulation: Simulation
@@ -81,7 +81,11 @@ function start(seed: string, immediate = false): void {
   trails = new TrailStore()
   sources = helmsFor(simulation)
   styles = stylesFor(simulation)
-  board = new StandingsBoard(requireElement<HTMLElement>('#standings'), simulation.names)
+  board = new StandingsBoard(
+    requireElement<HTMLElement>('#standings'),
+    simulation.names,
+    Object.fromEntries(Object.entries(styles).map(([id, style]) => [id, style.hull])),
+  )
   running = false
   debugRate = STARTING_DEBUG_RATE
 
@@ -97,8 +101,10 @@ function start(seed: string, immediate = false): void {
 
   showOverlay(
     'Ready to race',
-    `The gun is in thirty seconds. Cross the line, leave the orange mark to port, and come
-     back through the line to finish.
+    `You are <b style="color: ${PALETTE.hullBlue}">Blue</b>, racing
+     <b style="color: ${PALETTE.hullRed}">Red</b>.
+     <br />The gun is in thirty seconds. Cross the line, leave the orange mark to port,
+     and come back through the line to finish.
      <br /><b>← →</b> or <b>A D</b> to steer · <b>Space</b> to start and pause · <b>R</b> for a new race`,
   )
 }
@@ -352,8 +358,9 @@ function showResults(): void {
       const progress = race.progress[boatId]
       const elapsed = (progress?.finishTime ?? 0) / GAME_PACE
       const name = simulation.names[boatId] ?? boatId
+      const color = styles[boatId]?.hull ?? ''
       const mine = boatId === PLAYER_ID ? ' class="mine"' : ''
-      return `<tr${mine}><td>${progress?.place ?? ''}</td><td>${name}</td><td>${clock(elapsed)}</td></tr>`
+      return `<tr${mine}><td>${progress?.place ?? ''}</td><td style="color: ${color}">${name}</td><td>${clock(elapsed)}</td></tr>`
     })
     .join('')
 

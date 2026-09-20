@@ -30,7 +30,7 @@ npm run dev      # http://localhost:5173
 
 The gun is thirty seconds after you start. Cross the line, leave the orange mark to port,
 and come back through the line to finish. You start alongside one opponent, lying stern to
-stern with you on the other tack. The race runs until you are both home, and then the
+stern with you on the other tack. You sail the blue boat and race the red one. The race runs until you are both home, and then the
 finishing order goes up. Crossing early means going back and crossing again.
 
 The wind shifts, blows harder on one side of the course than the other, and carries gusts

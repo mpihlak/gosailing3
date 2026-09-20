@@ -117,10 +117,10 @@ describe('the race finishing', () => {
     }
   })
 
-  it('has a name for each of them to put on the results', () => {
+  it('names them for the colors they are drawn in', () => {
     const { sim, world } = sailItOut('alpha')
     const names = world.race.finishOrder.map((id) => sim.names[id])
-    expect(names).toEqual(expect.arrayContaining(['Player', 'Computer']))
+    expect(names).toEqual(expect.arrayContaining(['Blue', 'Red']))
   })
 
   it('takes a few minutes of the player\'s time, both boats', () => {

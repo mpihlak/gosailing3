@@ -8,6 +8,8 @@ export class StandingsBoard {
   constructor(
     private readonly root: HTMLElement,
     private readonly names: Readonly<Record<BoatId, string>>,
+    /** The color each boat is drawn in, so the board names them as they look. */
+    private readonly colors: Readonly<Record<BoatId, string>> = {},
   ) {}
 
   update(standings: readonly Standing[], playerId: BoatId): void {
@@ -27,9 +29,10 @@ export class StandingsBoard {
         ]
           .filter(Boolean)
           .join(' ')
+        const color = this.colors[standing.boatId]
         return `<div class="${classes}">
           <span class="pos">${standing.place}</span>
-          <span class="who">${name}</span>
+          <span class="who"${color ? ` style="color: ${color}"` : ''}>${name}</span>
           <span class="pen">${turns(standing.penalties)}</span>
         </div>`
       })

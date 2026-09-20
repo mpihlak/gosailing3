@@ -50,14 +50,14 @@ export function duel(seed: number | string): ScenarioSpec {
     boats: [
       {
         id: PLAYER_ID,
-        name: 'Player',
+        name: 'Blue',
         controller: 'human',
         position: playerBerth,
         heading: alongLine,
       },
       {
         id: OPPONENT_ID,
-        name: 'Computer',
+        name: 'Red',
         controller: 'ai',
         position: opponentBerth,
         heading: alongLine + 180,
