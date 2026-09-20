@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { vec, type Vec2 } from '@/foundation/geom'
+import { normalizeSigned, vec, type Vec2 } from '@/foundation/geom'
 import { CRUISER_35_SPEC, type BoatState } from '@/domain/boat'
 import { windwardLeeward } from '@/domain/course'
 import { stepRace, type BoatProgress, type RaceState } from './race'
@@ -13,8 +13,19 @@ const COURSE = windwardLeeward({
 })
 const SPECS = { a: CRUISER_35_SPEC }
 
+/** In a northerly the true wind angle is the heading, which is what makes a turn round
+ * the compass pass head to wind and dead downwind. */
 function boatAt(position: Vec2, heading: number): BoatState {
-  return { id: 'a', position, heading, speed: 6, turnRate: 0, twa: 45, course: heading, leeway: 0 }
+  return {
+    id: 'a',
+    position,
+    heading,
+    speed: 6,
+    turnRate: 0,
+    twa: normalizeSigned(heading),
+    course: heading,
+    leeway: 0,
+  }
 }
 
 function racing(overrides: Partial<BoatProgress> = {}): RaceState {
@@ -33,16 +44,23 @@ function racing(overrides: Partial<BoatProgress> = {}): RaceState {
 }
 
 /** Turn her through a sequence of headings, staying where she is. */
-function turnThrough(start: RaceState, headings: number[], at: Vec2 = vec(0, 400)) {
+function turnThrough(
+  start: RaceState,
+  headings: number[],
+  at: Vec2 = vec(0, 400),
+  dt = 1 / 60,
+  twaOf: (heading: number) => number = normalizeSigned,
+) {
   let race = start
   const events: SimEvent[] = []
   for (let i = 1; i < headings.length; i++) {
     const result = stepRace(race, {
       course: COURSE,
       specs: SPECS,
-      previous: [boatAt(at, headings[i - 1] as number)],
-      current: [boatAt(at, headings[i] as number)],
+      previous: [{ ...boatAt(at, headings[i - 1] as number), twa: twaOf(headings[i - 1] as number) }],
+      current: [{ ...boatAt(at, headings[i] as number), twa: twaOf(headings[i] as number) }],
       raceTime: 30,
+      dt,
     })
     race = result.race
     events.push(...result.events)
@@ -113,6 +131,50 @@ describe('taking a penalty turn', () => {
   })
 })
 
+describe('what does not count as a turn', () => {
+  it('will not let her pay it off by sailing the course', () => {
+    /*
+     * Beating with a tack in it, a mark rounding, and gybes down the run: seven minutes
+     * of ordinary racing. Counting every heading change while a turn was owed let a boat
+     * clear one this way, having never gone round at all.
+     */
+    const beat = [40, 42, 38, 41, 39, 40]
+    const tack = [40, 10, 340, 320]
+    const backToPort = [320, 350, 20, 40]
+    const rounding = [40, 70, 110, 150, 180]
+    const run = [180, 200, 220, 200, 180, 160, 140, 160, 180]
+    const courseSailing = [...beat, ...tack, ...backToPort, ...rounding, ...run, ...beat]
+
+    // At a second a tick, the pauses between manoeuvres are as long as they would be.
+    const { race, events } = turnThrough(racing(), courseSailing, vec(0, 400), 1)
+    expect(race.progress.a?.penalties).toBe(1)
+    expect(events.filter((event) => event.kind === 'penaltyCleared')).toHaveLength(0)
+  })
+
+  it('abandons a turn she breaks off in the middle of', () => {
+    const halfWay = circle(200)
+    const holdingCourse = Array.from({ length: 8 }, () => 200)
+    const andAgain = circle(200).map((heading) => heading + 200)
+
+    const { race } = turnThrough(racing(), [...halfWay, ...holdingCourse, ...andAgain], vec(0, 400), 1)
+    expect(race.progress.a?.penalties).toBe(1)
+  })
+
+  it('wants a tack and a gybe, not just the degrees', () => {
+    // The same full circle, but with the wind going round with her so she never passes
+    // head to wind or dead downwind. The sweep is there; the turn is not.
+    const { race } = turnThrough(racing(), circle(360), vec(0, 400), 1 / 60, () => 45)
+    expect(race.progress.a?.penalties).toBe(1)
+  })
+
+  it('records the tack and the gybe on the way round', () => {
+    // Starting on a beam reach, so the circle takes in both on the way.
+    const { race } = turnThrough(racing(), circle(300).map((heading) => heading + 90))
+    expect(race.progress.a?.penaltyTurn?.tacked).toBe(true)
+    expect(race.progress.a?.penaltyTurn?.gybed).toBe(true)
+  })
+})
+
 describe('finishing with turns owed', () => {
   const FINISH = 2 // start, mark, finish
   const approach = [vec(0, 40), vec(0, -40)] // down through the line
@@ -124,6 +186,7 @@ describe('finishing with turns owed', () => {
       previous: [boatAt(approach[0] as Vec2, 180)],
       current: [boatAt(approach[1] as Vec2, 180)],
       raceTime: 300,
+      dt: 1 / 60,
     })
     return result
   }
@@ -168,6 +231,7 @@ describe('finishing with turns owed', () => {
         previous: [boatAt(vec(0, 90), 180)],
         current: [boatAt(vec(0, 80), 180)],
         raceTime: 300,
+        dt: 1 / 60,
       },
     )
     expect(backOnTheCourseSide.race.progress.a?.clearedToFinish).toBe(true)

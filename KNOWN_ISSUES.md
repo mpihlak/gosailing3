@@ -68,3 +68,17 @@ be blameless.
 
 Penalties cancelling one for one is defined between the two boats in the incident, which
 is what match racing means by it. With three boats or more it is undefined.
+
+## There is no race log
+
+A race cannot be replayed or picked apart after the fact. The pieces are in place —
+the simulation is a pure function of a seed and a tick-by-tick input frame, and a
+snapshot serializes — so recording one is a matter of writing the frames down beside the
+scenario, with periodic snapshots to seek by and the umpire's working saved at each
+incident.
+
+Without it, a wrong penalty can only be investigated by reproducing it, and a penalty
+turn counted over seven minutes of sailing went unnoticed until someone watched a boat
+and thought her turn looked wrong.
+
+TODO: a recorder wrapping the runner, and a lab scene to scrub it.

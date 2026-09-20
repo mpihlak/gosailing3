@@ -57,6 +57,12 @@ export interface PenaltyTurn {
   readonly swept: Degrees
   /** The furthest she has got round, so turning back can be seen. */
   readonly peak: Degrees
+  /** She has passed head to wind: the tack the rule asks for. */
+  readonly tacked: boolean
+  /** She has passed dead downwind: the gybe. */
+  readonly gybed: boolean
+  /** How long she has gone without getting any further round. */
+  readonly stalled: Seconds
 }
 
 export interface RaceState {
@@ -71,12 +77,21 @@ export interface RaceState {
  */
 const ROUNDING_RANGE: Meters = 120
 
-/** A penalty turn is a full circle, which necessarily takes in a tack and a gybe. */
+/** A penalty turn is a full circle, and must take in a tack and a gybe besides. */
 const FULL_TURN: Degrees = 360
 /** Heading changes smaller than this are steering, not turning. */
 const TURN_NOISE: Degrees = 0.02
 /** Turning back this far unwinds the turn: the rule asks for one direction. */
-const TURN_REVERSAL: Degrees = 25
+const TURN_REVERSAL: Degrees = 10
+/**
+ * How long she may go without getting further round before the turn is abandoned.
+ *
+ * This is what makes it a turn rather than a tally. Counting every heading change while
+ * a turn was owed let a boat pay it off with a mark rounding and a couple of gybes over
+ * seven minutes of ordinary sailing, having never gone round at all: rule 44.2 asks her
+ * to make the turns promptly, and promptly means without stopping to race in between.
+ */
+const TURN_PATIENCE: Seconds = 4
 
 export function createRaceState(boatIds: readonly BoatId[]): RaceState {
   const progress: Record<BoatId, BoatProgress> = {}
@@ -102,6 +117,7 @@ export interface RaceStepInput {
   readonly current: readonly BoatState[]
   /** Elapsed race time. Negative before the gun. */
   readonly raceTime: Seconds
+  readonly dt: Seconds
 }
 
 export interface RaceStepResult {
@@ -133,7 +149,7 @@ export function stepRace(race: RaceState, input: RaceStepInput): RaceStepResult 
       distanceSailed: before.distanceSailed + distance(previousState.position, boat.position),
     }
 
-    next = trackPenaltyTurn(next, previousState, boat, events)
+    next = trackPenaltyTurn(next, previousState, boat, input.dt, events)
 
     if (tackOf(previousState.twa) !== tackOf(boat.twa) && Math.abs(boat.twa) > 5) {
       events.push({
@@ -334,26 +350,44 @@ function trackPenaltyTurn(
   progress: BoatProgress,
   previous: BoatState,
   boat: BoatState,
+  dt: Seconds,
   events: SimEvent[],
 ): BoatProgress {
   if (progress.penalties <= 0) return withoutTurn(progress)
 
   const turned = angleDelta(previous.heading, boat.heading)
-  if (Math.abs(turned) < TURN_NOISE) return progress
-
   const turn = progress.penaltyTurn
+
   if (!turn) {
+    if (Math.abs(turned) < TURN_NOISE) return progress
     const direction: 1 | -1 = turned > 0 ? 1 : -1
-    return { ...progress, penaltyTurn: { direction, swept: turned, peak: direction * turned } }
+    return {
+      ...progress,
+      penaltyTurn: {
+        direction,
+        swept: turned,
+        peak: direction * turned,
+        // The tick the turn begins on can be the tack itself.
+        tacked: crossed(previous.twa, boat.twa, 0),
+        gybed: crossed(previous.twa, boat.twa, 180),
+        stalled: 0,
+      },
+    }
   }
 
   const swept = turn.swept + turned
   const round = turn.direction * swept
   const peak = Math.max(turn.peak, round)
 
+  // Turning back out of it, or stopping to sail on, abandons the turn.
   if (round < peak - TURN_REVERSAL) return withoutTurn(progress)
+  const stalled = round > turn.peak ? 0 : turn.stalled + dt
+  if (stalled > TURN_PATIENCE) return withoutTurn(progress)
 
-  if (round >= FULL_TURN) {
+  const tacked = turn.tacked || crossed(previous.twa, boat.twa, 0)
+  const gybed = turn.gybed || crossed(previous.twa, boat.twa, 180)
+
+  if (round >= FULL_TURN && tacked && gybed) {
     const penalties = progress.penalties - 1
     events.push({ kind: 'penaltyCleared', boatId: progress.boatId, remaining: penalties })
     const carried = round - FULL_TURN
@@ -361,12 +395,29 @@ function trackPenaltyTurn(
       ? {
           ...progress,
           penalties,
-          penaltyTurn: { direction: turn.direction, swept: turn.direction * carried, peak: carried },
+          penaltyTurn: {
+            direction: turn.direction,
+            swept: turn.direction * carried,
+            peak: carried,
+            tacked: false,
+            gybed: false,
+            stalled: 0,
+          },
         }
       : withoutTurn({ ...progress, penalties })
   }
 
-  return { ...progress, penaltyTurn: { direction: turn.direction, swept, peak } }
+  return { ...progress, penaltyTurn: { direction: turn.direction, swept, peak, tacked, gybed, stalled } }
+}
+
+/**
+ * Whether the boat went through an angle to the wind between one tick and the next:
+ * zero for head to wind, a hundred and eighty for dead downwind.
+ */
+function crossed(before: Degrees, after: Degrees, angle: Degrees): boolean {
+  const from = angleDelta(angle, before)
+  const to = angleDelta(angle, after)
+  return Math.sign(from) !== Math.sign(to) && Math.abs(from) < 90 && Math.abs(to) < 90
 }
 
 /** A turn owed. In match racing an opponent's outstanding turn cancels it instead. */

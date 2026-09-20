@@ -48,6 +48,7 @@ function sail(
       previous,
       current,
       raceTime: raceTimeAt(i),
+      dt: 1 / 60,
     })
     race = result.race
     events.push(...result.events)
@@ -194,6 +195,7 @@ describe('the start', () => {
       previous: [bowDown],
       current: [bowUp],
       raceTime: 5,
+      dt: 1 / 60,
     })
 
     expect(events.filter((event) => event.kind === 'boatStarted')).toHaveLength(0)
@@ -339,6 +341,7 @@ describe('bookkeeping', () => {
       previous: [onPort],
       current: [onStarboard],
       raceTime: 5,
+      dt: 1 / 60,
     })
     expect(events).toContainEqual({ kind: 'tacked', boatId: 'a', from: 'port', to: 'starboard' })
   })
@@ -351,6 +354,7 @@ describe('bookkeeping', () => {
       previous: [{ ...boatAt('a', vec(0, 0)), twa: 2 }],
       current: [{ ...boatAt('a', vec(0, 10)), twa: -2 }],
       raceTime: 5,
+      dt: 1 / 60,
     })
     expect(events.filter((event) => event.kind === 'tacked')).toHaveLength(0)
   })

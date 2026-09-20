@@ -52,6 +52,7 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
     previous: world.boats,
     current: boats,
     raceTime: raceTime(ctx, { ...world, time }),
+    dt,
   })
 
   // A contact is news on the tick it starts, not for every tick the boats stay locked.

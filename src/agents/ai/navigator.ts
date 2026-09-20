@@ -72,7 +72,12 @@ export function planCourse(
    * opponent's penalty cancels yours, and a turn spent early is a chance thrown away.
    * They come due on the last leg, because she may not finish owing any.
    */
-  if (progress.penalties > 0 && stage.kind === 'finish' && clearToTurn(ctx, world, boat, spec)) {
+  const turning = progress.penaltyTurn !== undefined
+  if (
+    progress.penalties > 0 &&
+    stage.kind === 'finish' &&
+    (turning || clearToTurn(ctx, world, boat, spec))
+  ) {
     const direction = progress.penaltyTurn?.direction ?? (tackOf(boat.twa) === 'port' ? 1 : -1)
     // Aiming a quarter turn ahead keeps the helm hard over all the way round.
     return { bearing: normalizeBearing(boat.heading + direction * 90), reason: 'penalty' }
