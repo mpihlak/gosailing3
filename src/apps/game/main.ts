@@ -145,11 +145,11 @@ function start(seed: string, immediate = false): void {
 
   showOverlay(
     'Ready to race',
-    `You are <b style="color: ${PALETTE.hullBlue}">Blue</b>, racing
+    `<p>You are <b style="color: ${PALETTE.hullBlue}">Blue</b>, racing
      <b style="color: ${PALETTE.hullRed}">Red</b>.
      <br />The gun is in thirty seconds. Cross the line, leave the orange mark to port,
      and come back through the line to finish.
-     <br /><br />${CONTROLS}`,
+     <br /><br />${CONTROLS}</p>`,
     () => handleCommand('toggleRun'),
   )
 }
@@ -165,13 +165,15 @@ function handleCommand(command: HelmCommand): void {
     running = !running
     if (running) hideOverlay()
     else {
-      showOverlay('Paused', BY_TOUCH ? 'Tap to carry on.' : 'Press <b>Space</b> to carry on.', () =>
-        handleCommand('toggleRun'),
+      showOverlay(
+        'Paused',
+        `<p>${BY_TOUCH ? 'Tap to carry on.' : 'Press <b>Space</b> to carry on.'}</p>`,
+        () => handleCommand('toggleRun'),
       )
     }
   }
   if (command === 'help') {
-    showOverlay('Controls', CONTROLS, () => handleCommand('toggleRun'))
+    showOverlay('Controls', `<p>${CONTROLS}</p>`, () => handleCommand('toggleRun'))
     running = false
   }
   if (command === 'toggleShadows') {
@@ -426,16 +428,24 @@ function showResults(): void {
     })
     .join('')
 
-  overlay.innerHTML = `<div class="card">
-    <h1>Results</h1>
-    <table class="results">${rows}</table>
-    <p>${BY_TOUCH ? 'Tap for another race.' : 'Press <b>R</b> to race again.'}</p>
-  </div>`
-  overlay.dataset.visible = 'true'
+  showOverlay(
+    'Results',
+    `<table class="results">${rows}</table>
+     <p>${BY_TOUCH ? 'Tap for another race.' : 'Press <b>R</b> to race again.'}</p>`,
+    () => handleCommand('restart'),
+  )
 }
 
-function showOverlay(title: string, body: string, onTap?: () => void): void {
-  overlay.innerHTML = `<div class="card"><h1>${title}</h1><p>${body}</p></div>`
+/**
+ * The only way a card goes up, and `onTap` is not optional: there is no keyboard on a
+ * phone, so a card that does not say what tapping it does is a dead end. The results card
+ * was exactly that — it invited a tap for another race and answered nothing.
+ *
+ * `body` is the card's own markup, headline apart, because the results are a table and
+ * everything else is a paragraph.
+ */
+function showOverlay(title: string, body: string, onTap: () => void): void {
+  overlay.innerHTML = `<div class="card"><h1>${title}</h1>${body}</div>`
   overlay.dataset.visible = 'true'
   onCardTap = onTap
 }
