@@ -76,15 +76,15 @@ const FLUTTER_RATE = 6
 const FLUTTER_STREAMING = 2
 const FLUTTER_LIFTED = 7
 
-/** Where the panel sits: its bottom left corner, in pixels from the canvas corner. */
+/** Where the panel sits: its top left corner, in pixels from the canvas corner. */
 export interface PanelAnchor {
   readonly left: number
-  readonly bottom: number
+  readonly top: number
 }
 
 /**
  * `anchor` is measured off the instruments rather than guessed at, so the panel stays
- * sitting on them however the window is sized and however they wrap.
+ * lined up with them however the window is sized and however they wrap.
  * `time` is in the player's seconds, since it drives an animation rather than physics.
  */
 export function drawTelltales(
@@ -93,8 +93,7 @@ export function drawTelltales(
   time: Seconds,
   anchor: PanelAnchor,
 ): void {
-  const left = anchor.left
-  const top = anchor.bottom - PANEL_HEIGHT
+  const { left, top } = anchor
   const luffX = left + 34
   const windwardY = top + 26
   const leewardY = top + 58

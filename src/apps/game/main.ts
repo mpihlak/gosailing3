@@ -34,6 +34,7 @@ const hud = new Hud(
   requireElement<HTMLElement>('[data-banner]'),
 )
 const overlay = requireElement<HTMLElement>('#overlay')
+const standingsPanel = requireElement<HTMLElement>('#standings')
 
 /** How much water to show across the short edge of the screen. */
 const METERS_ACROSS = 420
@@ -82,8 +83,8 @@ let showLaylines = true
 let running = false
 let lastFrame = 0
 let debugRate = STARTING_DEBUG_RATE
-/** Where the telltales sit: on top of the first gauge, and lined up with it. */
-let panelAnchor = { left: 16, bottom: 120 }
+/** Where the telltales sit: at the top of the screen, lined up with the first gauge. */
+let panelAnchor = { left: 16, top: 16 }
 let measuredAt = ''
 
 const helm = new Helm({ onCommand: handleCommand })
@@ -99,7 +100,7 @@ function start(seed: string, immediate = false): void {
   sources = helmsFor(simulation)
   styles = stylesFor(simulation)
   board = new StandingsBoard(
-    requireElement<HTMLElement>('#standings'),
+    standingsPanel,
     simulation.names,
     Object.fromEntries(Object.entries(styles).map(([id, style]) => [id, style.hull])),
   )
@@ -162,29 +163,38 @@ function handleCommand(command: HelmCommand): void {
 }
 
 /**
- * Read off the first gauge, so the telltales sit on the instruments however the panel
- * wraps or the window is sized. Reading it costs a layout, so it is taken when the
- * viewport changes rather than every frame.
+ * Line the two corner panels up with the instruments: the telltales with the left of the
+ * first gauge, the standings with the right of the last, both at the top of the screen.
+ * Reading a layout is not free, so it is done when the viewport changes and not every
+ * frame.
  */
-function measurePanelAnchor(width: number, height: number): void {
+function measurePanels(width: number, height: number): void {
   const key = `${width}x${height}`
   if (key === measuredAt) return
   measuredAt = key
 
-  const gauge = document.querySelector('[data-field="timer"]')
-  if (!gauge) return
-  const gaugeBox = gauge.getBoundingClientRect()
   const canvasBox = canvas.getBoundingClientRect()
+
+  const last = document.querySelector('[data-field="status"]')
+  if (last) {
+    const inset = canvasBox.right - last.getBoundingClientRect().right
+    standingsPanel.style.right = `${Math.max(8, Math.round(inset))}px`
+  }
+
+  // The board's own top, so whatever the stylesheet says about safe areas, the telltales
+  // agree with it rather than guessing.
+  const board = standingsPanel.getBoundingClientRect()
+  const first = document.querySelector('[data-field="timer"]')
   panelAnchor = {
-    left: Math.max(8, gaugeBox.left - canvasBox.left),
-    bottom: gaugeBox.top - canvasBox.top - 10,
+    left: first ? Math.max(8, first.getBoundingClientRect().left - canvasBox.left) : 16,
+    top: Math.max(8, Math.round(board.top - canvasBox.top)),
   }
 }
 
 function frame(timestamp: number): void {
   const surface = resizeSurface(canvas)
   camera = { ...camera, viewport: surface.viewport }
-  measurePanelAnchor(surface.viewport.width, surface.viewport.height)
+  measurePanels(surface.viewport.width, surface.viewport.height)
 
   const elapsed = lastFrame === 0 ? 0 : (timestamp - lastFrame) / 1000
   lastFrame = timestamp
