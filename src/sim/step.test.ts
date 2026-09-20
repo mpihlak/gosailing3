@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { distance, vec } from '@/foundation/geom'
+import { add, bearingToVector, distance, scale, vec } from '@/foundation/geom'
 import { createSimulation } from './scenario'
 import { step } from './step'
 import { fixedSource, runHeadless, SimulationRunner, type InputSource } from './runner'
@@ -109,6 +109,48 @@ describe('contacts', () => {
     })
     expect(after.race.progress.a?.penalties).toBe(1)
     expect(after.race.progress.b?.penalties).toBe(0)
+  })
+
+  it('puts the turn on the windward boat when the leeward boat luffs into her', () => {
+    /*
+     * Rule 11 asks who was to leeward, not who turned. The leeward boat closes the gap
+     * herself and still has right of way; the windward boat owes the turn for not having
+     * kept clear. Rule 16, which limits how a right-of-way boat may change course, is
+     * not modelled, so nothing here comes back on the boat that luffed.
+     */
+    const heading = 70
+    const windward = vec(0, -300)
+    // Square out to her starboard side, which is the leeward side on port tack, far
+    // enough that they start with clear water between them and end up overlapped.
+    const leeward = add(windward, scale(bearingToVector(heading + 90), 8))
+    const sim = createSimulation({
+      name: 'luff',
+      seed: 'luff',
+      boats: [
+        { id: 'windward', name: 'Windward', position: windward, heading },
+        { id: 'leeward', name: 'Leeward', position: leeward, heading },
+      ],
+      wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+      config: { startSequence: 0 },
+    })
+
+    // Nothing to see if they begin on top of each other.
+    expect(step(sim.ctx, sim.world, {}).world.contacts).toHaveLength(0)
+
+    const luffing = { leeward: fixedSource({ rudder: -0.35 }) }
+    const { world: after, events } = runHeadless(sim.ctx, sim.world, luffing, { maxTicks: 300 })
+
+    expect(events.filter((event) => event.kind === 'contact')).toMatchObject([
+      { boatId: 'windward', otherId: 'leeward', with: 'boat' },
+    ])
+    expect(events.filter((event) => event.kind === 'penalised')).toMatchObject([
+      { boatId: 'windward', otherId: 'leeward', rule: 11 },
+    ])
+    expect(after.race.progress.windward?.penalties).toBe(1)
+    expect(after.race.progress.leeward?.penalties).toBe(0)
+    // She luffed rather than tacked, so rule 11 held all the way through: both are still
+    // on port tack, which is what a positive true wind angle means.
+    for (const boat of after.boats) expect(boat.twa).toBeGreaterThan(0)
   })
 
   it('charges one turn for one coming together, however long they stay locked', () => {
