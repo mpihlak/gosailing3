@@ -50,8 +50,8 @@ beforeAll(async () => {
 })
 
 describe('a rival touching a mark', () => {
-  it('tells the player, and names her', () => {
-    expect(said.filter((line) => line.startsWith('Red'))).toEqual(['Red touched a mark — one turn owed'])
+  it('tells the player, and names the boat the turn falls on', () => {
+    expect(said.filter((line) => line.includes('Red'))).toEqual(['Penalty to Red — touched a mark'])
   })
 
   it('shows the turn she owes on the board', () => {

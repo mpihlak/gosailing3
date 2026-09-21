@@ -360,13 +360,18 @@ function announce(event: TimedEvent): void {
     case 'markRounded':
       return hud.showBanner('Mark rounded — head for the line', 'good')
     case 'penalised': {
-      const cause = event.rule === undefined ? 'touched a mark' : `broke rule ${event.rule}`
-      return mine
-        ? hud.showBanner(`Penalty — you ${cause}. One turn owed.`, 'warn', 3600)
-        : hud.showBanner(`${nameOf(event.boatId)} ${cause} — one turn owed`, 'info', 3000)
+      const cause = event.rule === undefined ? 'touched a mark' : `rule ${event.rule}`
+      // Named rather than addressed, because the same line reports a rival's penalty.
+      return hud.showBanner(
+        `Penalty to ${nameOf(event.boatId)} — ${cause}`,
+        mine ? 'warn' : 'info',
+        mine ? 3600 : 3000,
+      )
     }
     case 'penaltiesCancelled':
       return hud.showBanner('Penalties cancel — nothing owed', 'good', 2600)
+    // A coming-together is reported as the penalty it earns. Announcing the contact as
+    // well overwrote that with a vaguer line naming a boat by her id.
     case 'penaltyCleared':
       return hud.showBanner(
         event.remaining > 0 ? `Turn taken — ${event.remaining} still owed` : 'Turn taken — you are clear',
@@ -379,8 +384,6 @@ function announce(event: TimedEvent): void {
         'warn',
         4200,
       )
-    case 'contact':
-      return hud.showBanner(`Contact with the ${event.otherId}`, 'warn')
     case 'boatFinished': {
       // Her own finish is worth saying, but the race is not over until the rest of the
       // fleet is home, and it carries on until it is.
