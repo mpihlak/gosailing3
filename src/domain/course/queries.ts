@@ -1,6 +1,16 @@
-import { add, bearingToVector, cross, dot, normalizeBearing, scale, sub, type Vec2 } from '@/foundation/geom'
+import {
+  add,
+  bearingToVector,
+  cross,
+  dot,
+  normalizeBearing,
+  scale,
+  sub,
+  type Segment,
+  type Vec2,
+} from '@/foundation/geom'
 import type { Degrees, Meters } from '@/foundation/units'
-import type { CourseStage, Mark, RoundingSide } from './types'
+import type { CourseStage, Mark, RaceLine, RoundingSide } from './types'
 
 export interface Layline {
   readonly tack: 'port' | 'starboard'
@@ -88,11 +98,22 @@ export interface CourseBody {
   readonly id: string
   readonly position: Vec2
   readonly radius: Meters
+  /** For something long: her centreline, stern to bow. */
+  readonly centreline?: Segment
   readonly solid?: boolean
 }
 
-/** A committee boat is a vessel, and stops you. */
-const COMMITTEE_RADIUS: Meters = 5
+/**
+ * The committee boat, which is a vessel and stops you. One set of dimensions: the
+ * renderer draws this shape and the simulation hits it, so a boat reaching along the
+ * line is flagged when she looks flagged. A circle round her middle was five meters in
+ * every direction, more than twice her half beam, and caught boats with two meters of
+ * clear water still showing down her side.
+ */
+export const COMMITTEE_BOAT: { readonly length: Meters; readonly beam: Meters } = {
+  length: 14,
+  beam: 4.4,
+}
 /** The pin is an inflatable on a rope. */
 const PIN_RADIUS: Meters = 1.5
 
@@ -102,6 +123,19 @@ const PIN_RADIUS: Meters = 1.5
  * worked out from the lines instead of being stored twice. Start and finish share their
  * ends on a windward-leeward course, so each end is reported once.
  */
+/**
+ * Where she lies. Anchored, she lies head to wind, and the line's normal points at the
+ * next mark to windward, so that is the way her bow faces. Her centreline is shorter
+ * than she is by her beam, so the capsule around it is exactly her length.
+ */
+function committeeCentreline(line: RaceLine): Segment {
+  const half = (COMMITTEE_BOAT.length - COMMITTEE_BOAT.beam) / 2
+  return {
+    from: add(line.to, scale(line.normal, -half)),
+    to: add(line.to, scale(line.normal, half)),
+  }
+}
+
 export function lineEndBodies(stages: readonly CourseStage[]): CourseBody[] {
   const bodies = new Map<string, CourseBody>()
 
@@ -112,7 +146,8 @@ export function lineEndBodies(stages: readonly CourseStage[]): CourseBody[] {
     const committee: CourseBody = {
       id: 'committee',
       position: line.to,
-      radius: COMMITTEE_RADIUS,
+      radius: COMMITTEE_BOAT.beam / 2,
+      centreline: committeeCentreline(line),
       solid: true,
     }
     for (const body of [pin, committee]) {

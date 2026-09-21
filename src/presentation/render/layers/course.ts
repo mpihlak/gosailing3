@@ -1,6 +1,13 @@
-import { add, scale, toRadians, type Vec2 } from '@/foundation/geom'
+import { add, scale, toRadians, vectorToBearing, type Vec2 } from '@/foundation/geom'
 import type { Degrees } from '@/foundation/units'
-import { laylines, lineMidpoint, type Course, type Mark, type RaceLine } from '@/domain/course'
+import {
+  COMMITTEE_BOAT,
+  laylines,
+  lineMidpoint,
+  type Course,
+  type Mark,
+  type RaceLine,
+} from '@/domain/course'
 import { metersToPixels, worldToScreen, type Camera } from '@/presentation/view/camera'
 import { PALETTE } from '../palette'
 
@@ -26,7 +33,7 @@ export function drawCourse(ctx: CanvasRenderingContext2D, view: CourseView): voi
 
   const startStage = course.stages.find((stage) => stage.kind === 'start')
   if (startStage?.kind === 'start') {
-    drawStartLine(ctx, camera, startStage.line, started, windDirection)
+    drawStartLine(ctx, camera, startStage.line, started)
   }
 
   for (const mark of course.marks) drawMark(ctx, camera, mark, mark === targetMark)
@@ -38,17 +45,11 @@ export function drawCourse(ctx: CanvasRenderingContext2D, view: CourseView): voi
   }
 }
 
-/** Length and beam of the committee boat on the water. She is a bigger vessel than the
- * boats racing round her. */
-const COMMITTEE_LENGTH = 14
-const COMMITTEE_BEAM = 4.4
-
 function drawStartLine(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
   line: RaceLine,
   started: boolean,
-  windDirection: Degrees,
 ): void {
   const pin = worldToScreen(camera, line.from)
 
@@ -63,7 +64,7 @@ function drawStartLine(
   ctx.stroke()
   ctx.restore()
 
-  drawCommitteeBoat(ctx, camera, line.to, windDirection)
+  drawCommitteeBoat(ctx, camera, line)
 
   // Both ends of the line are marked the same way, because both ends are the line.
   ctx.fillStyle = PALETTE.mark
@@ -74,23 +75,19 @@ function drawStartLine(
 }
 
 /**
- * The committee boat lies head to wind, as an anchored boat does. The line ends at the
- * staff on her rail rather than at the vessel, so the orange dot on top of her is what
- * the boats are actually crossing.
+ * The committee boat lies head to wind, as an anchored boat does, which is along the
+ * line's normal. Her size and her heading are the ones the simulation hits her with, not
+ * a second set that can drift from them. The orange dot on top of her is the end of the
+ * line, which is what the boats are actually crossing.
  */
-function drawCommitteeBoat(
-  ctx: CanvasRenderingContext2D,
-  camera: Camera,
-  at: Vec2,
-  windDirection: Degrees,
-): void {
-  const screen = worldToScreen(camera, at)
-  const length = Math.max(18, metersToPixels(camera, COMMITTEE_LENGTH))
-  const beam = Math.max(7, metersToPixels(camera, COMMITTEE_BEAM))
+function drawCommitteeBoat(ctx: CanvasRenderingContext2D, camera: Camera, line: RaceLine): void {
+  const screen = worldToScreen(camera, line.to)
+  const length = Math.max(18, metersToPixels(camera, COMMITTEE_BOAT.length))
+  const beam = Math.max(7, metersToPixels(camera, COMMITTEE_BOAT.beam))
 
   ctx.save()
   ctx.translate(screen.x, screen.y)
-  ctx.rotate(toRadians(windDirection))
+  ctx.rotate(toRadians(vectorToBearing(line.normal)))
 
   ctx.beginPath()
   ctx.moveTo(0, -length / 2)

@@ -1,6 +1,5 @@
 import {
   add,
-  closestPointOnSegment,
   closestBetweenSegments,
   normalize,
   scale,
@@ -24,11 +23,19 @@ export interface Hull {
   readonly radius: Meters
 }
 
-/** A mark or an obstacle: round, and not going anywhere. */
-export interface Disc {
+/** A mark, an obstacle or a committee boat: not going anywhere, and hittable. */
+export interface Body {
   readonly id: string
+  /** Her middle. */
   readonly position: Vec2
   readonly radius: Meters
+  /**
+   * For something long: her centreline, stern to bow, exactly as a hull has one. Without
+   * it she is round and her position is all there is to her. A committee boat is fourteen
+   * meters by four and a half, and a circle round her middle is wrong in both directions
+   * at once — the same reason a boat is not a circle either.
+   */
+  readonly centreline?: Segment
   /**
    * Solid things stop a boat. A buoy on a rope does not: she pushes it aside and sails
    * on, having earned a penalty. Soft is the default, because most of what is out there
@@ -87,26 +94,30 @@ function contactFrom(
   }
 }
 
-function hullTouchesDisc(
+function hullTouchesBody(
   hull: Hull,
-  disc: Disc,
+  body: Body,
   kind: ContactKind,
   margin: Meters,
 ): Contact | null {
-  const nearest = closestPointOnSegment(hull.centreline, disc.position)
-  const gap = Math.hypot(nearest.x - disc.position.x, nearest.y - disc.position.y)
+  const closest = closestBetweenSegments(hull.centreline, extentOf(body))
   return contactFrom(
     hull.id,
-    disc.id,
+    body.id,
     kind,
-    nearest,
-    disc.position,
-    gap,
-    hull.radius + disc.radius,
-    disc.radius,
-    disc.solid !== true,
+    closest.onFirst,
+    closest.onSecond,
+    closest.distance,
+    hull.radius + body.radius,
+    body.radius,
+    body.solid !== true,
     margin,
   )
+}
+
+/** Something round is a capsule whose centreline has no length. */
+function extentOf(body: Body): Segment {
+  return body.centreline ?? { from: body.position, to: body.position }
 }
 
 function hullTouchesHull(first: Hull, second: Hull, margin: Meters): Contact | null {
@@ -127,8 +138,8 @@ function hullTouchesHull(first: Hull, second: Hull, margin: Meters): Contact | n
 
 export interface ContactScene {
   readonly boats: readonly Hull[]
-  readonly marks?: readonly Disc[]
-  readonly obstacles?: readonly Disc[]
+  readonly marks?: readonly Body[]
+  readonly obstacles?: readonly Body[]
   /**
    * Also report pairs this close to touching. Nothing about the physics changes; it lets
    * a caller see a pair still in each other's company, which is how one incident is told
@@ -160,11 +171,11 @@ export function detectContacts(scene: ContactScene): Contact[] {
       if (contact) contacts.push(contact)
     }
     for (const mark of marks) {
-      const contact = hullTouchesDisc(boat, mark, 'mark', margin)
+      const contact = hullTouchesBody(boat, mark, 'mark', margin)
       if (contact) contacts.push(contact)
     }
     for (const obstacle of obstacles) {
-      const contact = hullTouchesDisc(boat, obstacle, 'obstacle', margin)
+      const contact = hullTouchesBody(boat, obstacle, 'obstacle', margin)
       if (contact) contacts.push(contact)
     }
   }

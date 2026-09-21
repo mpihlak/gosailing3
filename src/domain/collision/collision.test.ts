@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { vec } from '@/foundation/geom'
 import { CRUISER_35_SPEC, hullCentreline, hullRadius, spawnBoat } from '@/domain/boat'
-import { detectContacts, isTouching, separationFor, type Disc, type Hull } from './index'
+import { detectContacts, isTouching, separationFor, type Body, type Hull } from './index'
 
 const SPEC = CRUISER_35_SPEC
 const WIND = { direction: 0, speed: 12 }
 const HALF_BEAM = SPEC.beam / 2 // 1.7 m
-const MARK: Disc = { id: 'windward', position: vec(0, 0), radius: 1.5 }
+const MARK: Body = { id: 'windward', position: vec(0, 0), radius: 1.5 }
 /** Centre to centre at which the hull and the mark just touch, abeam. */
 const TOUCHING_ABEAM = HALF_BEAM + MARK.radius // 3.2 m
 

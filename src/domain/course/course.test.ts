@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { distance, vec } from '@/foundation/geom'
 import { createLine, crossedLine, lineBearing, lineBias, lineLength, lineMidpoint, sideOfLine } from './line'
-import { bearingAroundMark, isInZone, laylineMargin, laylines, lineEndBodies } from './queries'
+import {
+  bearingAroundMark,
+  COMMITTEE_BOAT,
+  isInZone,
+  laylineMargin,
+  laylines,
+  lineEndBodies,
+} from './queries'
 import { windwardLeeward } from './layouts'
 
 const pin = vec(-200, 0)
@@ -209,6 +216,28 @@ describe('lineEndBodies', () => {
     expect(bodies.find((body) => body.id === 'committee')!.radius).toBeGreaterThan(
       bodies.find((body) => body.id === 'pin')!.radius,
     )
+  })
+
+  it('gives the committee boat a hull rather than a circle round her middle', () => {
+    /*
+     * She is a vessel, and a circle is wrong in both directions at once: five meters in
+     * every direction is more than twice her half beam, so a boat reaching along the line
+     * was flagged for contact with two meters of clear water showing down her side.
+     */
+    const committee = bodies.find((body) => body.id === 'committee')!
+    const { from, to } = committee.centreline!
+    expect(committee.radius).toBeCloseTo(COMMITTEE_BOAT.beam / 2)
+    // Lying along the line's normal, which is where head to wind points.
+    expect(from.x).toBeCloseTo(200)
+    expect(to.x).toBeCloseTo(200)
+    // The capsule around the centreline is exactly her length.
+    expect(Math.hypot(to.x - from.x, to.y - from.y) + COMMITTEE_BOAT.beam).toBeCloseTo(
+      COMMITTEE_BOAT.length,
+    )
+  })
+
+  it('leaves the pin round, because a buoy is', () => {
+    expect(bodies.find((body) => body.id === 'pin')?.centreline).toBeUndefined()
   })
 
   it('reports each end once, though the start and finish share them', () => {
