@@ -3,6 +3,16 @@ import { add, bearingToVector, distance, scale, vec } from '@/foundation/geom'
 import { createSimulation } from './scenario'
 import { step } from './step'
 import { fixedSource, runHeadless, SimulationRunner, type InputSource } from './runner'
+
+/** Helm that heads her up until she is this far off the wind, then holds what she has. */
+function luffingTo(twa: number): InputSource {
+  return {
+    inputFor: (boatId, world) => {
+      const boat = world.boats.find((other) => other.id === boatId)
+      return { rudder: boat && Math.abs(boat.twa) > twa ? -0.45 : 0 }
+    },
+  }
+}
 import { DEFAULT_CONFIG } from './world'
 import { interpolateWorld } from './interpolate'
 import type { WorldState } from './world'
@@ -153,6 +163,44 @@ describe('contacts', () => {
     for (const boat of after.boats) expect(boat.twa).toBeGreaterThan(0)
   })
 
+  describe('on a run', () => {
+    const RUNNING = 175
+    /** Wind steady out of the north, so port tack puts the windward boat to the east. */
+    const running = (leewardHelm?: Record<string, InputSource>) => {
+      const sim = createSimulation({
+        name: 'run', seed: 'run',
+        boats: [
+          { id: 'windward', name: 'Windward', position: vec(8, 0), heading: RUNNING, speed: 4.4 },
+          { id: 'leeward', name: 'Leeward', position: vec(0, 0), heading: RUNNING, speed: 4.4 },
+        ],
+        wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+        course: { legLength: 2000, lineLength: 400, startCenter: vec(0, 1200) },
+        config: { startSequence: 0 },
+      })
+      return runHeadless(sim.ctx, sim.world, leewardHelm ?? {}, { maxTicks: 60 * 12 })
+    }
+
+    it('leaves two boats sailing parallel alone', () => {
+      expect(running().events.filter((event) => event.kind === 'contact')).toHaveLength(0)
+    })
+
+    /*
+     * Running, a boat is drawn with her boom squared right out, so a pair overlap on the
+     * screen long before their hulls meet — the reach of the rig against the reach of the
+     * hull is measured in the sail tests. What the hulls do when they finally do meet is
+     * this: judged exactly as on a beat, with the turn on the windward boat.
+     */
+    it('judges a leeward boat who luffs into her the same as on a beat', () => {
+      const { events } = running({ leeward: luffingTo(90) })
+      expect(events.filter((event) => event.kind === 'contact')).toMatchObject([
+        { boatId: 'windward', otherId: 'leeward', with: 'boat' },
+      ])
+      expect(events.filter((event) => event.kind === 'penalised')).toMatchObject([
+        { boatId: 'windward', otherId: 'leeward' },
+      ])
+    })
+  })
+
   it('charges one turn for one coming together, however long they stay locked', () => {
     // Two hulls that stay into each other touch and part many times a second. Two full
     // minutes of it is still one incident and one turn.
@@ -266,6 +314,22 @@ describe('contacts', () => {
     expect(contact).toMatchObject({ otherId: 'committee', with: 'mark' })
     // Solid: she is held off it rather than sailing through.
     expect(world.boats[0]!.position.x).toBeLessThan(200)
+  })
+
+  it('lets a boat lie alongside the committee boat without calling it a touch', () => {
+    /*
+     * Six meters off her centreline leaves two meters of clear water down her side. She
+     * was a circle five meters in every direction, more than twice her half beam, and
+     * this was reported as contact with nothing touching on the screen.
+     */
+    const sim = createSimulation({
+      name: 'alongside',
+      seed: 'alongside',
+      boats: [{ id: 'a', name: 'Alpha', position: vec(194, 0), heading: 0, speed: 0 }],
+      course: { legLength: 900, lineLength: 400, startCenter: vec(0, 0) },
+    })
+    const { events } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 })
+    expect(events.filter((event) => event.kind === 'contact')).toHaveLength(0)
   })
 
   it('reports a boat hitting the pin, and lets her push it aside', () => {

@@ -131,6 +131,8 @@ function drawHull(
 /** Close-hauled, and eased right out on a run. */
 const BOOM_CLOSE_HAULED: Degrees = 18
 const BOOM_RUNNING: Degrees = 80
+/** The boom, as a fraction of the boat's length. */
+const BOOM_LENGTH = 0.62
 /** Below this angle to the wind she is luffing, and there is no tack to show. */
 const LUFFING_WITHIN: Degrees = 12
 
@@ -150,12 +152,23 @@ export function boomAngle(twa: Degrees): Degrees {
   return angle * smoothstep(off / LUFFING_WITHIN)
 }
 
+/**
+ * How far the clew lies off her centreline, to leeward, as a fraction of her length.
+ *
+ * Worth having a name because it is not the same as the shape she is hit with. Her hull
+ * reaches half her beam either side; on a run the boom reaches several times that, over
+ * water a rival can sail through without touching anything.
+ */
+export function boomReach(twa: Degrees): number {
+  return BOOM_LENGTH * Math.sin(toRadians(boomAngle(twa)))
+}
+
 /** The mainsail, set on the leeward side. It shows which tack a boat is on at a glance. */
 function drawSail(ctx: CanvasRenderingContext2D, boat: BoatState, length: number): void {
   const toLeeward = boat.twa >= 0 ? 1 : -1
   const angle = toRadians(boomAngle(boat.twa))
   const mastY = -length / 5
-  const boom = length * 0.62
+  const boom = length * BOOM_LENGTH
 
   // In the boat's own frame, forward is negative y and starboard is positive x.
   const clewX = toLeeward * boom * Math.sin(angle)

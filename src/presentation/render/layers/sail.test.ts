@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { boomAngle } from './boats'
+import { CRUISER_35_SPEC, hullRadius } from '@/domain/boat'
+import { boomAngle, boomReach } from './boats'
 
 describe('boomAngle', () => {
   it('shows a readable angle close-hauled, where a real main would be near flat', () => {
@@ -38,5 +39,29 @@ describe('boomAngle', () => {
     for (const twa of [15, 40, 90, 135, 170]) {
       expect(boomAngle(-twa)).toBeCloseTo(boomAngle(twa))
     }
+  })
+})
+
+
+describe('how far the rig reaches beside her', () => {
+  const spec = CRUISER_35_SPEC
+  const across = (twa: number) => boomReach(twa) * spec.length
+  const hull = hullRadius(spec)
+
+  it('keeps the boom close to the hull close-hauled', () => {
+    // Inside a beam of her centreline, so what is drawn is about what is hit.
+    expect(across(40)).toBeLessThan(spec.beam)
+  })
+
+  /*
+   * A known gap, not a decision. Contact in the rules includes a boat's equipment, but
+   * the simulation hits hulls only, and on a run the boom is eased until it reaches
+   * several times the half beam. Two boats can overlap plainly on the screen, boom over
+   * deck, and nothing is flagged. Widening the hull to leeward with the boom would close
+   * it, at the cost of far more fouls on every run.
+   */
+  it('sweeps well outside the hull on a run, which is all she is hit with', () => {
+    expect(across(175)).toBeGreaterThan(hull * 3)
+    expect(across(175) - hull).toBeGreaterThan(spec.beam)
   })
 })
