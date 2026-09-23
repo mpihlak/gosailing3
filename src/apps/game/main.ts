@@ -54,6 +54,13 @@ const BY_TOUCH = window.matchMedia('(pointer: coarse)').matches
 const STARTING_DEBUG_RATE = 1
 
 /**
+ * How much faster the race runs while the boost key is held. A multiplier on whatever
+ * the rate keys are set to rather than a rate of its own, so letting go puts the player
+ * back where she was instead of back at normal.
+ */
+const BOOST = 2
+
+/**
  * The angle the laylines are drawn at: the forty-five degrees sailors use to judge a
  * tack, rather than the polar beat angle.
  *
@@ -71,6 +78,7 @@ const CONTROLS = BY_TOUCH
      <br />Tap the water to stop and carry on. Tap this card to start.`
   : `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start and pause · <b>R</b> new race
      <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>H</b> or <b>?</b> these keys
+     <br />Hold <b>Shift</b> to watch the race run on
      <br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal speed`
 
 const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hullBlue, trail: PALETTE.trailBlue, trailWidth: 2 }
@@ -94,6 +102,8 @@ let showLaylines = true
 let running = false
 let lastFrame = 0
 let debugRate = STARTING_DEBUG_RATE
+/** Whether the boost key was down last frame, so the change is announced once. */
+let boosting = false
 /** Where the telltales sit, measured off the place the page keeps for them. */
 let panelAnchor = { left: 16, top: 16 }
 /**
@@ -191,8 +201,13 @@ function handleCommand(command: HelmCommand): void {
         : command === 'slower'
           ? slowerThan(debugRate)
           : NORMAL_RATE
-    hud.showBanner(`Debug: watching at ${formatRate(debugRate)}`, 'info', 1400)
+    hud.showBanner(`Debug: watching at ${formatRate(watchRate())}`, 'info', 1400)
   }
+}
+
+/** The rate the player is watching at: the ladder, doubled while she holds the key. */
+function watchRate(): number {
+  return debugRate * (helm.boost ? BOOST : 1)
 }
 
 /**
@@ -228,10 +243,15 @@ function frame(timestamp: number): void {
   const elapsed = lastFrame === 0 ? 0 : (timestamp - lastFrame) / 1000
   lastFrame = timestamp
 
+  if (helm.boost !== boosting) {
+    boosting = helm.boost
+    hud.showBanner(`Watching at ${formatRate(watchRate())}`, 'info', 1200)
+  }
+
   if (running) {
     // Scale the catch-up cap alongside the rate, or running fast would be throttled by
     // the stall guard rather than by the rate itself.
-    const pace = GAME_PACE * debugRate
+    const pace = GAME_PACE * watchRate()
     const events = runner.advance(elapsed * pace, sources, 0.25 * pace)
     for (const event of events) announce(event)
   }

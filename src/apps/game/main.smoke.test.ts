@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll } from 'vitest'
-import { mountPage, tapOverlay } from './page.harness'
+import { bannerText, mountPage, tapOverlay, type MountedPage } from './page.harness'
 
 /**
  * Starts the game against the real page and checks that it comes up: that it runs, draws,
@@ -10,11 +10,21 @@ import { mountPage, tapOverlay } from './page.harness'
 /** Every canvas call the game makes, so the test can see that it drew something. */
 const drawn: string[] = []
 
+let page: MountedPage
+let clock = 0
+/** Run a frame, so anything the game only notices while drawing gets noticed. */
+const nextFrame = () => page.frame((clock += 16))
+
+const press = (key: string) =>
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }))
+const release = (key: string) =>
+  window.dispatchEvent(new window.KeyboardEvent('keyup', { key, bubbles: true }))
+
 beforeAll(async () => {
-  const page = mountPage({ width: 1200, height: 800, record: drawn })
+  page = mountPage({ width: 1200, height: 800, record: drawn })
   await import('./main')
   // A handful of frames, enough to fill the instruments in.
-  for (let n = 1; n <= 4; n += 1) page.frame(n * 16)
+  for (let n = 0; n < 4; n += 1) nextFrame()
 })
 
 describe('the game, started against the real page', () => {
@@ -55,5 +65,39 @@ describe('the game, started against the real page', () => {
   it('starts the race when the card is tapped', () => {
     tapOverlay()
     expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')
+  })
+})
+
+describe('watching the race run on', () => {
+  /*
+   * The boost multiplies whatever the rate keys are set to rather than setting a rate of
+   * its own. Assigning instead would drop the player back to normal on release, losing a
+   * rate she had chosen and never asked to change.
+   */
+  it('doubles what the rate keys are set to, and gives it back on release', () => {
+    press('+')
+    nextFrame()
+    expect(bannerText()).toContain('2×')
+
+    press('Shift')
+    nextFrame()
+    expect(bannerText()).toBe('Watching at 4×')
+
+    release('Shift')
+    nextFrame()
+    expect(bannerText()).toBe('Watching at 2×')
+  })
+
+  it('says nothing while the key is simply not held', () => {
+    const before = bannerText()
+    nextFrame()
+    nextFrame()
+    expect(bannerText()).toBe(before)
+  })
+
+  it('is on the card of keys, where the player looks for it', () => {
+    press('h')
+    nextFrame()
+    expect(document.querySelector('#overlay')?.textContent).toContain('Shift')
   })
 })

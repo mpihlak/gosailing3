@@ -22,7 +22,7 @@ export interface HelmOptions {
  * and touch both land here, so nothing downstream needs to know which one is in use.
  */
 export class Helm implements InputSource {
-  private readonly held = new Set<string>()
+  private readonly held = new Set<HeldKey>()
   private detachers: (() => void)[] = []
   /** The tiller, when there is one. A keyboard and a thumb both end up here. */
   tiller: Tiller | undefined
@@ -34,6 +34,15 @@ export class Helm implements InputSource {
   get rudder(): number {
     const keyboard = (this.held.has('left') ? -1 : 0) + (this.held.has('right') ? 1 : 0)
     return clamp(keyboard + (this.tiller?.rudder ?? 0), -1, 1)
+  }
+
+  /**
+   * Whether the player is asking to watch the race run on. Held rather than toggled, and
+   * kept in the same set as the steering keys so that losing the window cancels it: a
+   * release that arrives somewhere else would otherwise leave the race running away.
+   */
+  get boost(): boolean {
+    return this.held.has('boost')
   }
 
   inputFor(): BoatInput {
@@ -50,15 +59,17 @@ export class Helm implements InputSource {
         if (!event.repeat) this.options.onCommand?.(action)
         return
       }
-      const side = sideFor(event.key)
-      if (side) {
-        event.preventDefault()
-        this.held.add(side)
+      const held = heldFor(event.key)
+      if (held) {
+        // Arrows scroll the page and want stopping. Shift on its own does nothing, and
+        // taking it over would break the browser's own combinations.
+        if (held !== 'boost') event.preventDefault()
+        this.held.add(held)
       }
     }
     const keyUp = (event: KeyboardEvent) => {
-      const side = sideFor(event.key)
-      if (side) this.held.delete(side)
+      const held = heldFor(event.key)
+      if (held) this.held.delete(held)
     }
 
     /*
@@ -103,9 +114,12 @@ export class Helm implements InputSource {
   }
 }
 
-function sideFor(key: string): 'left' | 'right' | null {
+type HeldKey = 'left' | 'right' | 'boost'
+
+function heldFor(key: string): HeldKey | null {
   if (key === 'ArrowLeft' || key === 'a' || key === 'A') return 'left'
   if (key === 'ArrowRight' || key === 'd' || key === 'D') return 'right'
+  if (key === 'Shift') return 'boost'
   return null
 }
 
