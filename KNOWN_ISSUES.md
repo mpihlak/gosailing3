@@ -93,3 +93,28 @@ playing a different game from the one the rules describe.
 
 `shade` in `domain/wind` is the same function a tactical tier would consult, so the piece
 is there; deciding what to do about it is the work.
+
+## A boat going back to start does not have to keep clear
+
+Rule 21.1 puts the whole burden on a boat returning to the pre-start side: she keeps clear
+of boats that have started or are starting, and it does not matter which tack anyone is
+on. None of that is modelled. A boat dipping back is judged by the ordinary right of way
+rules, so she can sail through a boat who has just started and the turn may land on the
+boat in the right.
+
+Tolerable while there is one opponent, who starts on port and so owes the turn under rule
+10 in most of the meetings this produces. A fleet would make it obvious.
+
+## A boat can sail past the end of the line and never start
+
+Starting needs a crossing of the line between its marks. A boat who has been wholly behind
+the line is entitled to the course side, so once she has been there she is never called
+over early — and if she then leaves across the extension beyond an end rather than between
+the marks, nothing stops her. She is not started, not over early, and not coming back.
+
+She sails away and the race cannot finish, because it ends only when every boat is home.
+The AI does this from a position up by the committee boat with no countdown left to sort
+herself out in: close-hauled on port from there crosses the extension, not the line.
+
+The start strategy's own tests record the near relation of this, where she is called over
+early first and recovers.

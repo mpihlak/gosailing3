@@ -126,28 +126,39 @@ describe('losing time she does not need', () => {
 })
 
 /**
+ * Starts she makes badly but does not throw away. In each of these she crosses before the
+ * gun, is called over early, and goes back for a late start rather than sailing on and
+ * never starting at all. Recovering is not the same as starting well, so each still has
+ * the fix it is waiting for.
+ */
+describe('when the start goes wrong', () => {
+  it('recovers from a countdown too short to reach out in', () => {
+    // With a minute there is no room for the reach out, so the whole of the spare time
+    // goes into bearing away — and bearing away runs her up the line rather than away
+    // from it. She meets the line before she meets the gun.
+    // TODO: a timed run instead, out on a reciprocal for half the spare and back, so she
+    // starts on the gun rather than recovering from being over it.
+    const report = start({ seed: 'short', countdown: 60 })
+    expect(report.calledOverEarly).toBe(true)
+    expect(report.started).toBe(true)
+  })
+
+  it('recovers when the pin is not layable', () => {
+    // From well up the line, close-hauled on port crosses the extension beyond the
+    // committee boat rather than passing between the marks, which is no start at all.
+    // TODO: fall back to the best part of the line she can actually fetch.
+    const report = start({ seed: 'unlayable', from: { x: 200, y: -60 } })
+    expect(report.calledOverEarly).toBe(true)
+    expect(report.started).toBe(true)
+  })
+})
+
+/**
  * What she cannot do yet. Written down rather than left to be rediscovered, and each one
  * a scenario she should eventually handle. When one of these starts passing, the fix
  * worked and the test should become a requirement.
  */
 describe('known limits', () => {
-  it('cannot manage a countdown too short to reach out in', () => {
-    // With a minute she has no room for the reach out, so the whole of the spare time
-    // has to go into bearing away — and bearing away runs her up the line rather than
-    // away from the line. From the middle she reaches the committee boat before she
-    // reaches the gun, and stops there.
-    // TODO: a timed run instead, out on a reciprocal for half the spare and back.
-    const report = start({ seed: 'short', countdown: 60 })
-    expect(report.started).toBe(false)
-  })
-
-  it('sails off the end of the line when the pin is not layable', () => {
-    // From well up the line, close-hauled on port crosses the extension beyond the
-    // committee boat rather than passing between the marks.
-    // TODO: fall back to the best part of the line she can actually fetch.
-    expect(start({ seed: 'unlayable', from: { x: 200, y: -60 } }).started).toBe(false)
-  })
-
   it('drifts away from the pin over a very long countdown', () => {
     // The wind shifts while she is reaching out, so the layline she comes back on is not
     // the one she left.

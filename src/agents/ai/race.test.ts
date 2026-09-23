@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { vec, type Vec2 } from '@/foundation/geom'
 import { createSimulation, runHeadless, type WorldState } from '@/sim'
 import { Skipper } from './skipper'
 
@@ -103,5 +104,59 @@ describe('determinism', () => {
     expect(first.world.race.progress.ai?.finishTime).not.toBe(
       second.world.race.progress.ai?.finishTime,
     )
+  })
+})
+
+
+/**
+ * Caught on the course side by the gun. She cannot start, cannot round a mark and cannot
+ * finish until her whole hull has been behind the line again, and the race cannot end
+ * while she has not — so a boat who does not go back leaves the player with no result.
+ */
+function sailFromOverEarly(at: Vec2, startSequence: number) {
+  const simulation = createSimulation({
+    name: 'over early',
+    seed: 'ocs',
+    boats: [{ id: 'ai', name: 'Robot', controller: 'ai', position: at, heading: 20 }],
+    course: { legLength: 700, lineLength: 260, startCenter: vec(0, 0) },
+    wind: { direction: 0, speed: 12 },
+    config: { startSequence },
+    duration: 2400,
+  })
+  return runHeadless(
+    simulation.ctx,
+    simulation.world,
+    { ai: new Skipper() },
+    {
+      maxTicks: 60 * 60 * 25,
+      until: (world: WorldState) => world.race.phase === 'complete',
+    },
+  )
+}
+
+describe('a boat over the line at the gun', () => {
+  const { world, events } = sailFromOverEarly(vec(30, 60), 20)
+  const kinds = events.filter((event) => event.kind !== 'contact').map((event) => event.kind)
+
+  it('is called over early', () => {
+    expect(kinds).toContain('overEarly')
+  })
+
+  it('goes back until her hull is behind the line, and is cleared', () => {
+    expect(kinds).toContain('cleared')
+    expect(kinds.indexOf('cleared')).toBeGreaterThan(kinds.indexOf('overEarly'))
+  })
+
+  it('then starts properly and sails the course', () => {
+    expect(kinds).toContain('boatStarted')
+    expect(kinds.indexOf('boatStarted')).toBeGreaterThan(kinds.indexOf('cleared'))
+    expect(world.race.progress.ai?.status).toBe('finished')
+  })
+
+  it('gets back from wherever the gun caught her', () => {
+    // Deep over, barely over, and over at the pin end.
+    for (const at of [vec(0, 90), vec(-10, 8), vec(-90, 40)]) {
+      expect(sailFromOverEarly(at, 60).world.race.progress.ai?.status).toBe('finished')
+    }
   })
 })

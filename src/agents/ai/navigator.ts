@@ -2,7 +2,9 @@ import {
   add,
   angleDelta,
   bearingToVector,
+  closestPointOnSegment,
   distance,
+  normalize,
   normalizeBearing,
   scale,
   sub,
@@ -17,6 +19,7 @@ import {
   pastMark,
   sideOfMark,
   type CourseStage,
+  type RaceLine,
 } from '@/domain/course'
 import type { WindSample } from '@/domain/wind'
 import { raceTime, type SimContext, type WorldState } from '@/sim'
@@ -45,6 +48,7 @@ export interface NavigationPlan {
     | 'fetching'
     | 'rounding'
     | 'penalty'
+    | 'returning'
     | 'holding'
   /** Set while a start strategy is in charge, for the lab and the tests to read. */
   readonly startPhase?: StartPhase
@@ -90,6 +94,17 @@ export function planCourse(
     return { bearing: normalizeBearing(boat.heading + direction * 90), reason: 'penalty' }
   }
 
+  /*
+   * Over the line at the gun, and nothing else matters until she has been behind it
+   * again: she cannot start, so she cannot round a mark or finish either. Here rather
+   * than in the start strategy because every strategy needs it and none of them differ
+   * about it, which is the same reason the penalty turn sits above.
+   */
+  if (stage.kind === 'start' && progress.status === 'overEarly') {
+    const back = returnPoint(stage.line, boat.position, spec)
+    return { bearing: vectorToBearing(sub(back, boat.position)), reason: 'returning' }
+  }
+
   if (stage.kind === 'start') {
     // Getting off the line is its own problem, and there is more than one way to go
     // about it, so it belongs to a strategy rather than to the navigator.
@@ -105,6 +120,27 @@ export function planCourse(
   }
   if (stage.kind === 'mark') return planMark(boat, spec, wind, stage, progress.passedMark)
   return planFor(boat, spec, wind, lineMidpoint(stage.line), 'running')
+}
+
+/**
+ * Where she has to get to before she may start again: square back over the line and a
+ * length beyond it, which puts her whole hull on the pre-start side however she is lying.
+ *
+ * Straight back rather than round an end, which is the shorter way and an allowed one
+ * while no flag says otherwise. She aims at the line itself rather than at its extension,
+ * so she comes back between the marks and can start from where she lands — but short of
+ * the ends, because square across the line at the end is square into the boat or the buoy
+ * that marks it. Sent there she leans on the committee boat and stops dead.
+ *
+ * The course side is upwind, so the way back is a bear away and a run: no tack to make
+ * and no layline to judge.
+ */
+function returnPoint(line: RaceLine, at: Vec2, spec: BoatSpec): Vec2 {
+  const along = sub(line.to, line.from)
+  const inset = Math.min(spec.length * 2, distance(line.from, line.to) / 2)
+  const off = scale(normalize(along), inset)
+  const onLine = closestPointOnSegment({ from: add(line.from, off), to: sub(line.to, off) }, at)
+  return add(onLine, scale(line.normal, -spec.length))
 }
 
 function planMark(
