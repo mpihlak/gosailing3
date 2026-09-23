@@ -26,7 +26,7 @@ import {
   timing,
 } from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
-import { duel, GAME_PACE, PLAYER_ID, randomSeed } from './scenario'
+import { duel, GAME_PACE, playerSeconds, PLAYER_ID, randomSeed } from './scenario'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
 const hud = new Hud(
@@ -264,7 +264,7 @@ function frame(timestamp: number): void {
     styles,
     started: raceTime(simulation.ctx, world) >= 0,
     medianWindSpeed: simulation.wind.median.speed,
-    displayTime: world.time / GAME_PACE,
+    displayTime: playerSeconds(world.time),
     panelAnchor,
     beatAngle: specOfPlayer().polar.beatAngle(wind.speed),
     runAngle: specOfPlayer().polar.runAngle(wind.speed),
@@ -288,8 +288,8 @@ function updateInstruments(player: BoatState, windSpeed: number): void {
     twa: player.twa,
     windSpeed,
     vmgRatio: targetVmgRatio(spec.polar, player.speed, player.twa, windSpeed),
-    timeToStart: timeToStart(simulation.ctx, runner.world) / GAME_PACE,
-    raceTime: raceTime(simulation.ctx, runner.world) / GAME_PACE,
+    timeToStart: playerSeconds(timeToStart(simulation.ctx, runner.world)),
+    raceTime: playerSeconds(raceTime(simulation.ctx, runner.world)),
     ...(progress?.place === undefined ? {} : { place: progress.place }),
   })
 }
@@ -356,7 +356,7 @@ function announce(event: TimedEvent): void {
     case 'cleared':
       return hud.showBanner('Cleared', 'good', 1600)
     case 'boatStarted':
-      return hud.showBanner(`Started ${event.late.toFixed(1)}s after the gun`, 'info')
+      return hud.showBanner(`Started ${playerSeconds(event.late).toFixed(1)}s after the gun`, 'info')
     case 'markRounded':
       return hud.showBanner('Mark rounded — head for the line', 'good')
     case 'penalised': {
@@ -387,7 +387,7 @@ function announce(event: TimedEvent): void {
     case 'boatFinished': {
       // Her own finish is worth saying, but the race is not over until the rest of the
       // fleet is home, and it carries on until it is.
-      const elapsed = (runner.world.race.progress[PLAYER_ID]?.finishTime ?? 0) / GAME_PACE
+      const elapsed = playerSeconds(runner.world.race.progress[PLAYER_ID]?.finishTime ?? 0)
       return hud.showBanner(`Finished in ${clock(elapsed)}`, 'good', 3200)
     }
     case 'raceFinished':
@@ -429,7 +429,7 @@ function showResults(): void {
   const rows = race.finishOrder
     .map((boatId) => {
       const progress = race.progress[boatId]
-      const elapsed = (progress?.finishTime ?? 0) / GAME_PACE
+      const elapsed = playerSeconds(progress?.finishTime ?? 0)
       const name = simulation.names[boatId] ?? boatId
       const color = styles[boatId]?.hull ?? ''
       const mine = boatId === PLAYER_ID ? ' class="mine"' : ''

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll, vi } from 'vitest'
 import type * as Scenario from './scenario'
-import { mountPage, overlayText, tapOverlay } from './page.harness'
+import { bannerText, mountPage, overlayText, tapOverlay } from './page.harness'
 
 /**
  * Sails a whole race and taps the card at the end of it.
@@ -35,6 +35,18 @@ vi.mock('./scenario', async () => {
 
 const overlay = () => document.querySelector<HTMLElement>('#overlay')
 
+/** The clock the player is reading, in seconds. Negative before the gun. */
+function raceClock(): number {
+  const shown = document.querySelector('#hud [data-field="timer"] .value')?.textContent ?? ''
+  const found = shown.match(/(−?)(\d+):(\d\d)/)
+  if (!found) return NaN
+  const seconds = Number(found[2]) * 60 + Number(found[3])
+  return found[1] === '−' ? -seconds : seconds
+}
+
+/** What the banner said when she was told she had started, and the clock at that moment. */
+let startReport: { late: number; clock: number } | undefined
+
 beforeAll(async () => {
   const page = mountPage({ width: 900, height: 600 })
   await import('./main')
@@ -44,7 +56,26 @@ beforeAll(async () => {
   // up in one go, so a frame here is a second of the race.
   for (let second = 1; second <= 900; second += 1) {
     if (overlayText().includes('Results') || !page.frame(second * 1000)) break
+    const said = bannerText().match(/Started ([\d.]+)s after the gun/)
+    if (said && !startReport) startReport = { late: Number(said[1]), clock: raceClock() }
   }
+})
+
+describe('crossing the line, on the page', () => {
+  /*
+   * Every duration the player is shown is in her seconds, not the simulation's, and the
+   * two differ by GAME_PACE. Taken straight from the simulation this read four times too
+   * large: a start half a second late was announced as two seconds late.
+   */
+  it('cannot report her starting later than her own clock has reached', () => {
+    expect(startReport).toBeDefined()
+    // The clock is floored to whole seconds, so it can be up to one behind the truth.
+    expect(startReport!.late).toBeLessThanOrEqual(startReport!.clock + 1)
+  })
+
+  it('reports a number, not a blank', () => {
+    expect(startReport!.late).toBeGreaterThanOrEqual(0)
+  })
 })
 
 describe('the end of a race, on the page', () => {

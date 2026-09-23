@@ -18,6 +18,16 @@ export const OPPONENT_ID = 'opponent'
  */
 export const GAME_PACE = 4
 
+/**
+ * Simulation seconds as the player lives them. Every duration she is shown goes through
+ * here: the boats move GAME_PACE times faster than her clock, so a number taken straight
+ * from the simulation reads four times too large. A start half a second late was reported
+ * as two seconds late that way.
+ */
+export function playerSeconds(simulated: Seconds): Seconds {
+  return simulated / GAME_PACE
+}
+
 /** Countdown before the gun, in the player's seconds. */
 export const COUNTDOWN: number = 30
 
