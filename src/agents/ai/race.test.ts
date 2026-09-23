@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { vec, type Vec2 } from '@/foundation/geom'
-import { createSimulation, runHeadless, type WorldState } from '@/sim'
+import { distance, vec, type Vec2 } from '@/foundation/geom'
+import { createSimulation, runHeadless, SimulationRunner, type WorldState } from '@/sim'
 import { Skipper } from './skipper'
 
 /** A full race, sailed by the AI with no renderer and no clock. */
@@ -158,5 +158,108 @@ describe('a boat over the line at the gun', () => {
     for (const at of [vec(0, 90), vec(-10, 8), vec(-90, 40)]) {
       expect(sailFromOverEarly(at, 60).world.race.progress.ai?.status).toBe('finished')
     }
+  })
+})
+
+
+/**
+ * A race she starts already owing turns, watched tick by tick while she pays them.
+ *
+ * The simulation opens a penalty turn on any rotation while a boat owes one, so a mark
+ * rounding opens it by itself. Read as a decision already taken, that had her commit to
+ * a circle ten meters off the mark she had just been round, and sometimes into it.
+ */
+function payingTurns(seed: string, penalties: number, rival = false) {
+  const boats = [
+    { id: 'ai', name: 'Robot', controller: 'ai' as const, position: vec(0, -70), heading: 90 },
+    ...(rival
+      ? [{ id: 'two', name: 'Other', controller: 'ai' as const, position: vec(-25, -70), heading: 90 }]
+      : []),
+  ]
+  const simulation = createSimulation({
+    name: 'penalty turns',
+    seed,
+    boats,
+    course: { legLength: 450, lineLength: 260, startCenter: vec(0, 0) },
+    wind: { direction: 0, speed: 12 },
+    config: { startSequence: 120 },
+    duration: 2400,
+  })
+  const owed = simulation.world.race.progress
+  const runner = new SimulationRunner(simulation.ctx, {
+    ...simulation.world,
+    race: {
+      ...simulation.world.race,
+      progress: { ...owed, ai: { ...owed.ai!, penalties } },
+    },
+  })
+
+  const mark = simulation.ctx.course.marks[0]!
+  let markContacts = 0
+  let closestToMark = Infinity
+  let beganTurnAt: number | undefined
+
+  for (let tick = 0; tick < 60 * 60 * 25; tick++) {
+    const helms = Object.fromEntries(runner.world.boats.map((boat) => [boat.id, new Skipper()]))
+    const events = runner.advance(1 / 60, helms, 10)
+    const boat = runner.world.boats.find((other) => other.id === 'ai')
+    const turning = runner.world.race.progress.ai?.penaltyTurn !== undefined
+    if (boat && turning) {
+      const off = distance(boat.position, mark.position)
+      beganTurnAt ??= off
+      closestToMark = Math.min(closestToMark, off)
+      for (const event of events) {
+        if (event.kind === 'contact' && event.with === 'mark' && event.boatId === 'ai') markContacts++
+      }
+    }
+    if (runner.world.race.progress.ai?.status === 'finished') break
+  }
+
+  const progress = runner.world.race.progress.ai
+  return {
+    markContacts,
+    closestToMark,
+    beganTurnAt,
+    finished: progress?.status === 'finished',
+    owing: progress?.penalties ?? 0,
+  }
+}
+
+const SEEDS = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'charlie']
+
+describe('paying a penalty turn', () => {
+  it('does not take the mark with her', () => {
+    for (const seed of SEEDS) {
+      expect(payingTurns(seed, 1).markContacts).toBe(0)
+    }
+  })
+
+  it('waits until she is clear of it before she starts to spin', () => {
+    for (const seed of SEEDS) {
+      const { beganTurnAt } = payingTurns(seed, 1)
+      // Her turning circle and her own length, with something over for the ground she
+      // sags to leeward while she is slow.
+      expect(beganTurnAt).toBeGreaterThan(25)
+    }
+  })
+
+  it('keeps clear water between her and the mark all the way round', () => {
+    for (const seed of SEEDS) {
+      expect(payingTurns(seed, 1).closestToMark).toBeGreaterThan(5)
+    }
+  })
+
+  it('still pays what she owes and finishes, however many turns', () => {
+    for (const penalties of [1, 2]) {
+      const result = payingTurns('a1', penalties)
+      expect(result.owing).toBe(0)
+      expect(result.finished).toBe(true)
+    }
+  })
+
+  it('does not spin into a boat sailing by', () => {
+    const result = payingTurns('a1', 1, true)
+    expect(result.markContacts).toBe(0)
+    expect(result.finished).toBe(true)
   })
 })

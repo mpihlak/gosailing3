@@ -6,18 +6,20 @@ import {
   distance,
   normalize,
   normalizeBearing,
+  toRadians,
   scale,
   sub,
   vectorToBearing,
   type Vec2,
 } from '@/foundation/geom'
-import type { Degrees, Meters } from '@/foundation/units'
+import { clamp, knotsToMps, type Degrees, type Meters, type Seconds } from '@/foundation/units'
 import { tackOf, type BoatSpec, type BoatState } from '@/domain/boat'
 import {
   lineEndBodies,
   lineMidpoint,
   pastMark,
   sideOfMark,
+  type CourseBody,
   type CourseStage,
   type RaceLine,
 } from '@/domain/course'
@@ -83,13 +85,20 @@ export function planCourse(
    * opponent's penalty cancels yours, and a turn spent early is a chance thrown away.
    * They come due on the last leg, because she may not finish owing any.
    */
-  const turning = progress.penaltyTurn !== undefined
+  const direction = progress.penaltyTurn?.direction ?? (tackOf(boat.twa) === 'port' ? 1 : -1)
+  /*
+   * Room is asked for every tick, not only on the tick she begins. The simulation opens a
+   * turn on any rotation while she owes one, so a mark rounding opens it for her, and
+   * treating an open turn as a decision already taken had her commit to a circle ten
+   * meters off the mark she had just been round. The circle she would sweep barely moves
+   * as she goes round it, so asking repeatedly gives the same answer until something
+   * else moves — which is exactly when she should think again.
+   */
   if (
     progress.penalties > 0 &&
     stage.kind === 'finish' &&
-    (turning || clearToTurn(ctx, world, boat, spec))
+    roomToSpin(ctx, world, boat, spec, direction)
   ) {
-    const direction = progress.penaltyTurn?.direction ?? (tackOf(boat.twa) === 'port' ? 1 : -1)
     // Aiming a quarter turn ahead keeps the helm hard over all the way round.
     return { bearing: normalizeBearing(boat.heading + direction * 90), reason: 'penalty' }
   }
@@ -236,26 +245,77 @@ export function stageOf(ctx: SimContext, world: WorldState, boatId: string): Cou
   return progress ? ctx.course.stages[progress.stageIndex] : undefined
 }
 
+/** Water she wants beyond the circle itself, for the ground she loses going round. */
+const TURN_MARGIN: Meters = 12
+
+/** How fast she comes round with the helm hard over, which is slower the slower she goes. */
+function turnRate(spec: BoatSpec, boat: BoatState): number {
+  return spec.maxTurnRate * clamp(boat.speed / spec.steerageSpeed, 0.12, 1)
+}
+
 /**
- * Whether there is room to spin. She has to keep clear of other boats while taking a
- * penalty, and hitting a mark in the middle of a turn would only earn her another.
+ * The water she will occupy going round: a circle to the side she turns towards, of the
+ * radius her speed and her helm give her, widened by her own length and the ground she
+ * sags to leeward while she is slow.
+ *
+ * A circle rather than a radius around where she is now. Her turn is not centred on her —
+ * it is centred a radius off her beam — so a plain distance is too strict on the side she
+ * is turning away from and too kind on the side she is turning into.
  */
-function clearToTurn(
+function turnCircle(
+  boat: BoatState,
+  spec: BoatSpec,
+  direction: 1 | -1,
+): { readonly centre: Vec2; readonly radius: Meters } {
+  const radius = knotsToMps(boat.speed) / toRadians(turnRate(spec, boat))
+  const abeam = bearingToVector(normalizeBearing(boat.heading + direction * 90))
+  return {
+    centre: add(boat.position, scale(abeam, radius)),
+    radius: radius + spec.length / 2 + TURN_MARGIN,
+  }
+}
+
+/** Nearest approach to a fixed body, which may be a vessel lying along a line. */
+function gapTo(centre: Vec2, body: CourseBody): Meters {
+  const at = body.centreline
+    ? closestPointOnSegment(body.centreline, centre)
+    : body.position
+  return distance(centre, at) - body.radius
+}
+
+/**
+ * Whether she can go round from here without hitting anything, for as long as it takes.
+ *
+ * Marks and the ends of the line have to be outside the circle she will sweep. So does
+ * every other boat, and not only where she is now: a boat standing on cannot be expected
+ * to have gone round, so her track for the length of the turn is checked as well.
+ */
+function roomToSpin(
   ctx: SimContext,
   world: WorldState,
   boat: BoatState,
   spec: BoatSpec,
+  direction: 1 | -1,
 ): boolean {
-  const room = spec.length * 4
+  const circle = turnCircle(boat, spec, direction)
+  const rate = turnRate(spec, boat)
+  if (!(rate > 0)) return false
+  const seconds: Seconds = 360 / rate
 
-  for (const other of world.boats) {
-    if (other.id !== boat.id && distance(boat.position, other.position) < room) return false
-  }
   for (const mark of ctx.course.marks) {
-    if (distance(boat.position, mark.position) < room) return false
+    if (distance(circle.centre, mark.position) - mark.radius < circle.radius) return false
   }
   for (const end of lineEndBodies(ctx.course.stages)) {
-    if (distance(boat.position, end.position) < room) return false
+    if (gapTo(circle.centre, end) < circle.radius) return false
+  }
+
+  for (const other of world.boats) {
+    if (other.id === boat.id) continue
+    const reach = (ctx.specs[other.id]?.length ?? spec.length) / 2
+    const run = scale(bearingToVector(other.heading), knotsToMps(other.speed) * seconds)
+    const track = { from: other.position, to: add(other.position, run) }
+    const nearest = closestPointOnSegment(track, circle.centre)
+    if (distance(circle.centre, nearest) < circle.radius + reach) return false
   }
   return true
 }
