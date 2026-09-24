@@ -61,11 +61,12 @@ describe('the boost key', () => {
     expect(commands).toEqual([])
   })
 
-  it('leaves the rate keys reachable while it is held', () => {
-    // Shift and '=' together give '+', which is the same command either way.
+  it('leaves the other keys reachable while it is held', () => {
+    // It takes no default, so the keys keep working and so do the browser's own.
     press('Shift')
-    press('+')
-    expect(commands).toEqual(['faster'])
+    press('w')
+    press('l')
+    expect(commands).toEqual(['toggleShadows', 'toggleLaylines'])
     expect(helm.boost).toBe(true)
   })
 })

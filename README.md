@@ -50,8 +50,7 @@ Boats sail faster than they would on the water — the course takes about six an
 minutes at true scale, which is a long time to sit through. `GAME_PACE` in
 `src/apps/game/scenario.ts` sets how much faster, and every clock is divided back down by
 it, so the timer counts real seconds. A race runs to roughly two minutes including the
-countdown. `+` and `-` watch the race faster or slower; that is a debugging aid, not part
-of the game.
+countdown. Holding `Shift` runs it at twice that, for as long as you hold it.
 
 ## Layout
 

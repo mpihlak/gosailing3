@@ -16,7 +16,7 @@ import {
 import { createCamera, follow, zoomForBoats, type Camera } from '@/presentation/view/camera'
 import { drawScene, PALETTE, resizeSurface, TrailStore, type BoatStyle } from '@/presentation/render'
 import { Helm, Tiller, type HelmCommand } from '@/presentation/input'
-import { fasterThan, formatRate, NORMAL_RATE, slowerThan } from '@/presentation/view/timescale'
+import { formatRate } from '@/presentation/view/timescale'
 import {
   clock,
   Hud,
@@ -47,18 +47,7 @@ const LEAST_BOAT_PIXELS = 20
 /** Whether this is a finger rather than a mouse, which decides what the cards say. */
 const BY_TOUCH = window.matchMedia('(pointer: coarse)').matches
 
-/**
- * A debugging aid: watch the race faster or slower than it is meant to be played. It is
- * not part of the game and is expected to come out again. The pace the game actually
- * runs at is GAME_PACE, which this multiplies on top of.
- */
-const STARTING_DEBUG_RATE = 1
-
-/**
- * How much faster the race runs while the boost key is held. A multiplier on whatever
- * the rate keys are set to rather than a rate of its own, so letting go puts the player
- * back where she was instead of back at normal.
- */
+/** How much faster the race runs while the boost key is held. */
 const BOOST = 2
 
 /**
@@ -79,8 +68,7 @@ const CONTROLS = BY_TOUCH
      <br />Tap the water to stop and carry on. Tap this card to start.`
   : `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start and pause · <b>R</b> new race
      <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>H</b> or <b>?</b> these keys
-     <br />Hold <b>Shift</b> to watch the race run on
-     <br />Debug: <b>+ −</b> watch faster or slower · <b>0</b> normal speed`
+     <br />Hold <b>Shift</b> to watch the race run on`
 
 const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hullBlue, trail: PALETTE.trailBlue, trailWidth: 2 }
 
@@ -102,7 +90,6 @@ let showShadows = true
 let showLaylines = true
 let running = false
 let lastFrame = 0
-let debugRate = STARTING_DEBUG_RATE
 /** Whether the boost key was down last frame, so the change is announced once. */
 let boosting = false
 /** Where the telltales sit, measured off the place the page keeps for them. */
@@ -142,7 +129,6 @@ function start(seed: string, immediate = false): void {
     Object.fromEntries(Object.entries(styles).map(([id, style]) => [id, style.hull])),
   )
   running = false
-  debugRate = STARTING_DEBUG_RATE
 
   const surface = resizeSurface(canvas)
   const player = playerBoat(runner.world.boats)
@@ -195,20 +181,11 @@ function handleCommand(command: HelmCommand): void {
     showLaylines = !showLaylines
     hud.showBanner(`Laylines ${showLaylines ? 'on' : 'off'}`, 'info', 1400)
   }
-  if (command === 'faster' || command === 'slower' || command === 'normalRate') {
-    debugRate =
-      command === 'faster'
-        ? fasterThan(debugRate)
-        : command === 'slower'
-          ? slowerThan(debugRate)
-          : NORMAL_RATE
-    hud.showBanner(`Debug: watching at ${formatRate(watchRate())}`, 'info', 1400)
-  }
 }
 
-/** The rate the player is watching at: the ladder, doubled while she holds the key. */
+/** The rate the player is watching at: her own, or doubled while she holds the key. */
 function watchRate(): number {
-  return debugRate * (helm.boost ? BOOST : 1)
+  return helm.boost ? BOOST : 1
 }
 
 /**

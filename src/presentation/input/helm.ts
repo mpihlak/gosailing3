@@ -7,9 +7,6 @@ export type HelmCommand =
   | 'toggleRun'
   | 'restart'
   | 'help'
-  | 'faster'
-  | 'slower'
-  | 'normalRate'
   | 'toggleShadows'
   | 'toggleLaylines'
 
@@ -129,9 +126,5 @@ function commandFor(key: string): HelmCommand | null {
   if (key === 'h' || key === 'H' || key === '?') return 'help'
   if (key === 'w' || key === 'W') return 'toggleShadows'
   if (key === 'l' || key === 'L') return 'toggleLaylines'
-  // Accept the key both shifted and not, so it works without reaching for shift.
-  if (key === '+' || key === '=') return 'faster'
-  if (key === '-' || key === '_') return 'slower'
-  if (key === '0') return 'normalRate'
   return null
 }

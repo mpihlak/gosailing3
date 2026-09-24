@@ -75,23 +75,14 @@ describe('the game, started against the real page', () => {
 })
 
 describe('watching the race run on', () => {
-  /*
-   * The boost multiplies whatever the rate keys are set to rather than setting a rate of
-   * its own. Assigning instead would drop the player back to normal on release, losing a
-   * rate she had chosen and never asked to change.
-   */
-  it('doubles what the rate keys are set to, and gives it back on release', () => {
-    press('+')
-    nextFrame()
-    expect(bannerText()).toContain('2×')
-
+  it('doubles the pace while the key is held, and gives it back on release', () => {
     press('Shift')
     nextFrame()
-    expect(bannerText()).toBe('Watching at 4×')
+    expect(bannerText()).toBe('Watching at 2×')
 
     release('Shift')
     nextFrame()
-    expect(bannerText()).toBe('Watching at 2×')
+    expect(bannerText()).toBe('Watching at 1×')
   })
 
   it('says nothing while the key is simply not held', () => {
