@@ -62,6 +62,12 @@ describe('the game, started against the real page', () => {
     expect(doing).toEqual(['to start', 'to start'])
   })
 
+  it('shows how fast each of them is going', () => {
+    const speeds = [...document.querySelectorAll('#standings .speed')].map((it) => it.textContent)
+    expect(speeds).toHaveLength(2)
+    for (const speed of speeds) expect(speed).toMatch(/^\d+\.\d$/)
+  })
+
   it('starts the race when the card is tapped', () => {
     tapOverlay()
     expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')

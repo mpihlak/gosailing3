@@ -31,6 +31,7 @@ const HOME_INDICATOR = 34
 const panelWidth = css('panel-width')
 const panelHeight = css('panel-height')
 const tillerHeight = css('tiller-height')
+const tillerWidth = css('tiller-width')
 const standingsHeight = css('standings-height')
 
 const wide = {
@@ -48,7 +49,6 @@ const narrow = {
   gap: css('gauge-gap-narrow'),
   padding: css('edge-pad-narrow'),
   gaugeHeight: css('gauge-height-narrow'),
-  standings: css('standings-narrow'),
 }
 
 /** Speed, TWA, the clock, TWS and %VMG, all on one line. */
@@ -149,16 +149,18 @@ describe('the board at the foot of the screen', () => {
   it('goes under the tiller where there is one, and takes the left edge back', () => {
     expect(PAGE).toMatch(/#tiller \{ display: block; order: 1; \}\s*#standings \{ order: 2; \}/)
     const stacked = PAGE.match(new RegExp(`@media \\(max-width: ${wide.until}px\\)([\\s\\S]*?)\\n      \\}`))
-    expect(stacked?.[1] ?? '').toMatch(/#standings \{ margin-left: 0; \}/)
+    expect(stacked?.[1] ?? '').toMatch(/#standings \{ margin-left: 0;/)
   })
 
-  it('fits across a phone', () => {
-    expect(narrow.standings).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
+  it('runs the width of the tiller on a phone, and fits', () => {
+    expect(PAGE).toMatch(/#standings \{[^}]*max-width: var\(--tiller-width\)/)
+    expect(tillerWidth).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
   })
 
-  it('has room for a name and what she is sailing for', () => {
-    // Place, name, the doing column and a penalty flag, at 13px and 11px.
-    expect(narrow.standings).toBeGreaterThanOrEqual(150)
+  it('has room for a name, what she is sailing for and her speed', () => {
+    // Place, name, the doing column, her speed and a penalty flag, at 13px and 11px.
+    expect(wide.standings).toBeGreaterThanOrEqual(200)
+    expect(tillerWidth).toBeGreaterThanOrEqual(200)
   })
 
 
@@ -180,5 +182,12 @@ describe('what is left for the water', () => {
   it('gives the tiller a thumb-sized bar', () => {
     // Anything under about forty-four points is hard to hit without looking.
     expect(tillerHeight).toBeGreaterThanOrEqual(44)
+  })
+
+  it('caps how long the tiller gets, because a longer bar is a slower helm', () => {
+    // The rudder comes from how far along the bar the thumb is, so across a tablet the
+    // same movement was worth a third of the rudder it is worth on a phone.
+    expect(PAGE).toMatch(/#tiller \{[^}]*max-width: var\(--tiller-width\)/)
+    expect(tillerWidth).toBeLessThanOrEqual(SCREEN.width)
   })
 })

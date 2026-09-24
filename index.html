@@ -24,7 +24,7 @@
           var(--timer-width) / 2 + var(--gauge-width) * 2 + var(--gauge-gap) * 3 +
             var(--panel-width)
         );
-        --standings-width: 186px;
+        --standings-width: 214px;
         --standings-height: 58px;
         /* The narrow layout's budget. The layout test reads these. */
         --gauge-narrow: 64px;
@@ -32,8 +32,11 @@
         --gauge-gap-narrow: 4px;
         --edge-pad-narrow: 8px;
         --gauge-height-narrow: 46px;
-        --standings-narrow: 176px;
         --tiller-height: 56px;
+        /* The bar a phone gives it, and as wide as it ever gets. The rudder is taken from
+           how far along the bar the thumb is, so a longer bar is a slower helm: across an
+           iPad the same movement was worth a third of the rudder. */
+        --tiller-width: 374px;
         --ink: #eaf2f8;
         --dim: #8aa7ba;
         --panel: rgba(8, 28, 44, 0.82);
@@ -164,6 +167,7 @@
         display: none;
         position: relative;
         height: var(--tiller-height);
+        max-width: var(--tiller-width);
         pointer-events: auto;
         border-radius: 999px;
         background: var(--panel);
@@ -217,6 +221,13 @@
         text-overflow: ellipsis;
       }
       .crew.ocs .doing { color: var(--warn); font-weight: 600; }
+      /* How fast she is going, in the same tabular figures as the speed gauge. */
+      .crew .speed {
+        min-width: 2.2em;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: var(--ink);
+      }
       .crew .pen { min-width: 2.2em; text-align: right; }
       .crew .turns { color: var(--penalty); font-weight: 600; }
       [data-banner] {
@@ -301,8 +312,9 @@
         /* The auto margin beats the centering on that line alone, putting the telltales
            against the same edge as the board at the foot of the screen. */
         #telltales { order: 7; margin-right: auto; }
-        /* No centered row to line up with any more, so the board takes the same edge. */
-        #standings { margin-left: 0; }
+        /* No centered row to line up with any more, so the board takes the same edge, and
+           the same width as the tiller below it. */
+        #standings { margin-left: 0; width: auto; max-width: var(--tiller-width); }
       }
       @media (pointer: coarse), (max-width: 560px) {
         /* The tiller is under the thumb, so the board goes below it rather than above. */
@@ -322,7 +334,6 @@
             max(var(--edge-pad-narrow), env(safe-area-inset-bottom))
             max(var(--edge-pad-narrow), env(safe-area-inset-left));
         }
-        #standings { width: var(--standings-narrow); }
         .gauge {
           width: var(--gauge-narrow);
           min-height: var(--gauge-height-narrow);

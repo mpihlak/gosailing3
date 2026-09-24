@@ -23,6 +23,7 @@ import {
   OCS,
   StandingsBoard,
   targetVmgRatio,
+  type CrewReading,
   timing,
 } from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
@@ -295,7 +296,7 @@ function frame(timestamp: number): void {
   })
 
   if (player) updateInstruments(player, wind.speed)
-  board.update(standings(simulation.ctx, runner.world), PLAYER_ID, whatEachBoatIsDoing())
+  board.update(standings(simulation.ctx, runner.world), PLAYER_ID, boardReadings(world.boats))
   requestAnimationFrame(frame)
 }
 
@@ -314,8 +315,12 @@ function updateInstruments(player: BoatState, windSpeed: number): void {
   })
 }
 
-function whatEachBoatIsDoing(): Record<string, string> {
-  return Object.fromEntries(runner.world.boats.map((boat) => [boat.id, doingText(boat.id)]))
+/** What the board says about each boat. Speeds come from the interpolated frame, so they
+ *  read as smoothly as the boats move. */
+function boardReadings(boats: readonly BoatState[]): Record<string, CrewReading> {
+  return Object.fromEntries(
+    boats.map((boat) => [boat.id, { doing: doingText(boat.id), speed: boat.speed }]),
+  )
 }
 
 /** What a boat is sailing for now, said the way the board says it. */
