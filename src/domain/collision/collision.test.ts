@@ -155,24 +155,14 @@ describe('separationFor', () => {
 })
 
 describe('near misses', () => {
-  it('reports nothing near without a margin', () => {
+  it('reports nothing for a pair with clear water between them', () => {
     expect(detectContacts({ boats: [hull('a', 0, 0), hull('b', 8, 0)] })).toEqual([])
+    expect(detectContacts({ boats: [hull('a', 0, 0), hull('b', 40, 0)] })).toEqual([])
   })
 
-  it('reports a pair within the margin, and says they are not touching', () => {
-    const [close] = detectContacts({ boats: [hull('a', 0, 0), hull('b', 8, 0)], margin: 12 })
-    expect(close).toBeDefined()
-    expect(close!.separation).toBeCloseTo(8 - SPEC.beam)
-    expect(isTouching(close!)).toBe(false)
-  })
-
-  it('still says a pair into each other is touching', () => {
-    const [overlapping] = detectContacts({ boats: [hull('a', 0, 0), hull('b', 2, 0)], margin: 12 })
+  it('says a pair into each other is touching, and by how much', () => {
+    const [overlapping] = detectContacts({ boats: [hull('a', 0, 0), hull('b', 2, 0)] })
     expect(overlapping!.separation).toBeLessThan(0)
     expect(isTouching(overlapping!)).toBe(true)
-  })
-
-  it('leaves a pair beyond the margin out altogether', () => {
-    expect(detectContacts({ boats: [hull('a', 0, 0), hull('b', 40, 0)], margin: 12 })).toEqual([])
   })
 })

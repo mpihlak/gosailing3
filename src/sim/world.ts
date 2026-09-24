@@ -17,6 +17,17 @@ export interface SimConfig {
    * the rules, not a collision.
    */
   readonly markContactSpeedLoss: number
+  /**
+   * How long two boats have to be out of contact before the next touch is a new incident
+   * rather than more of the last one.
+   *
+   * Two hulls leaning on each other touch and part many times a second — measured, up to
+   * about a second between touches — so anything shorter than that charges a boat over
+   * and over for one coming together. Judging it by how far apart they are instead never
+   * let go at all: a pair sailing on a few meters apart stayed one incident indefinitely,
+   * and a boat could drive another up the course for as long as she liked for one turn.
+   */
+  readonly incidentGrace: Seconds
 }
 
 export const DEFAULT_CONFIG: SimConfig = {
@@ -24,6 +35,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   startSequence: 60,
   contactSpeedLoss: 0.35,
   markContactSpeedLoss: 0.08,
+  incidentGrace: 4,
 }
 
 /**
@@ -51,7 +63,8 @@ export interface WorldState {
    * open until they are clear, so however long they grind along each other it costs one
    * turn.
    */
-  readonly incidents: readonly string[]
+  /** Incidents still open, and the time each pair last touched. */
+  readonly incidents: Readonly<Record<string, Seconds>>
 }
 
 export type InputFrame = Readonly<Record<BoatId, BoatInput>>

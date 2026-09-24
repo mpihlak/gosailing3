@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { add, bearingToVector, distance, scale, vec } from '@/foundation/geom'
 import { createSimulation } from './scenario'
 import { step } from './step'
+import type { Meters, Seconds } from '@/foundation/units'
+import type { TimedEvent } from './events'
 import { fixedSource, runHeadless, SimulationRunner, type InputSource } from './runner'
 
 /** Helm that heads her up until she is this far off the wind, then holds what she has. */
@@ -245,10 +247,10 @@ describe('contacts', () => {
     for (const boat of after.boats) expect(boat.speed).toBeGreaterThan(3)
   })
 
-  it('keeps the incident open while they are still in each other\'s company', () => {
+  it('keeps the incident open while they are still touching', () => {
     const { ctx, world } = collidingFleet()
     const after = runHeadless(ctx, world, {}, { maxTicks: 60 * 10 }).world
-    expect(after.incidents).toHaveLength(1)
+    expect(Object.keys(after.incidents)).toHaveLength(1)
   })
 
   it('closes the incident once they have come properly apart', () => {
@@ -264,10 +266,78 @@ describe('contacts', () => {
       config: { startSequence: 0 },
     })
     const touched = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 5 }).world
-    expect(touched.incidents).toHaveLength(1)
+    expect(Object.keys(touched.incidents)).toHaveLength(1)
 
     const parted = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 20 }).world
-    expect(parted.incidents).toHaveLength(0)
+    expect(Object.keys(parted.incidents)).toHaveLength(0)
+  })
+
+  /*
+   * Two boats on a run sail within a length of each other for minutes at a time. Judging
+   * one incident by how close they are, rather than by whether they are touching, never
+   * let go of the first one: a boat could lean on another and drive her up the course as
+   * long as she liked and pay a single turn for all of it.
+   */
+  describe('a second coming together', () => {
+    /** Hold the pair at a chosen separation for a while, and report what the race said. */
+    function driveTogether(gaps: readonly { apart: Meters; seconds: Seconds }[]) {
+      const sim = createSimulation({
+        name: 'leaning', seed: 'lean',
+        boats: [
+          { id: 'a', name: 'Alpha', position: vec(0, -200), heading: 20 },
+          { id: 'b', name: 'Bravo', position: vec(3, -200), heading: 20 },
+        ],
+        wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+        config: { startSequence: 0 },
+      })
+      let world = sim.world
+      const events: TimedEvent[] = []
+      for (const { apart, seconds } of gaps) {
+        for (let tick = 0; tick < Math.round(seconds / sim.ctx.config.dt); tick++) {
+          // Placed rather than sailed, so the test says what the separation was and the
+          // rule is read off that alone.
+          const [first, second] = world.boats
+          world = {
+            ...world,
+            boats: [first!, { ...second!, position: vec(first!.position.x + apart, first!.position.y) }],
+          }
+          const result = step(sim.ctx, world, {})
+          world = result.world
+          events.push(...result.events)
+        }
+      }
+      return events.filter((event) => event.kind === 'penalised')
+    }
+
+    const TOUCHING = 3
+    /** Clear water between them, but closer than the boat length the old rule used. */
+    const CLEAR = 6
+
+    it('charges one turn while they stay in contact', () => {
+      expect(driveTogether([{ apart: TOUCHING, seconds: 30 }])).toHaveLength(1)
+    })
+
+    it('charges another once they have been clear and come back', () => {
+      expect(
+        driveTogether([
+          { apart: TOUCHING, seconds: 2 },
+          { apart: CLEAR, seconds: 8 },
+          { apart: TOUCHING, seconds: 2 },
+        ]),
+      ).toHaveLength(2)
+    })
+
+    it('charges only one if they barely come apart at all', () => {
+      // Shorter than the grace, which is what two hulls leaning on each other do many
+      // times a second.
+      expect(
+        driveTogether([
+          { apart: TOUCHING, seconds: 2 },
+          { apart: CLEAR, seconds: 0.5 },
+          { apart: TOUCHING, seconds: 2 },
+        ]),
+      ).toHaveLength(1)
+    })
   })
 
   it('lets a boat pass close by a mark without calling it a touch', () => {

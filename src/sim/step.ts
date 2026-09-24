@@ -20,6 +20,7 @@ import { encounter } from '@/domain/rules'
 import { shadowersIn } from './wind'
 import { penalise, stepRace } from './race'
 import type { SimEvent, TimedEvent } from './events'
+import type { Seconds } from '@/foundation/units'
 import type { InputFrame, SimContext, WorldState } from './world'
 import { raceTime, specFor } from './world'
 
@@ -55,7 +56,7 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
     return stepBoat(boat, input, specFor(ctx, boat.id), { wind }, dt)
   })
 
-  const { boats, contacts, nearby, keys } = resolveContacts(ctx, sailed, world.contacts)
+  const { boats, contacts, keys } = resolveContacts(ctx, sailed, world.contacts)
 
   const { race, events: raceEvents } = stepRace(world.race, {
     course: ctx.course,
@@ -74,20 +75,20 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
    * One coming-together, one turn. Two hulls locked together touch and part many times a
    * second, and judging each of those separately once ran a boat up to nine hundred and
    * fifty outstanding penalties. An incident opens when a pair touches and stays open
-   * while they are anywhere near each other; only once they have come properly apart can
-   * the next touch be a fresh one.
+   * while they keep touching, and for a short grace after they stop; once they have been
+   * clear of one another for longer than that, the next touch is a new incident.
    */
-  const incidents: string[] = []
+  const incidents: Record<string, Seconds> = {}
   const opened: Contact[] = []
-  for (const contact of nearby) {
-    const key = incidentKey(contact)
-    if (world.incidents.includes(key) && !incidents.includes(key)) incidents.push(key)
+  for (const [key, lastTouched] of Object.entries(world.incidents)) {
+    if (time - lastTouched <= ctx.config.incidentGrace) incidents[key] = lastTouched
   }
 
   for (const contact of contacts) {
     const key = incidentKey(contact)
-    if (incidents.includes(key)) continue
-    incidents.push(key)
+    const carried = key in incidents
+    incidents[key] = time
+    if (carried) continue
     opened.push(contact)
 
     if (contact.kind !== 'boat') {
@@ -147,8 +148,6 @@ interface ContactResolution {
   readonly boats: BoatState[]
   /** Pairs actually into each other. */
   readonly contacts: Contact[]
-  /** Those, and the pairs close enough to still count as the same incident. */
-  readonly nearby: Contact[]
   readonly keys: string[]
 }
 
@@ -170,11 +169,7 @@ function resolveContacts(
     return { id: boat.id, centreline: hullCentreline(boat, spec), radius: hullRadius(spec) }
   })
 
-  // A boat length of clear water between them ends an incident.
-  const clearance = Math.max(...boats.map((boat) => specFor(ctx, boat.id).length), 0)
-
-  const nearby = detectContacts({
-    margin: clearance,
+  const contacts = detectContacts({
     boats: hulls,
     // Rounding marks and the ends of the start line alike: all of them are marks of the
     // course, and all of them can be hit.
@@ -187,11 +182,10 @@ function resolveContacts(
       ...lineEndBodies(ctx.course.stages),
     ],
     obstacles: ctx.course.obstacles.map((obstacle) => ({ ...obstacle, solid: true })),
-  })
-  const contacts = nearby.filter(isTouching)
+  }).filter(isTouching)
 
   if (contacts.length === 0) {
-    return { boats: [...boats], contacts, nearby, keys: [] }
+    return { boats: [...boats], contacts, keys: [] }
   }
 
   const byId = new Map(boats.map((boat) => [boat.id, boat]))
@@ -229,12 +223,7 @@ function resolveContacts(
     }
   }
 
-  return {
-    boats: boats.map((boat) => byId.get(boat.id) ?? boat),
-    contacts,
-    nearby,
-    keys: contacts.map(keyOf),
-  }
+  return { boats: boats.map((boat) => byId.get(boat.id) ?? boat), contacts, keys: contacts.map(keyOf) }
 }
 
 function negate(v: { x: number; y: number }) {
