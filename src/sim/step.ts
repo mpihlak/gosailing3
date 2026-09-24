@@ -104,9 +104,10 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
     const two = before(contact.otherId)
     if (!one || !two) continue
 
+    const stillRacing = (id: string) => progress[id]?.status !== 'finished'
     const verdict = encounter(
-      { boat: one, spec: specFor(ctx, one.id) },
-      { boat: two, spec: specFor(ctx, two.id) },
+      { boat: one, spec: specFor(ctx, one.id), racing: stillRacing(one.id) },
+      { boat: two, spec: specFor(ctx, two.id), racing: stillRacing(two.id) },
     )
     penalise(progress, verdict.keepClear, verdict.rightOfWay, penaltyEvents, verdict.rule)
   }

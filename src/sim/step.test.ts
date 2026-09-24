@@ -203,6 +203,41 @@ describe('contacts', () => {
     })
   })
 
+  it('puts the turn on a boat who has finished and sails into one still racing', () => {
+    /*
+     * Her race is over and the other boat's is not, so rule 24 asks her to keep out of
+     * the way whatever the tacks and the overlap would otherwise say. Judged on those
+     * alone, a boat could cross the line and then go back and lean on the one still out
+     * there, and collect a turn for the trouble.
+     */
+    const sim = createSimulation({
+      name: 'finished',
+      seed: 'finished',
+      boats: [
+        // Overlapped on port, so rule 11 on its own puts the turn on the windward boat.
+        { id: 'windward', name: 'Windward', position: vec(-1.5, -200), heading: 10 },
+        { id: 'leeward', name: 'Leeward', position: vec(1.5, -200), heading: 10 },
+      ],
+      wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+      config: { startSequence: 0 },
+    })
+    const racing = sim.world.race.progress
+    const homeAlready = {
+      ...sim.world,
+      race: {
+        ...sim.world.race,
+        progress: { ...racing, leeward: { ...racing.leeward!, status: 'finished' as const } },
+      },
+    }
+
+    expect(runHeadless(sim.ctx, sim.world, {}, { maxTicks: 5 }).events).toContainEqual(
+      expect.objectContaining({ kind: 'penalised', boatId: 'windward', rule: 11 }),
+    )
+    expect(runHeadless(sim.ctx, homeAlready, {}, { maxTicks: 5 }).events).toContainEqual(
+      expect.objectContaining({ kind: 'penalised', boatId: 'leeward', rule: 24 }),
+    )
+  })
+
   it('charges one turn for one coming together, however long they stay locked', () => {
     // Two hulls that stay into each other touch and part many times a second. Two full
     // minutes of it is still one incident and one turn.

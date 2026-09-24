@@ -10,9 +10,13 @@ import { hullCentreline, tackOf, type BoatId, type BoatSpec, type BoatState } fr
  *   11  on the same tack and overlapped, windward keeps clear of leeward
  *   12  on the same tack and not overlapped, clear astern keeps clear of clear ahead
  *
+ * And one from Section D, which overrides them all:
+ *
+ *   24  a boat not racing keeps out of the way of one that is
+ *
  * Rule 13, while tacking, is not here: a boat is judged on the tack she is on.
  */
-export type RightOfWayRule = 10 | 11 | 12
+export type RightOfWayRule = 10 | 11 | 12 | 24
 
 export interface Encounter {
   readonly rule: RightOfWayRule
@@ -23,6 +27,8 @@ export interface Encounter {
 export interface Contender {
   readonly boat: BoatState
   readonly spec: BoatSpec
+  /** False once she has finished, which is when rule 24 starts to apply to her. */
+  readonly racing: boolean
 }
 
 /** How far along an axis the furthest-forward part of a hull reaches. */
@@ -66,6 +72,17 @@ export function isToLeewardOf(other: Contender, of: Contender): boolean {
 
 /** Which of two boats has right of way, and under which rule. */
 export function encounter(a: Contender, b: Contender): Encounter {
+  /*
+   * A boat who has finished is no longer racing, and is asked to keep out of the way of
+   * one who still is. It comes ahead of the rest because it does not care about tacks or
+   * overlaps: a boat sailing away from the line with her race behind her has nothing to
+   * gain and everything to give way to.
+   */
+  if (a.racing !== b.racing) {
+    const [done, still] = a.racing ? [b, a] : [a, b]
+    return { rule: 24, rightOfWay: still.boat.id, keepClear: done.boat.id }
+  }
+
   if (tackOf(a.boat.twa) !== tackOf(b.boat.twa)) {
     const port = tackOf(a.boat.twa) === 'port' ? a : b
     const starboard = port === a ? b : a

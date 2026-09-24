@@ -11,7 +11,12 @@ const PORT = 45
 const STARBOARD = 315
 
 function boat(id: string, position: Vec2, heading: number): Contender {
-  return { boat: spawnBoat({ id, position, heading }, SPEC, WIND), spec: SPEC }
+  return { boat: spawnBoat({ id, position, heading }, SPEC, WIND), spec: SPEC, racing: true }
+}
+
+/** The same boat, with her race behind her. */
+function finished(contender: Contender): Contender {
+  return { ...contender, racing: false }
 }
 
 describe('rule 10, on opposite tacks', () => {
@@ -34,8 +39,8 @@ describe('rule 10, on opposite tacks', () => {
   it('reads the tack from the wind, not from the compass', () => {
     // The same two headings in a southerly put them on the other tacks.
     const southerly = { direction: 180, speed: 12 }
-    const a = { boat: spawnBoat({ id: 'a', position: vec(0, 0), heading: PORT }, SPEC, southerly), spec: SPEC }
-    const b = { boat: spawnBoat({ id: 'b', position: vec(30, 0), heading: STARBOARD }, SPEC, southerly), spec: SPEC }
+    const a = { boat: spawnBoat({ id: 'a', position: vec(0, 0), heading: PORT }, SPEC, southerly), spec: SPEC, racing: true }
+    const b = { boat: spawnBoat({ id: 'b', position: vec(30, 0), heading: STARBOARD }, SPEC, southerly), spec: SPEC, racing: true }
     expect(encounter(a, b)).toEqual({ rule: 10, rightOfWay: 'a', keepClear: 'b' })
   })
 })
@@ -125,5 +130,46 @@ describe('the three rules together', () => {
         expect([verdict.rightOfWay, verdict.keepClear].sort()).toEqual(['a', 'b'])
       }
     }
+  })
+})
+
+
+describe('rule 24, a boat not racing', () => {
+  /*
+   * She has finished and is sailing away from the line; whoever is still out there has a
+   * result to sail for and she does not. It overrides the tacks and the overlap, so a
+   * boat who has finished cannot lean on the rules to take water from one still racing.
+   */
+  const port = boat('p', vec(0, 0), PORT)
+  const starboard = boat('s', vec(30, 0), STARBOARD)
+
+  it('keeps clear of one that is, whatever the tacks say', () => {
+    // Starboard would have right of way under rule 10, but her race is over.
+    const verdict = encounter(port, finished(starboard))
+    expect(verdict).toEqual({ rule: 24, rightOfWay: 'p', keepClear: 's' })
+  })
+
+  it('does not care which way round they are given', () => {
+    expect(encounter(finished(starboard), port)).toEqual({
+      rule: 24,
+      rightOfWay: 'p',
+      keepClear: 's',
+    })
+  })
+
+  it('overrides an overlap as readily as a tack', () => {
+    // Overlapped on the same tack, so rule 11 would ask the windward boat to keep clear.
+    const windward = boat('w', vec(-4, 0), PORT)
+    const leeward = boat('l', vec(4, 0), PORT)
+    expect(encounter(windward, leeward).keepClear).toBe('w')
+    expect(encounter(windward, finished(leeward))).toEqual({
+      rule: 24,
+      rightOfWay: 'w',
+      keepClear: 'l',
+    })
+  })
+
+  it('goes back to the ordinary rules once both of them have finished', () => {
+    expect(encounter(finished(port), finished(starboard)).rule).toBe(10)
   })
 })
