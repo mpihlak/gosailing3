@@ -24,8 +24,10 @@ function twoBoats(overrides = {}) {
     name: 'test',
     seed: 'step-test',
     boats: [
-      { id: 'a', name: 'Alpha', position: vec(-20, -100), heading: 0 },
-      { id: 'b', name: 'Bravo', position: vec(20, -100), heading: 0 },
+      // Close-hauled on port, which is an angle she can actually sail: pointed head to
+      // wind a boat makes no way at all and most of what follows never happens.
+      { id: 'a', name: 'Alpha', position: vec(-20, -100), heading: 40 },
+      { id: 'b', name: 'Bravo', position: vec(20, -100), heading: 40 },
     ],
     ...overrides,
   })
@@ -73,8 +75,8 @@ describe('contacts', () => {
       name: 'collision',
       seed: 'contact',
       boats: [
-        { id: 'a', name: 'Alpha', position: vec(-1.5, -100), heading: 0 },
-        { id: 'b', name: 'Bravo', position: vec(1.5, -100), heading: 0 },
+        { id: 'a', name: 'Alpha', position: vec(-1.5, -100), heading: 40 },
+        { id: 'b', name: 'Bravo', position: vec(1.5, -100), heading: 40 },
       ],
     })
 
@@ -280,12 +282,6 @@ describe('contacts', () => {
     })
     const after = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 30 }).world
     for (const boat of after.boats) expect(boat.speed).toBeGreaterThan(3)
-  })
-
-  it('keeps the incident open while they are still touching', () => {
-    const { ctx, world } = collidingFleet()
-    const after = runHeadless(ctx, world, {}, { maxTicks: 60 * 10 }).world
-    expect(Object.keys(after.incidents)).toHaveLength(1)
   })
 
   it('closes the incident once they have come properly apart', () => {

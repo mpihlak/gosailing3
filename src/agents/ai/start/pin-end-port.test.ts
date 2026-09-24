@@ -41,6 +41,28 @@ function start(conditions: Conditions): StartReport {
   return trialStart({ strategy: pinEndPortStart(), scenario: scenario(conditions) })
 }
 
+describe('starting from up by the committee boat', () => {
+  /*
+   * Close-hauled on port from well up the line used to cross the extension beyond the
+   * committee boat rather than passing between the marks, which is no start at all. She
+   * points high enough to lay the line from there now.
+   */
+  const report = start({ seed: 'unlayable', from: { x: 200, y: -60 } })
+
+  it('starts between the marks rather than outside them', () => {
+    expect(report.started).toBe(true)
+    expect(report.calledOverEarly).toBe(false)
+  })
+
+  it('gets there on the gun', () => {
+    expect(report.startedAt).toBeLessThan(5)
+  })
+
+  it('finds her way down to the pin end', () => {
+    expect(report.fromPin).toBeLessThan(PIN_END)
+  })
+})
+
 describe('a pin end port start, in the conditions it is built for', () => {
   const seeds = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot']
 
@@ -143,14 +165,6 @@ describe('when the start goes wrong', () => {
     expect(report.started).toBe(true)
   })
 
-  it('recovers when the pin is not layable', () => {
-    // From well up the line, close-hauled on port crosses the extension beyond the
-    // committee boat rather than passing between the marks, which is no start at all.
-    // TODO: fall back to the best part of the line she can actually fetch.
-    const report = start({ seed: 'unlayable', from: { x: 200, y: -60 } })
-    expect(report.calledOverEarly).toBe(true)
-    expect(report.started).toBe(true)
-  })
 })
 
 /**

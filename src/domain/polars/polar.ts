@@ -48,6 +48,13 @@ function sample(values: readonly number[], at: Bracket): number {
   return lerp(values[at.lower] as number, values[at.upper] as number, at.t)
 }
 
+/**
+ * Where a boat stops sailing, as a fraction of her best beat angle. Head to wind is not
+ * the place: sails stall well before that, and a boat pointed ten degrees off it is going
+ * nowhere however long you wait.
+ */
+const STALL_FRACTION = 0.55
+
 export function createPolar(table: PolarTable): Polar {
   validateTable(table)
 
@@ -95,9 +102,25 @@ export function createPolar(table: PolarTable): Polar {
     const beatSpeed = sample(beatVmgs, windAt) / Math.cos(toRadians(beatAngle))
 
     if (absTwa <= beatAngle) {
-      // Quadratic, so the last few degrees into the no-go zone cost most of the speed.
-      const pinched = absTwa / beatAngle
-      return beatSpeed * pinched * pinched
+      /*
+       * Pinching: gentle for the first degree or two and then away to nothing where her
+       * sails stall. Tapering all the way to zero at head to wind instead spread the loss
+       * evenly over forty degrees, which put five per cent of her speed on the very first
+       * one — a touch on the tiller cost three per cent and twelve seconds to win back.
+       *
+       * How fast it may fall at the top is not a choice. The table's beat angle is the
+       * angle of best VMG, and VMG is speed times the cosine of the angle, so the speed
+       * curve has to fall away there at exactly the tangent of that angle for the peak to
+       * land where the table says it does. Flatter and her best VMG would lie above the
+       * beat angle, steeper and it would lie below.
+       */
+      const stall = beatAngle * STALL_FRACTION
+      if (absTwa <= stall) return 0
+      const span = beatAngle - stall
+      const slope = Math.tan(toRadians(beatAngle)) * (Math.PI / 180)
+      const curve = (1 - slope * span) / (span * span)
+      const pinch = beatAngle - absTwa
+      return beatSpeed * Math.max(0, 1 - slope * pinch - curve * pinch * pinch)
     }
     return lerp(
       beatSpeed,

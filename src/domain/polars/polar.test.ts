@@ -48,13 +48,36 @@ describe('the no-go zone', () => {
     expect(polar.boatSpeed(0, 12)).toBe(0)
   })
 
-  it('rises without a step from head to wind up to the beat angle', () => {
+  it('leaves her stopped until her sails fill, and rises without a step after that', () => {
+    // Head to wind is not the only angle she makes no way at: a boat pointed well inside
+    // her beat angle is stalled, and waiting does not help her.
+    const beat = polar.beatAngle(12)
+    expect(polar.boatSpeed(beat * 0.5, 12)).toBe(0)
+
+    // Walked finely, because the interesting place is the edge of the stall, where the
+    // curve leaves zero steeply. Steep is wanted; a step in the value is not.
     let previous = 0
-    for (let twa = 0; twa <= polar.beatAngle(12); twa += 1) {
+    for (let twa = 0; twa <= beat; twa += 0.1) {
       const speed = polar.boatSpeed(twa, 12)
       expect(speed).toBeGreaterThanOrEqual(previous - 1e-9)
-      expect(speed - previous).toBeLessThan(0.6) // no cliff between samples
+      expect(speed - previous).toBeLessThan(0.1)
       previous = speed
+    }
+  })
+
+  /*
+   * How fast the curve may fall away at the beat angle is not a free choice. The table's
+   * beat angle is the angle of best VMG, and VMG is speed times the cosine of the angle,
+   * so the speed curve has to fall at exactly the tangent of that angle for the peak to
+   * land where the table puts it. A steeper taper — five per cent of her speed for the
+   * first degree of pinch — made a touch on the tiller cost far more than it should.
+   */
+  it('gives up only a degree of speed for a degree of pinch', () => {
+    for (const wind of [8, 12, 16]) {
+      const beat = polar.beatAngle(wind)
+      const best = polar.boatSpeed(beat, wind)
+      expect(polar.boatSpeed(beat - 1, wind) / best).toBeGreaterThan(0.97)
+      expect(polar.boatSpeed(beat - 3, wind) / best).toBeGreaterThan(0.9)
     }
   })
 
