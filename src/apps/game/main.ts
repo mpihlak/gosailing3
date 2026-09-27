@@ -1,8 +1,9 @@
 import { vec } from '@/foundation/geom'
-import type { BoatState } from '@/domain/boat'
+import type { BoatId, BoatState } from '@/domain/boat'
 import type { Mark } from '@/domain/course'
 import {
   type InputSource,
+  type WorldState,
   createSimulation,
   standings,
   windAt,
@@ -102,6 +103,15 @@ let panelAnchor = { left: 16, top: 16 }
  */
 let onCardTap: (() => void) | undefined
 let measuredAt = ''
+/**
+ * The race as it stands, and the boat the screen belongs to.
+ *
+ * Set from the runner when the race is sailed here and from the last snapshot when it is
+ * sailed on a server, so everything that draws or reads an instrument asks these two and
+ * never asks where the race came from.
+ */
+let latest: WorldState
+let watching: BoatId = PLAYER_ID
 
 const helm = new Helm({ onCommand: handleCommand })
 helm.attach(canvas)
@@ -129,9 +139,11 @@ function start(seed: string, immediate = false): void {
     Object.fromEntries(Object.entries(styles).map(([id, style]) => [id, style.hull])),
   )
   running = false
+  latest = runner.world
+  watching = PLAYER_ID
 
   const surface = resizeSurface(canvas)
-  const player = playerBoat(runner.world.boats)
+  const player = playerBoat(latest.boats)
   camera = createCamera(surface.viewport, player?.position ?? vec(0, 0), METERS_ACROSS, boatFloor())
 
   if (immediate) {
@@ -231,6 +243,9 @@ function frame(timestamp: number): void {
     // the stall guard rather than by the rate itself.
     const pace = GAME_PACE * watchRate()
     const events = runner.advance(elapsed * pace, sources, 0.25 * pace)
+    // Before the events are read out: one of them may be the finish, and the card it
+    // puts up is written from where the race stands now.
+    latest = runner.world
     for (const event of events) announce(event)
   }
 
@@ -248,7 +263,7 @@ function frame(timestamp: number): void {
   // What she is sailing in, shadows included, which is what the instruments should read.
   const wind = windAt(
     simulation.ctx,
-    runner.world,
+    latest,
     player?.position ?? camera.center,
     player?.id,
   )
@@ -258,7 +273,7 @@ function frame(timestamp: number): void {
     world,
     camera,
     trails,
-    playerId: PLAYER_ID,
+    playerId: watching,
     styles,
     started: raceTime(simulation.ctx, world) >= 0,
     medianWindSpeed: simulation.wind.median.speed,
@@ -273,21 +288,21 @@ function frame(timestamp: number): void {
   })
 
   if (player) updateInstruments(player, wind.speed)
-  board.update(standings(simulation.ctx, runner.world), PLAYER_ID, boardReadings(world.boats))
+  board.update(standings(simulation.ctx, latest), watching, boardReadings(world.boats))
   requestAnimationFrame(frame)
 }
 
 function updateInstruments(player: BoatState, windSpeed: number): void {
   const spec = specOfPlayer()
-  const progress = runner.world.race.progress[PLAYER_ID]
+  const progress = latest.race.progress[watching]
 
   hud.update({
     speed: player.speed,
     twa: player.twa,
     windSpeed,
     vmgRatio: targetVmgRatio(spec.polar, player.speed, player.twa, windSpeed),
-    timeToStart: playerSeconds(timeToStart(simulation.ctx, runner.world)),
-    raceTime: playerSeconds(raceTime(simulation.ctx, runner.world)),
+    timeToStart: playerSeconds(timeToStart(simulation.ctx, latest)),
+    raceTime: playerSeconds(raceTime(simulation.ctx, latest)),
     ...(progress?.place === undefined ? {} : { place: progress.place }),
   })
 }
@@ -302,7 +317,7 @@ function boardReadings(boats: readonly BoatState[]): Record<string, CrewReading>
 
 /** What a boat is sailing for now, said the way the board says it. */
 function doingText(boatId: string): string {
-  const progress = runner.world.race.progress[boatId]
+  const progress = latest.race.progress[boatId]
   if (!progress) return ''
   if (progress.status === 'overEarly') return OCS
   if (progress.status === 'finished') return 'finished'
@@ -341,7 +356,7 @@ function stylesFor(sim: Simulation): Record<string, BoatStyle> {
 }
 
 function announce(event: TimedEvent): void {
-  const mine = !('boatId' in event) || event.boatId === PLAYER_ID
+  const mine = !('boatId' in event) || event.boatId === watching
   /*
    * What happens to a rival is mostly not news: told about all of it, the player gets a
    * report of her mark rounding and a finish card when she crosses the line. Her penalty
@@ -389,7 +404,7 @@ function announce(event: TimedEvent): void {
     case 'boatFinished': {
       // Her own finish is worth saying, but the race is not over until the rest of the
       // fleet is home, and it carries on until it is.
-      const elapsed = playerSeconds(runner.world.race.progress[PLAYER_ID]?.finishTime ?? 0)
+      const elapsed = playerSeconds(latest.race.progress[watching]?.finishTime ?? 0)
       return hud.showBanner(`Finished in ${clock(elapsed)}`, 'good', 3200)
     }
     case 'raceFinished':
@@ -412,29 +427,29 @@ function nextMark(): Mark | undefined {
 }
 
 function boatFloor() {
-  return { boatLength: simulation.ctx.specs[PLAYER_ID]?.length ?? 10, leastPixels: LEAST_BOAT_PIXELS }
+  return { boatLength: simulation.ctx.specs[watching]?.length ?? 10, leastPixels: LEAST_BOAT_PIXELS }
 }
 
 function playerBoat(boats: readonly BoatState[]): BoatState | undefined {
-  return boats.find((boat) => boat.id === PLAYER_ID)
+  return boats.find((boat) => boat.id === watching)
 }
 
 function specOfPlayer() {
-  const spec = simulation.ctx.specs[PLAYER_ID]
+  const spec = simulation.ctx.specs[watching]
   if (!spec) throw new Error('the player has no boat')
   return spec
 }
 
 /** The finishing order, once the last boat is home. */
 function showResults(): void {
-  const { race } = runner.world
+  const { race } = latest
   const rows = race.finishOrder
     .map((boatId) => {
       const progress = race.progress[boatId]
       const elapsed = playerSeconds(progress?.finishTime ?? 0)
       const name = simulation.names[boatId] ?? boatId
       const color = styles[boatId]?.hull ?? ''
-      const mine = boatId === PLAYER_ID ? ' class="mine"' : ''
+      const mine = boatId === watching ? ' class="mine"' : ''
       return `<tr${mine}><td>${progress?.place ?? ''}</td><td style="color: ${color}">${name}</td><td>${timing(elapsed)}</td></tr>`
     })
     .join('')
