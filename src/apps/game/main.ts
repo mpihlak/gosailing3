@@ -28,7 +28,9 @@ import {
   timing,
 } from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
+import type { Placing } from '@/net'
 import { duel, GAME_PACE, playerSeconds, PLAYER_ID, randomSeed } from './scenario'
+import { HELM_HZ, OnlineRace } from './online'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
 const hud = new Hud(
@@ -124,8 +126,59 @@ if (tillerBar) {
 }
 overlay.addEventListener('pointerup', () => onCardTap?.())
 
-start(randomSeed())
+/**
+ * A regatta to join, if there is one. Without it the race is sailed here against the
+ * computer, which is the game as it was.
+ *
+ *   index.html?server=ws://localhost:8080&name=Ann
+ *   index.html?server=ws://localhost:8080&watch=1
+ */
+const asked = new URLSearchParams(window.location.search)
+const server = asked.get('server')
+let online: OnlineRace | undefined
+
+if (server) joinRegatta(server, asked.get('name') ?? '', asked.get('watch') !== null)
+else start(randomSeed())
 requestAnimationFrame(frame)
+
+function joinRegatta(url: string, name: string, watching: boolean): void {
+  const role = watching ? 'observer' : 'racer'
+  online = new OnlineRace({
+    url,
+    name: name || (watching ? 'Watcher' : 'Sailor'),
+    role,
+    helm: () => helm.rudder,
+  })
+  online.join()
+  // On its own clock rather than the frame's: a tab that stops drawing still has to say
+  // it is there, and silence is how the server decides a sailor has gone.
+  window.setInterval(() => online?.sendHelm(), 1000 / HELM_HZ)
+  showLobby()
+}
+
+/** What the card says while there is no race to draw. */
+function showLobby(): void {
+  const race = online
+  if (!race) return
+  if (race.trouble) return showOverlay('Disconnected', `<p>${race.trouble}</p>`, () => undefined)
+
+  const crew = race.fleet
+    .map((sailor) => {
+      const mine = sailor.id === race.you ? ' — you' : ''
+      const waiting = sailor.waiting ? ' (next race)' : ''
+      return `<b style="color: ${sailor.color}">${sailor.name}</b>${mine}${waiting}`
+    })
+    .join('<br />')
+
+  const waitingForARace =
+    race.phase === 'racing'
+      ? 'A race is on. You are in the next one.'
+      : `Waiting for another boat. ${race.fleet.length} here.`
+
+  showOverlay('Regatta', `<p>${waitingForARace}<br /><br />${crew || 'Nobody yet.'}</p>`, () =>
+    undefined,
+  )
+}
 
 function start(seed: string, immediate = false): void {
   simulation = createSimulation(duel(seed))
@@ -219,7 +272,22 @@ function measurePanels(width: number, height: number): void {
   }
 }
 
+/**
+ * One frame, and the next one asked for whatever happened in it. A frame that threw
+ * before asking used to stop the race for good, which on a bad snapshot meant a screen
+ * that never moved again.
+ */
 function frame(timestamp: number): void {
+  try {
+    drawFrame(timestamp)
+  } catch (trouble) {
+    console.error(trouble)
+  }
+  requestAnimationFrame(frame)
+}
+
+function drawFrame(timestamp: number): void {
+  if (online && !takeFromRegatta(timestamp)) return
   const surface = resizeSurface(canvas)
   // Recomputed rather than kept, so turning the phone or dragging the window resizes the
   // view rather than leaving it at whatever it was when the race began.
@@ -238,7 +306,7 @@ function frame(timestamp: number): void {
     hud.showBanner(`Watching at ${formatRate(watchRate())}`, 'info', 1200)
   }
 
-  if (running) {
+  if (running && !online) {
     // Scale the catch-up cap alongside the rate, or running fast would be throttled by
     // the stall guard rather than by the rate itself.
     const pace = GAME_PACE * watchRate()
@@ -249,7 +317,9 @@ function frame(timestamp: number): void {
     for (const event of events) announce(event)
   }
 
-  const world = interpolateWorld(runner.previous, runner.world, running ? runner.alpha : 1)
+  const world = online
+    ? latest
+    : interpolateWorld(runner.previous, runner.world, running ? runner.alpha : 1)
   trails.record(world.boats, world.time)
 
   const player = playerBoat(world.boats)
@@ -289,7 +359,78 @@ function frame(timestamp: number): void {
 
   if (player) updateInstruments(player, wind.speed)
   board.update(standings(simulation.ctx, latest), watching, boardReadings(world.boats))
-  requestAnimationFrame(frame)
+}
+
+/**
+ * Take the fleet as the server last had it. False while there is nothing to draw — before
+ * a race, between races, or before the first two snapshots have arrived.
+ */
+function takeFromRegatta(timestamp: number): boolean {
+  const race = online
+  if (!race) return false
+
+  if (race.phase !== 'racing' || !race.simulation) {
+    if (race.phase === 'results' && race.results) showRegattaResults(race.results)
+    else showLobby()
+    return false
+  }
+
+  const drawn = race.frameAt(timestamp)
+  if (!drawn) return false
+
+  const fresh = simulation !== race.simulation
+  simulation = race.simulation
+  latest = drawn
+  // An observer has no boat of her own, so she is shown whoever is leading.
+  watching = race.watching ?? standings(simulation.ctx, drawn)[0]?.boatId ?? ''
+
+  if (fresh) {
+    trails = new TrailStore()
+    styles = stylesFromFleet(race)
+    board = new StandingsBoard(
+      standingsPanel,
+      simulation.names,
+      Object.fromEntries(Object.entries(styles).map(([id, style]) => [id, style.hull])),
+    )
+    // The camera is made here as well as at the start of a race sailed at home: this
+    // page may never have sailed one, and there is nothing to spread over.
+    const surface = resizeSurface(canvas)
+    const mine = drawn.boats.find((boat) => boat.id === watching)
+    camera = createCamera(surface.viewport, mine?.position ?? vec(0, 0), METERS_ACROSS, boatFloor())
+    hideOverlay()
+    running = true
+  }
+  return true
+}
+
+/**
+ * Colours come from the regatta, not from who is the player here: online there is no
+ * opponent, only a fleet, and every boat in it was given a colour when she joined.
+ */
+function stylesFromFleet(race: OnlineRace): Record<string, BoatStyle> {
+  return Object.fromEntries(
+    race.fleet
+      .filter((sailor) => sailor.role === 'racer')
+      .map((sailor) => [
+        sailor.id,
+        { hull: sailor.color, trail: sailor.color, trailWidth: sailor.id === race.you ? 2 : 1.5 },
+      ]),
+  )
+}
+
+/** The finishing order as the server scored it, which is not always by crossing a line. */
+function showRegattaResults(places: readonly Placing[]): void {
+  const rows = places
+    .map((one) => {
+      const how =
+        one.outcome === 'finished' ? timing(one.elapsed ?? 0) : one.outcome === 'retired' ? 'left' : 'DNF'
+      const mine = one.boatId === online?.you ? ' class="mine"' : ''
+      return `<tr${mine}><td>${one.place ?? ''}</td><td>${one.name}</td><td>${how}</td></tr>`
+    })
+    .join('')
+  showOverlay('Results', `<table class="results">${rows}</table><p>The next race is coming.</p>`, () =>
+    undefined,
+  )
 }
 
 function updateInstruments(player: BoatState, windSpeed: number): void {
@@ -421,7 +562,7 @@ function nameOf(boatId: string): string {
 }
 
 function nextMark(): Mark | undefined {
-  const progress = runner.world.race.progress[PLAYER_ID]
+  const progress = latest.race.progress[watching]
   const stage = progress && simulation.ctx.course.stages[progress.stageIndex]
   return stage?.kind === 'mark' ? stage.mark : undefined
 }
