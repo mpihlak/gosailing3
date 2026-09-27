@@ -1,8 +1,9 @@
 import { vec } from '@/foundation/geom'
 import type { Meters, Seconds } from '@/foundation/units'
-import { CRUISER_35_SPEC } from '@/domain/boat'
+import { CRUISER_35_SPEC, type BoatId } from '@/domain/boat'
 import { pointAt } from '@/domain/course'
 import type { ScenarioSpec } from '@/sim'
+import { PALETTE } from '@/presentation/render'
 
 export const PLAYER_ID = 'player'
 export const OPPONENT_ID = 'opponent'
@@ -79,6 +80,38 @@ export function duel(seed: number | string): ScenarioSpec {
     duration: RACE_DURATION * GAME_PACE,
   }
 }
+
+/**
+ * The same course, sailed by however many turn up. Boats are given no berth, so the
+ * course spreads them along the line itself and a fleet of two or eight needs no other
+ * arrangement.
+ */
+export function regattaRace(
+  seed: string,
+  sailors: readonly { readonly id: BoatId; readonly name: string }[],
+): ScenarioSpec {
+  return {
+    name: 'Regatta',
+    seed,
+    boats: sailors.map(({ id, name }) => ({ id, name, controller: 'human' as const })),
+    course: { legLength: LEG_LENGTH, lineLength: LINE_LENGTH, startCenter: START_CENTER },
+    wind: { direction: WIND_DIRECTION, speed: WIND_SPEED },
+    config: { startSequence: COUNTDOWN * GAME_PACE },
+    duration: RACE_DURATION * GAME_PACE,
+  }
+}
+
+/** Handed out in the order sailors arrive, so no two boats look alike. */
+export const FLEET_COLORS: readonly string[] = [
+  PALETTE.hullBlue,
+  PALETTE.hullRed,
+  PALETTE.hullRival,
+  '#e0a458',
+  '#9d7fd8',
+  '#5fc9b5',
+  '#d67fb0',
+  '#b8c45c',
+]
 
 export function randomSeed(): string {
   return Math.floor(Math.random() * 1e9).toString(36)

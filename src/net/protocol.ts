@@ -1,6 +1,6 @@
 import type { Seconds } from '@/foundation/units'
 import type { BoatId, BoatState } from '@/domain/boat'
-import type { RaceState, ScenarioSpec, SimEvent } from '@/sim'
+import type { BoatStatus, ScenarioSpec, SimEvent } from '@/sim'
 
 /**
  * What the two ends of a regatta say to each other.
@@ -41,6 +41,24 @@ export interface Placing {
   readonly elapsed?: Seconds
 }
 
+/**
+ * How a boat stands in the race, as much of it as anyone watching needs.
+ *
+ * Not the whole of what the simulation keeps. The rest — how far she has sailed, how far
+ * round a penalty turn she is — changes every tick, so sending it would put the race on
+ * every snapshot and there would be no point having asked whether it changed.
+ */
+export interface BoatReport {
+  readonly status: BoatStatus
+  readonly stageIndex: number
+  readonly penalties: number
+  readonly place?: number
+  /** Her elapsed time, in simulated seconds, once she is home. */
+  readonly finishTime?: Seconds
+}
+
+export type RaceReport = Readonly<Record<BoatId, BoatReport>>
+
 export type ClientMessage =
   | { readonly kind: 'join'; readonly name: string; readonly role?: Role }
   | { readonly kind: 'helm'; readonly rudder: number }
@@ -64,8 +82,8 @@ export type ServerMessage =
       readonly kind: 'snapshot'
       readonly time: Seconds
       readonly boats: readonly BoatState[]
-      /** Sent only when it has changed, which is rarely. */
-      readonly race?: RaceState
+      /** Sent only when it has changed, which is when a boat starts, rounds or finishes. */
+      readonly race?: RaceReport
       readonly events: readonly SimEvent[]
     }
   | { readonly kind: 'results'; readonly places: readonly Placing[] }

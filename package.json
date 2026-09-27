@@ -12,11 +12,14 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:server": "vite build --config vite.server.config.ts",
+    "server": "npm run build:server && node dist-server/main.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^26.6.2",
+    "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^2.1.8",
     "eslint": "^9.17.0",
     "fast-check": "^3.23.1",
@@ -26,5 +29,8 @@
     "typescript-eslint": "^8.18.1",
     "vite": "^6.0.5",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
   }
 }

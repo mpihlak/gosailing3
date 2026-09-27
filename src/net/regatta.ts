@@ -5,7 +5,6 @@ import {
   SimulationRunner,
   raceTime,
   type InputSource,
-  type RaceState,
   type ScenarioSpec,
   type Simulation,
   type SimEvent,
@@ -15,9 +14,11 @@ import {
   SNAPSHOT_HZ,
   type Addressed,
   type ClientMessage,
+  type BoatReport,
   type Outcome,
   type Phase,
   type Placing,
+  type RaceReport,
   type Role,
   type Sailor,
 } from './protocol'
@@ -94,7 +95,8 @@ export class Regatta {
   private starters = new Map<BoatId, string>()
   private retired = new Set<BoatId>()
   private pending: SimEvent[] = []
-  private lastRace: RaceState | undefined
+  /** The last report written out, so an unchanged one is not written again. */
+  private lastRace: string | undefined
   private sinceSnapshot = 0
   private resultsSince = 0
   /** The player's seconds since the server started. */
@@ -254,9 +256,11 @@ export class Regatta {
     this.sinceSnapshot += dt
     if (this.sinceSnapshot >= 1 / SNAPSHOT_HZ) {
       this.sinceSnapshot = 0
-      const { race, boats, time } = runner.world
-      const changed = race !== this.lastRace
-      this.lastRace = race
+      const { boats, time } = runner.world
+      const race = this.report()
+      const written = JSON.stringify(race)
+      const changed = written !== this.lastRace
+      this.lastRace = written
       out.push({
         to: this.everyone(),
         message: {
@@ -278,6 +282,24 @@ export class Regatta {
       out.push(this.announceFleet())
     }
     return out
+  }
+
+  /** Where every boat stands, in the few fields anyone watching needs. */
+  private report(): RaceReport {
+    const progress = this.runner?.world.race.progress ?? {}
+    const report: Record<BoatId, BoatReport> = {}
+    for (const id of this.starters.keys()) {
+      const boat = progress[id]
+      if (!boat) continue
+      report[id] = {
+        status: boat.status,
+        stageIndex: boat.stageIndex,
+        penalties: boat.penalties,
+        ...(boat.place === undefined ? {} : { place: boat.place }),
+        ...(boat.finishTime === undefined ? {} : { finishTime: boat.finishTime }),
+      }
+    }
+    return report
   }
 
   /** Whether the race is over, and how it came out. */
