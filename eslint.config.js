@@ -2,7 +2,7 @@ import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 
 // Architecture is enforced here, not by convention. Layers may import downward only.
-const LAYERS = ['foundation', 'domain', 'sim', 'agents', 'presentation', 'apps']
+const LAYERS = ['foundation', 'domain', 'sim', 'agents', 'net', 'presentation', 'apps']
 
 /** Import paths a file in `layer` must not reach for. */
 function forbiddenLayers(layer) {
