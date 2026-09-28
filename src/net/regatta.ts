@@ -7,7 +7,7 @@ import {
   type InputSource,
   type ScenarioSpec,
   type Simulation,
-  type SimEvent,
+  type TimedEvent,
 } from '@/sim'
 import { Skipper } from '@/agents/ai'
 import {
@@ -94,7 +94,7 @@ export class Regatta {
    */
   private starters = new Map<BoatId, string>()
   private retired = new Set<BoatId>()
-  private pending: SimEvent[] = []
+  private pending: TimedEvent[] = []
   /** The last report written out, so an unchanged one is not written again. */
   private lastRace: string | undefined
   private sinceSnapshot = 0

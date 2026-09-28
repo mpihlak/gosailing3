@@ -1,6 +1,6 @@
 import type { Seconds } from '@/foundation/units'
 import type { BoatId, BoatState } from '@/domain/boat'
-import type { BoatStatus, ScenarioSpec, SimEvent } from '@/sim'
+import type { BoatStatus, ScenarioSpec, TimedEvent } from '@/sim'
 
 /**
  * What the two ends of a regatta say to each other.
@@ -84,7 +84,7 @@ export type ServerMessage =
       readonly boats: readonly BoatState[]
       /** Sent only when it has changed, which is when a boat starts, rounds or finishes. */
       readonly race?: RaceReport
-      readonly events: readonly SimEvent[]
+      readonly events: readonly TimedEvent[]
     }
   | { readonly kind: 'results'; readonly places: readonly Placing[] }
 

@@ -170,6 +170,59 @@ describe('drawing what the server says', () => {
   })
 })
 
+describe('what the race has done', () => {
+  beforeEach(() => {
+    socket.say({ kind: 'welcome', you: 'c1', role: 'racer', phase: 'lobby', fleet: [] })
+    socket.say({ kind: 'racing', scenario: SCENARIO })
+  })
+
+  it('keeps what came with the boats, so a banner can be made of it', () => {
+    socket.say({
+      kind: 'snapshot',
+      time: 1,
+      boats: boatsAt(0),
+      events: [{ kind: 'penalised', boatId: 'c1', otherId: 'c2', rule: 11, tick: 1, time: 1 }],
+    })
+    expect(race.takeEvents()).toEqual([
+      { kind: 'penalised', boatId: 'c1', otherId: 'c2', rule: 11, tick: 1, time: 1 },
+    ])
+  })
+
+  it('hands each one over once', () => {
+    socket.say({
+      kind: 'snapshot',
+      time: 1,
+      boats: boatsAt(0),
+      events: [{ kind: 'raceStarted', tick: 1, time: 1 }],
+    })
+    expect(race.takeEvents()).toHaveLength(1)
+    expect(race.takeEvents()).toHaveLength(0)
+  })
+
+  it('gathers up everything between one ask and the next', () => {
+    for (const time of [1, 2, 3]) {
+      socket.say({
+        kind: 'snapshot',
+        time,
+        boats: boatsAt(time),
+        events: [{ kind: 'markRounded', boatId: 'c1', markId: 'windward', tick: time, time }],
+      })
+    }
+    expect(race.takeEvents()).toHaveLength(3)
+  })
+
+  it('drops what belonged to the race before', () => {
+    socket.say({
+      kind: 'snapshot',
+      time: 1,
+      boats: boatsAt(0),
+      events: [{ kind: 'raceStarted', tick: 1, time: 1 }],
+    })
+    socket.say({ kind: 'racing', scenario: SCENARIO })
+    expect(race.takeEvents()).toEqual([])
+  })
+})
+
 describe('when it ends', () => {
   it('keeps the result and says so', () => {
     socket.say({

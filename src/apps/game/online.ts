@@ -6,6 +6,7 @@ import {
   type BoatProgress,
   type RaceState,
   type Simulation,
+  type TimedEvent,
   type WorldState,
 } from '@/sim'
 import {
@@ -58,6 +59,8 @@ export class OnlineRace {
   private socket: Socket | undefined
   private frames: { readonly at: number; readonly world: WorldState }[] = []
   private report: RaceReport = {}
+  /** What the race has done since anyone last asked: the banners are made from these. */
+  private events: TimedEvent[] = []
 
   simulation: Simulation | undefined
   you: BoatId | undefined
@@ -105,6 +108,13 @@ export class OnlineRace {
     this.socket = undefined
   }
 
+  /** Everything the race has done since this was last called. */
+  takeEvents(): readonly TimedEvent[] {
+    const since = this.events
+    this.events = []
+    return since
+  }
+
   /**
    * The fleet as it should be drawn at this moment, or nothing until two snapshots have
    * arrived and there is something to slide between.
@@ -141,11 +151,13 @@ export class OnlineRace {
         this.simulation = createSimulation(message.scenario)
         this.frames = []
         this.report = {}
+        this.events = []
         this.results = undefined
         this.phase = 'racing'
         return
       case 'snapshot':
         if (message.race) this.report = message.race
+        this.events.push(...message.events)
         this.remember(message.time, message.boats)
         return
       case 'results':

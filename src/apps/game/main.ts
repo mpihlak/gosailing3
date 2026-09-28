@@ -400,6 +400,15 @@ function takeFromRegatta(timestamp: number): boolean {
     hideOverlay()
     running = true
   }
+
+  /*
+   * The banners are made from what the race did, and what it did comes down the wire with
+   * the boats. The finish is the exception: the server scores that one, because it knows
+   * about a boat who was timed out or who left, and the simulation only knows who crossed.
+   */
+  for (const event of race.takeEvents()) {
+    if (event.kind !== 'raceFinished') announce(event)
+  }
   return true
 }
 
