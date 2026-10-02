@@ -245,12 +245,31 @@ function start(seed: string, immediate = false): void {
 
 function handleCommand(command: HelmCommand): void {
   if (command === 'restart') {
+    /*
+     * A regatta is the server's to restart, and it has a button for it. Starting a race
+     * here would have dropped a sailor out of the one she is in and into a race against
+     * the computer, with the socket still open behind it.
+     */
+    if (online) {
+      if (online.hosting) online.order('restart')
+      else hud.showBanner('Only the host can restart a network race', 'info', 2200)
+      return
+    }
     // Straight into the next race: restarting is what you do when you want another go,
     // not something to be asked about.
     start(randomSeed(), true)
     return
   }
   if (command === 'toggleRun') {
+    /*
+     * The race is being sailed on a server and runs on whether or not this page is
+     * watching, so there is nothing here to stop. A Paused card over a race still
+     * running is a worse answer than saying so.
+     */
+    if (online) {
+      hud.showBanner('A network race cannot be paused', 'info', 2200)
+      return
+    }
     running = !running
     if (running) hideOverlay()
     else {
@@ -262,8 +281,12 @@ function handleCommand(command: HelmCommand): void {
     }
   }
   if (command === 'help') {
-    showOverlay('Controls', `<p>${CONTROLS}</p>`, () => handleCommand('toggleRun'))
-    running = false
+    // Online the card is the only thing to put away, since there is no race here to
+    // carry on with. Dismissing through toggleRun would leave it stuck on the screen.
+    showOverlay('Controls', `<p>${CONTROLS}</p>`, () =>
+      online ? hideOverlay() : handleCommand('toggleRun'),
+    )
+    if (!online) running = false
   }
   if (command === 'toggleShadows') {
     showShadows = !showShadows

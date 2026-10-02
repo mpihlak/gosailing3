@@ -95,3 +95,40 @@ describe('arriving while a race is on', () => {
     expect(bannerText()).toContain('Blue (Ann)')
   })
 })
+
+/*
+ * The keys and the tap that pause or restart a race at home have nothing to act on in a
+ * regatta: the race is sailed on a server and runs whether or not this page is watching.
+ * Pausing put a Paused card over a race that carried on underneath, and restarting
+ * dropped the sailor into a race against the computer with the socket still open.
+ */
+describe('the controls that cannot apply to a regatta', () => {
+  const press = (key: string) =>
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }))
+
+  it('does not put a Paused card over a race that is still running', () => {
+    press(' ')
+    page.frame(400)
+    expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')
+    expect(bannerText()).toContain('cannot be paused')
+  })
+
+  it('stays in the regatta when the restart key is pressed', () => {
+    press('r')
+    page.frame(500)
+    expect(bannerText()).toContain('host')
+    // Still drawing the boats the server sent, not a race of its own.
+    const roster = document.querySelector('#standings')?.textContent ?? ''
+    expect(roster).toContain('Blue (Ann)')
+    expect(roster).not.toContain('Red\n')
+  })
+
+  it('can put the controls card away again', () => {
+    press('h')
+    expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('true')
+    document
+      .querySelector('#overlay')
+      ?.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true }))
+    expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')
+  })
+})
