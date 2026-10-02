@@ -244,6 +244,38 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      /* The host's buttons. Only her page shows them, and only while there is a race to
+         cut short. Sized for a thumb rather than a cursor: both ends sail on phones. */
+      #host {
+        display: none;
+        gap: 8px;
+        margin-top: 8px;
+        /* Out of the middle, where the boats are. */
+        align-self: flex-end;
+        /* #top lets taps through to the water; these are the one thing up here that
+           has to catch them. */
+        pointer-events: auto;
+      }
+      #host[data-visible='true'] {
+        display: flex;
+      }
+      #host button {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--edge);
+        color: inherit;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        backdrop-filter: blur(8px);
+      }
+      #host button:active {
+        background: var(--edge);
+      }
+
       [data-banner][data-visible='true'] { opacity: 1; }
       [data-banner][data-tone='warn'] { color: var(--warn); }
       [data-banner][data-tone='good'] { color: var(--good); }
@@ -366,6 +398,10 @@
         <div class="row-break"></div>
       </div>
       <div data-banner data-visible="false"></div>
+      <div id="host" data-visible="false">
+        <button type="button" data-command="endRace">End race</button>
+        <button type="button" data-command="restart">Restart</button>
+      </div>
     </div>
     <div id="bottom">
       <div id="standings"></div>

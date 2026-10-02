@@ -40,6 +40,7 @@ const hud = new Hud(
   requireElement<HTMLElement>('[data-banner]'),
 )
 const overlay = requireElement<HTMLElement>('#overlay')
+const hostControls = requireElement<HTMLElement>('#host')
 const standingsPanel = requireElement<HTMLElement>('#standings')
 /** The telltales are drawn on the canvas; this is the place the page keeps for them. */
 const telltalesSlot = requireElement<HTMLElement>('#telltales')
@@ -134,6 +135,7 @@ if (tillerBar) {
 }
 overlay.addEventListener('pointerup', () => onCardTap?.())
 
+
 /**
  * A regatta to join, if there is one. Without it the race is sailed here against the
  * computer, which is the game as it was.
@@ -163,10 +165,20 @@ function joinRegatta(url: string, name: string, watching: boolean): void {
     helm: () => helm.rudder,
   })
   online.join()
+  hostControls.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest('button')
+    const command = button?.dataset.command
+    if (command === 'endRace' || command === 'restart') online?.order(command)
+  })
   // On its own clock rather than the frame's: a tab that stops drawing still has to say
   // it is there, and silence is how the server decides a sailor has gone.
   window.setInterval(() => online?.sendHelm(), 1000 / HELM_HZ)
   showLobby()
+}
+
+/** The host's buttons belong on the water, where there is a race to cut short. */
+function showHostControls(visible: boolean): void {
+  hostControls.dataset.visible = visible ? 'true' : 'false'
 }
 
 /** What the card says while there is no race to draw. */
@@ -385,6 +397,7 @@ function takeFromRegatta(timestamp: number): boolean {
   if (!race) return false
 
   if (race.phase !== 'racing' || !race.simulation) {
+    showHostControls(false)
     if (race.phase === 'results' && race.results) {
       showRegattaResults(race.results, race.secondsToNextRace(timestamp))
     }
@@ -433,6 +446,7 @@ function takeFromRegatta(timestamp: number): boolean {
   }
 
   if (!hasBoat) noteFollowing(follow, race.role === 'observer', timestamp)
+  showHostControls(race.hosting)
 
   /*
    * The banners are made from what the race did, and what it did comes down the wire with

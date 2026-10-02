@@ -74,5 +74,9 @@ export function read(text: string): ClientMessage | undefined {
     if (!Number.isFinite(message.rudder)) return undefined
     return { kind: 'helm', rudder: message.rudder }
   }
+  if (message.kind === 'command') {
+    if (message.command !== 'endRace' && message.command !== 'restart') return undefined
+    return { kind: 'command', command: message.command }
+  }
   return undefined
 }

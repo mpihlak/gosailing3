@@ -393,3 +393,63 @@ describe('arriving while the fleet is still manoeuvring', () => {
     expect(racing.kind === 'racing' && racing.scenario.boats).toHaveLength(2)
   })
 })
+
+describe('the host', () => {
+  const orders = (command: 'endRace' | 'restart') => ({ kind: 'command', command }) as const
+
+  function racing() {
+    const race = regatta()
+    race.say('a', joins('Ann'))
+    race.say('b', joins('Bob'))
+    race.tick(1)
+    pastTheGun(race, ['a', 'b'])
+    return race
+  }
+
+  it('is the racer who has been here longest', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('w', watches('Wendy'))
+    race.say('a', joins('Ann'))
+    race.say('b', joins('Bob'))
+    expect(race.fleet.filter((one) => one.host).map((one) => one.id)).toEqual(['a'])
+  })
+
+  it('passes to the next when she leaves, so there is always one', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('a', joins('Ann'))
+    race.say('b', joins('Bob'))
+    race.leave('a')
+    expect(race.fleet.filter((one) => one.host).map((one) => one.id)).toEqual(['b'])
+  })
+
+  it('ends the race where it stands and puts the results up', () => {
+    const race = racing()
+    const sent = race.say('a', orders('endRace'))
+    expect(race.state).toBe('results')
+    expect(resultsIn(sent)).toHaveLength(2)
+  })
+
+  it('starts a fresh race when she asks for one', () => {
+    const race = racing()
+    const sent = race.say('a', orders('restart'))
+    expect(race.state).toBe('racing')
+    expect(lastSnapshotTime(sent)).toBeNaN()
+    const racingAgain = sent.find((one) => one.message.kind === 'racing')!.message
+    expect(racingAgain.kind === 'racing' && racingAgain.scenario.boats).toHaveLength(2)
+  })
+
+  /** Otherwise one impatient sailor could cut everybody's race short. */
+  it('does not answer to anybody else', () => {
+    const race = racing()
+    expect(race.say('b', orders('endRace'))).toEqual([])
+    expect(race.state).toBe('racing')
+  })
+
+  it('has nothing to end when no race is on', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('a', joins('Ann'))
+    expect(race.say('a', orders('endRace'))).toEqual([])
+    expect(race.say('a', orders('restart'))).toEqual([])
+    expect(race.state).toBe('lobby')
+  })
+})

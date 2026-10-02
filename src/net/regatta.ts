@@ -14,6 +14,7 @@ import { Skipper } from '@/agents/ai'
 import {
   SNAPSHOT_HZ,
   type Addressed,
+  type Command,
   type FleetColor,
   type ClientMessage,
   type BoatReport,
@@ -131,13 +132,23 @@ export class Regatta {
   }
 
   get fleet(): readonly Sailor[] {
+    const host = this.host()
     return [...this.entries].map(([id, entry]) => ({
       id,
       name: entry.name,
       role: entry.role,
       color: entry.color.hex,
       waiting: entry.waiting,
+      host: id === host,
     }))
+  }
+
+  /**
+   * Who answers for the regatta: the racer who has been here longest, since the entries
+   * are held in the order they arrived. Nobody, when there is no racer to ask.
+   */
+  private host(): BoatId | undefined {
+    return this.racers()[0]?.[0]
   }
 
   /** A sailor says something. Her connection id is the id her boat will race under. */
@@ -147,7 +158,48 @@ export class Regatta {
     if (!entry) return []
     entry.heard = this.now
     if (message.kind === 'helm') entry.rudder = Math.max(-1, Math.min(1, message.rudder))
+    if (message.kind === 'command') return this.obey(id, message.command)
     return []
+  }
+
+  /**
+   * A race can drag on with nobody able to finish it, so the host may cut it short. Only
+   * the host, and only when there is a race to cut.
+   */
+  private obey(id: BoatId, command: Command): Addressed[] {
+    if (id !== this.host()) return []
+    if (command === 'restart') {
+      if (this.phase === 'lobby') return []
+      this.abandon()
+      return this.startIfReady()
+    }
+    if (this.phase !== 'racing') return []
+    return this.callItOff()
+  }
+
+  /** Score the race where it stands and put the results up. */
+  private callItOff(): Addressed[] {
+    const places = this.placings()
+    if (!places) return []
+    this.phase = 'results'
+    this.resultsSince = 0
+    return [
+      {
+        to: this.everyone(),
+        message: { kind: 'results', places, nextRaceIn: this.limits.resultsFor },
+      },
+      this.announceFleet(),
+    ]
+  }
+
+  /** Throw the race away without scoring it. */
+  private abandon(): void {
+    this.phase = 'lobby'
+    this.simulation = undefined
+    this.runner = undefined
+    this.starters.clear()
+    this.retired.clear()
+    for (const [, entry] of this.entries) entry.waiting = false
   }
 
   /** A boat sailed by nobody, for trying the thing out with one human or none. */
@@ -386,6 +438,14 @@ export class Regatta {
     const abandoned = winner === undefined && elapsed > this.limits.abandonAfter
     if (!everyoneHome && !outOfTime && !abandoned) return undefined
 
+    return this.placings()
+  }
+
+  /** The race scored as it stands, whether or not it was going to end here. */
+  private placings(): Placing[] | undefined {
+    const progress = this.runner?.world.race.progress
+    if (!progress) return undefined
+
     return [...this.starters].map(([id, name]) => {
       const boat = progress[id]
       const outcome: Outcome = this.retired.has(id)
@@ -404,12 +464,7 @@ export class Regatta {
   }
 
   private backToTheLobby(): Addressed[] {
-    this.phase = 'lobby'
-    this.simulation = undefined
-    this.runner = undefined
-    this.starters.clear()
-    this.retired.clear()
-    for (const [, entry] of this.entries) entry.waiting = false
+    this.abandon()
     return [this.announceFleet(), ...this.startIfReady()]
   }
 }

@@ -12,6 +12,7 @@ import {
 import {
   HELM_HZ,
   SNAPSHOT_HZ,
+  type Command,
   type Phase,
   type Placing,
   type RaceReport,
@@ -77,6 +78,11 @@ export class OnlineRace {
   /** Whether there is a socket to write to. Nothing is sent before there is. */
   private connected = false
 
+  /** Whether the regatta answers to this page, which is what shows the host's buttons. */
+  get hosting(): boolean {
+    return this.fleet.some((sailor) => sailor.id === this.you && sailor.host)
+  }
+
   constructor(private readonly options: OnlineOptions) {}
 
   join(): void {
@@ -116,6 +122,11 @@ export class OnlineRace {
   private say(message: unknown): void {
     if (!this.connected) return
     this.socket?.send(JSON.stringify(message))
+  }
+
+  /** Ask the regatta to cut the race short. Ignored by the server unless we are host. */
+  order(command: Command): void {
+    this.say({ kind: 'command', command })
   }
 
   leave(): void {

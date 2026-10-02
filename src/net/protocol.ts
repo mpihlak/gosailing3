@@ -42,7 +42,15 @@ export interface Sailor {
   readonly color: string
   /** True while her race is the next one rather than the one being sailed. */
   readonly waiting: boolean
+  /**
+   * Whether the regatta answers to her. The longest-connected racer holds it, so it
+   * passes to the next when she goes and the fleet is never left without one.
+   */
+  readonly host: boolean
 }
+
+/** What a host may do to a race nobody else can get out of. */
+export type Command = 'endRace' | 'restart'
 
 export interface Placing {
   readonly boatId: BoatId
@@ -74,6 +82,7 @@ export type RaceReport = Readonly<Record<BoatId, BoatReport>>
 export type ClientMessage =
   | { readonly kind: 'join'; readonly name: string; readonly role?: Role }
   | { readonly kind: 'helm'; readonly rudder: number }
+  | { readonly kind: 'command'; readonly command: Command }
 
 export type ServerMessage =
   /** First thing a client hears: who she is and what is going on. */
