@@ -46,7 +46,10 @@ export interface RegattaLimits {
   readonly abandonAfter: Seconds
   /** Silence this long, in the player's seconds, and a sailor is treated as gone. */
   readonly idleAfter: Seconds
-  /** How long the results stand before the next race is made up. */
+  /**
+   * How long the results stand before the next race is made up. The fleet is counting
+   * down to it, so it is short enough to count: five, four, three, two, one.
+   */
   readonly resultsFor: Seconds
 }
 
@@ -56,7 +59,7 @@ const DEFAULTS: RegattaLimits = {
   timeLimitFraction: 0.3,
   abandonAfter: 600,
   idleAfter: 10,
-  resultsFor: 10,
+  resultsFor: 5,
 }
 
 export interface RegattaOptions {
@@ -321,7 +324,10 @@ export class Regatta {
     if (places) {
       this.phase = 'results'
       this.resultsSince = 0
-      out.push({ to: this.everyone(), message: { kind: 'results', places } })
+      out.push({
+        to: this.everyone(),
+        message: { kind: 'results', places, nextRaceIn: this.limits.resultsFor },
+      })
       out.push(this.announceFleet())
     }
     return out

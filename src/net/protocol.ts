@@ -98,7 +98,12 @@ export type ServerMessage =
       readonly race?: RaceReport
       readonly events: readonly TimedEvent[]
     }
-  | { readonly kind: 'results'; readonly places: readonly Placing[] }
+  | {
+      readonly kind: 'results'
+      readonly places: readonly Placing[]
+      /** How long these stand before the next race, in the player's seconds. */
+      readonly nextRaceIn: Seconds
+    }
 
 /** A message and the connections it goes to. */
 export interface Addressed {

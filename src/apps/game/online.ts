@@ -68,6 +68,8 @@ export class OnlineRace {
   phase: Phase = 'lobby'
   fleet: readonly Sailor[] = []
   results: readonly Placing[] | undefined
+  /** When the next race is due, on the same clock the frames are stamped with. */
+  private nextRaceAt: number | undefined
   /** Whose instruments are shown: your own boat, or whoever an observer is following. */
   watching: BoatId | undefined
   /** What went wrong, if the socket did. */
@@ -122,6 +124,15 @@ export class OnlineRace {
     this.socket = undefined
   }
 
+  /**
+   * Seconds until the next race, counting down to one and then nothing. Undefined when
+   * the server never said, which is the only case the card falls back to a plain line.
+   */
+  secondsToNextRace(now: number): number | undefined {
+    if (this.nextRaceAt === undefined) return undefined
+    return Math.max(0, Math.ceil((this.nextRaceAt - now) / 1000))
+  }
+
   /** Everything the race has done since this was last called. */
   takeEvents(): readonly TimedEvent[] {
     const since = this.events
@@ -140,6 +151,10 @@ export class OnlineRace {
     const span = latest.at - previous.at
     const t = span > 0 ? (playAt - previous.at) / span : 1
     return interpolateWorld(previous.world, latest.world, Math.max(0, Math.min(1, t)))
+  }
+
+  private clock(): number {
+    return (this.options.now ?? (() => performance.now()))()
   }
 
   private heard(text: string): void {
@@ -174,10 +189,15 @@ export class OnlineRace {
         this.events.push(...message.events)
         this.remember(message.time, message.boats)
         return
-      case 'results':
+      case 'results': {
         this.results = message.places
         this.phase = 'results'
+        const due = message.nextRaceIn
+        // A server that does not say loses the countdown and nothing else.
+        this.nextRaceAt =
+          typeof due === 'number' && Number.isFinite(due) ? this.clock() + due * 1000 : undefined
         return
+      }
     }
   }
 
@@ -193,7 +213,7 @@ export class OnlineRace {
     // Two is all that is needed to slide between, and a third would only be drawn later.
     // Stamped with when it arrived rather than when it was meant to: a clock of our own
     // would drift away from the server's for as long as the two disagreed.
-    const at = (this.options.now ?? (() => performance.now()))()
+    const at = this.clock()
     this.frames = [...this.frames.slice(-1), { at, world }]
   }
 

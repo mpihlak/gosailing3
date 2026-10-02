@@ -228,9 +228,36 @@ describe('when it ends', () => {
     socket.say({
       kind: 'results',
       places: [{ boatId: 'c1', name: 'Ann', outcome: 'finished', place: 1 }],
+      nextRaceIn: 5,
     })
     expect(race.phase).toBe('results')
     expect(race.results).toHaveLength(1)
+  })
+
+  /** The card counts the wait down, so the fleet is never left wondering. */
+  it('counts down to the next race', () => {
+    clock = 10_000
+    socket.say({
+      kind: 'results',
+      places: [{ boatId: 'c1', name: 'Ann', outcome: 'finished', place: 1 }],
+      nextRaceIn: 5,
+    })
+    expect(race.secondsToNextRace(10_000)).toBe(5)
+    expect(race.secondsToNextRace(11_200)).toBe(4)
+    expect(race.secondsToNextRace(14_100)).toBe(1)
+    expect(race.secondsToNextRace(15_000)).toBe(0)
+    // It stops at nothing rather than running away into negatives.
+    expect(race.secondsToNextRace(30_000)).toBe(0)
+  })
+
+  it('loses only the countdown when a server does not say', () => {
+    socket.say({
+      kind: 'results',
+      places: [],
+      nextRaceIn: 'soon',
+    } as unknown as Parameters<typeof socket.say>[0])
+    expect(race.phase).toBe('results')
+    expect(race.secondsToNextRace(0)).toBeUndefined()
   })
 
   it('notices the connection going away', () => {
