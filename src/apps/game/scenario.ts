@@ -124,8 +124,12 @@ export const WATCHER_COLOR: FleetColor = { name: 'Watcher', hex: '#9aa7b1' }
  *
  * It must be `wss:`, because the page is served over https and a browser will not open a
  * plain socket from one.
+ *
+ * Behind this name is a Cloudflare tunnel. Measured against the same server reached over
+ * the house network, steering answers three milliseconds slower; the tailscale funnel it
+ * replaces was a hundred slower at the median and three hundred at the ninetieth.
  */
-export const DEFAULT_SERVER = 'wss://voyager.tail64dd71.ts.net'
+export const DEFAULT_SERVER = 'wss://ws.gosailing.online'
 
 export function randomSeed(): string {
   return Math.floor(Math.random() * 1e9).toString(36)

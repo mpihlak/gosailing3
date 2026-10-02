@@ -34,14 +34,32 @@ ssh martin@voyager 'loginctl enable-linger'
 ## Reaching it
 
 The server listens on port 8080 and answers `GET /health` with its phase and the number
-of sailors aboard. Tailscale funnel proxies `https://voyager.tail64dd71.ts.net` to it, so
-a page served over https connects with `wss://`:
+of sailors aboard. A Cloudflare tunnel fronts it at `https://ws.gosailing.online`, which
+is the address the game joins with `?network`. A page served over https must connect with
+`wss://`, so a plain `ws://` address only works from a page served over plain http.
 
 ```
-https://mpihlak.github.io/gosailing3/?server=wss://voyager.tail64dd71.ts.net&name=Ann
+https://mpihlak.github.io/gosailing3/?network
+https://mpihlak.github.io/gosailing3/?network&name=Ann
 ```
 
 Add `&watch=1` to spectate instead of racing.
+
+### Why not tailscale funnel
+
+It was the funnel first, and the funnel routes through Tailscale's public relay even when
+the player is on the same network as the server. Measured against the same server, same
+session, round trip from putting the helm over to the boat answering:
+
+| path                      | p50    | p90    | max    |
+| ------------------------- | ------ | ------ | ------ |
+| the house network, direct | 61 ms  | 66 ms  | 88 ms  |
+| Cloudflare tunnel         | 64 ms  | 70 ms  | 94 ms  |
+| tailscale funnel          | 165 ms | 366 ms | 766 ms |
+
+The tunnel costs three milliseconds over sitting next to the server. The spread matters
+as much as the middle: a boat that answers in 70 ms every time feels steered, and one
+that answers anywhere between 100 and 766 feels like it is arguing.
 
 ## Operating
 
