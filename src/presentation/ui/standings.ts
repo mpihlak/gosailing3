@@ -1,7 +1,7 @@
 import type { BoatId } from '@/domain/boat'
 import type { Knots } from '@/foundation/units'
 import type { Standing } from '@/sim'
-import { escapeHtml } from './text'
+import { cssColor, escapeHtml } from './text'
 
 /** What the board shows about a boat beyond where she lies in the fleet. */
 export interface CrewReading {
@@ -16,6 +16,8 @@ export const OCS = 'OCS'
 /** The board at the foot of the screen: who is where, what for, and who owes turns. */
 export class StandingsBoard {
   private shown = ''
+  /** The speed cells, in the order the board was last built in. */
+  private cells: readonly Element[] = []
 
   constructor(
     private readonly root: HTMLElement,
@@ -35,12 +37,15 @@ export class StandingsBoard {
      * Speed is written into the cells rather than counted as a reason to rebuild. It
      * changes every frame, and the board is built by replacing its markup wholesale, so
      * including it would throw the board away and make it again sixty times a second.
+     *
+     * The cells are taken in the order they were built in rather than looked up by boat.
+     * A lookup means a selector, and the id in it comes off a socket.
      */
-    for (const standing of standings) {
-      const cell = this.root.querySelector(`[data-speed="${standing.boatId}"]`)
+    standings.forEach((standing, row) => {
+      const cell = this.cells[row]
       const shown = reading[standing.boatId]?.speed.toFixed(1) ?? ''
       if (cell && cell.textContent !== shown) cell.textContent = shown
-    }
+    })
   }
 
   private rebuildIfChanged(
@@ -68,16 +73,17 @@ export class StandingsBoard {
         ]
           .filter(Boolean)
           .join(' ')
-        const color = this.colors[standing.boatId]
+        const color = cssColor(this.colors[standing.boatId])
         return `<div class="${classes}">
-          <span class="pos">${standing.place}</span>
+          <span class="pos">${escapeHtml(standing.place)}</span>
           <span class="who"${color ? ` style="color: ${color}"` : ''}>${name}</span>
           <span class="doing">${says}</span>
-          <span class="speed" data-speed="${standing.boatId}"></span>
+          <span class="speed"></span>
           <span class="pen">${turns(standing.penalties)}</span>
         </div>`
       })
       .join('')
+    this.cells = [...this.root.querySelectorAll('.speed')]
   }
 }
 
@@ -87,5 +93,5 @@ export class StandingsBoard {
  */
 function turns(penalties: number): string {
   if (penalties <= 0) return ''
-  return `<span class="turns">⚑${penalties > 1 ? `×${penalties}` : ''}</span>`
+  return `<span class="turns">⚑${penalties > 1 ? `×${escapeHtml(penalties)}` : ''}</span>`
 }

@@ -20,6 +20,7 @@ import { Helm, Tiller, type HelmCommand } from '@/presentation/input'
 import { formatRate } from '@/presentation/view/timescale'
 import {
   clock,
+  cssColor,
   escapeHtml,
   Hud,
   OCS,
@@ -167,7 +168,9 @@ function showLobby(): void {
     .map((sailor) => {
       const mine = sailor.id === race.you ? ' — you' : ''
       const waiting = sailor.waiting ? ' (next race)' : ''
-      return `<b style="color: ${sailor.color}">${escapeHtml(sailor.name)}</b>${mine}${waiting}`
+      const color = cssColor(sailor.color)
+      const paint = color ? ` style="color: ${color}"` : ''
+      return `<b${paint}>${escapeHtml(sailor.name)}</b>${mine}${waiting}`
     })
     .join('<br />')
 
@@ -435,7 +438,7 @@ function showRegattaResults(places: readonly Placing[]): void {
       const how =
         one.outcome === 'finished' ? timing(one.elapsed ?? 0) : one.outcome === 'retired' ? 'left' : 'DNF'
       const mine = one.boatId === online?.you ? ' class="mine"' : ''
-      return `<tr${mine}><td>${one.place ?? ''}</td><td>${one.name}</td><td>${how}</td></tr>`
+      return `<tr${mine}><td>${escapeHtml(one.place ?? '')}</td><td>${escapeHtml(one.name)}</td><td>${how}</td></tr>`
     })
     .join('')
   showOverlay('Results', `<table class="results">${rows}</table><p>The next race is coming.</p>`, () =>
@@ -599,9 +602,10 @@ function showResults(): void {
       const progress = race.progress[boatId]
       const elapsed = playerSeconds(progress?.finishTime ?? 0)
       const name = escapeHtml(simulation.names[boatId] ?? boatId)
-      const color = styles[boatId]?.hull ?? ''
+      const color = cssColor(styles[boatId]?.hull)
+      const paint = color ? ` style="color: ${color}"` : ''
       const mine = boatId === watching ? ' class="mine"' : ''
-      return `<tr${mine}><td>${progress?.place ?? ''}</td><td style="color: ${color}">${name}</td><td>${timing(elapsed)}</td></tr>`
+      return `<tr${mine}><td>${escapeHtml(progress?.place ?? '')}</td><td${paint}>${name}</td><td>${timing(elapsed)}</td></tr>`
     })
     .join('')
 
