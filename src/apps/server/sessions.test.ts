@@ -20,7 +20,11 @@ function regatta() {
     }),
     seed: () => `race-${++races}`,
     pace: PACE,
-    colors: ['#111111', '#222222'],
+    colors: [
+      { name: 'Blue', hex: '#111111' },
+      { name: 'Red', hex: '#222222' },
+    ],
+    watcherColor: { name: 'Watcher', hex: '#999999' },
   })
 }
 
@@ -61,11 +65,18 @@ describe('reading what arrives', () => {
     expect(read('{"kind":"helm"}')).toBeUndefined()
   })
 
-  it('cuts a long name short and gives a nameless sailor one', () => {
+  it('cuts a long name short', () => {
     const long = read(`{"kind":"join","name":"${'x'.repeat(200)}"}`)
     expect(long?.kind === 'join' && long.name.length).toBe(20)
-    expect(read('{"kind":"join","name":"   "}')).toMatchObject({ name: 'Sailor' })
-    expect(read('{"kind":"join"}')).toMatchObject({ name: 'Sailor' })
+  })
+
+  /*
+   * A sailor on a phone has no comfortable way to type, so no name is the ordinary case
+   * rather than a fault. The regatta calls her by her color instead.
+   */
+  it('lets a sailor arrive without a name', () => {
+    expect(read('{"kind":"join","name":"   "}')).toMatchObject({ name: '' })
+    expect(read('{"kind":"join"}')).toMatchObject({ name: '' })
   })
 
   /*
@@ -87,8 +98,8 @@ describe('reading what arrives', () => {
     }
   })
 
-  it('falls back to a name when nothing of one survives', () => {
-    expect(read('{"kind":"join","name":"<>!@#"}')).toMatchObject({ name: 'Sailor' })
+  it('keeps nothing of a name that was all markup', () => {
+    expect(read('{"kind":"join","name":"<>!@#"}')).toMatchObject({ name: '' })
   })
 })
 
@@ -96,6 +107,21 @@ describe('a socket talking to the regatta', () => {
   it('welcomes a sailor and tells the fleet', () => {
     sessions.received('c1', '{"kind":"join","name":"Ann"}')
     expect(kindsFor('c1')).toEqual(['welcome', 'fleet'])
+  })
+
+  /** What she is called is how she learns which boat is hers. */
+  it('calls her by her color, and adds the name she gave', () => {
+    sessions.received('c1', '{"kind":"join","name":"Ann"}')
+    sessions.received('c2', '{"kind":"join"}')
+
+    const welcome = written.find((one) => one.message.kind === 'welcome')!.message
+    expect(welcome.kind === 'welcome' && welcome.fleet[0]?.name).toBe('Blue (Ann)')
+
+    const latest = written.filter((one) => one.message.kind === 'fleet').at(-1)!.message
+    expect(latest.kind === 'fleet' && latest.fleet.map((one) => one.name)).toEqual([
+      'Blue (Ann)',
+      'Red',
+    ])
   })
 
   it('writes the same line once for each of them', () => {

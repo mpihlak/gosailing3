@@ -1,7 +1,13 @@
 import { createServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { Regatta } from '@/net'
-import { FLEET_COLORS, GAME_PACE, randomSeed, regattaRace } from '@/apps/game/scenario'
+import {
+  FLEET_COLORS,
+  GAME_PACE,
+  randomSeed,
+  regattaRace,
+  WATCHER_COLOR,
+} from '@/apps/game/scenario'
 import { Sessions } from './sessions'
 
 /**
@@ -22,6 +28,7 @@ const regatta = new Regatta({
   seed: randomSeed,
   pace: GAME_PACE,
   colors: FLEET_COLORS,
+  watcherColor: WATCHER_COLOR,
 })
 
 const sockets = new Map<string, WebSocket>()

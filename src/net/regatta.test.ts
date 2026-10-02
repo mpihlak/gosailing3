@@ -26,7 +26,12 @@ function regatta(limits: Partial<RegattaLimits> = {}) {
     race: shortRace,
     seed: () => `race-${++races}`,
     pace: PACE,
-    colors: ['#4fa3dd', '#c4655c', '#7ee08a'],
+    colors: [
+      { name: 'Blue', hex: '#4fa3dd' },
+      { name: 'Red', hex: '#c4655c' },
+      { name: 'Green', hex: '#7ee08a' },
+    ],
+    watcherColor: { name: 'Watcher', hex: '#9aa7b1' },
     limits,
   })
 }
@@ -37,6 +42,9 @@ function transcript(sent: Addressed[]): ServerMessage['kind'][] {
 }
 
 const joins = (name: string) => ({ kind: 'join', name }) as const
+/** A sailor is shown as her color with the name she gave after it, so match on that. */
+const isCalled = (given: string) => (one: { readonly name: string }) =>
+  one.name.endsWith(`(${given})`)
 const watches = (name: string) => ({ kind: 'join', name, role: 'observer' }) as const
 
 describe('the lobby', () => {
@@ -170,8 +178,8 @@ describe('how a race ends', () => {
     const places = resultsIn(
       sail(race, 600, { alive: ['idle'], until: () => race.state === 'results' }),
     )
-    expect(places?.find((one) => one.name === 'Rob')?.outcome).toBe('finished')
-    expect(places?.find((one) => one.name === 'Drifter')?.outcome).toBe('timedOut')
+    expect(places?.find(isCalled('Rob'))?.outcome).toBe('finished')
+    expect(places?.find(isCalled('Drifter'))?.outcome).toBe('timedOut')
   })
 
   it('abandons a race nobody finishes at all', () => {
@@ -196,8 +204,8 @@ describe('how a race ends', () => {
     const places = resultsIn(
       sail(race, 60, { alive: ['a'], until: () => race.state === 'results' }),
     )
-    expect(places?.find((one) => one.name === 'Bob')?.outcome).toBe('retired')
-    expect(race.fleet.map((sailor) => sailor.name)).not.toContain('Bob')
+    expect(places?.find(isCalled('Bob'))?.outcome).toBe('retired')
+    expect(race.fleet.some(isCalled('Bob'))).toBe(false)
   })
 
   it('goes back to the lobby and takes the next race', () => {
@@ -218,11 +226,11 @@ describe('how a race ends', () => {
     race.addRobot('Bot')
     race.tick(1)
     race.say('c', joins('Cat'))
-    expect(race.fleet.find((sailor) => sailor.name === 'Cat')?.waiting).toBe(true)
+    expect(race.fleet.find(isCalled('Cat'))?.waiting).toBe(true)
 
     sail(race, 400, { alive: ['c'], until: () => race.state === 'results' })
     sail(race, 5, { alive: ['c'], until: () => race.state === 'racing' })
-    expect(race.fleet.find((sailor) => sailor.name === 'Cat')?.waiting).toBe(false)
+    expect(race.fleet.find(isCalled('Cat'))?.waiting).toBe(false)
   })
 })
 
@@ -244,7 +252,7 @@ describe('holding the gate', () => {
     const race = regatta()
     race.say('a', joins('Ann'))
     race.say('a', joins('Bob'))
-    expect(race.fleet[0]?.name).toBe('Ann')
+    expect(race.fleet[0]?.name).toBe('Blue (Ann)')
   })
 
   it('seats the racers it will sail and watches the rest', () => {
@@ -278,5 +286,43 @@ describe('holding the gate', () => {
     race.leave('a')
     race.say('c', joins('Cat'))
     expect(race.fleet.find((sailor) => sailor.id === 'c')?.role).toBe('racer')
+  })
+})
+
+describe('telling a sailor which boat is hers', () => {
+  it('calls her by her color when she gave no name', () => {
+    const race = regatta()
+    race.say('a', { kind: 'join', name: '' })
+    expect(race.fleet[0]?.name).toBe('Blue')
+  })
+
+  it('hands every boat a color of its own', () => {
+    const race = regatta({ fleetSize: 10 })
+    for (const id of ['a', 'b', 'c']) race.say(id, joins(id))
+    expect(race.fleet.map((one) => one.name)).toEqual(['Blue (a)', 'Red (b)', 'Green (c)'])
+  })
+
+  it('gives a color back when the boat wearing it goes', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('a', joins('Ann'))
+    race.say('b', joins('Bob'))
+    race.leave('a')
+    race.say('c', joins('Cat'))
+    expect(race.fleet.find(isCalled('Cat'))?.name).toBe('Blue (Cat)')
+  })
+
+  /** An onlooker is not a boat, so she takes none of the colors the boats need. */
+  it('marks an onlooker apart and leaves the palette alone', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('w', watches('Wendy'))
+    race.say('a', joins('Ann'))
+    expect(race.fleet.find((one) => one.id === 'w')?.name).toBe('Watcher (Wendy)')
+    expect(race.fleet.find(isCalled('Ann'))?.name).toBe('Blue (Ann)')
+  })
+
+  it('paints the boat the color it named', () => {
+    const race = regatta()
+    race.say('a', joins('Ann'))
+    expect(race.fleet[0]?.color).toBe('#4fa3dd')
   })
 })

@@ -17,6 +17,18 @@ export const SNAPSHOT_HZ = 20
 /** And how often a client says where her helm is, whether or not it has moved. */
 export const HELM_HZ = 20
 
+/**
+ * How a sailor is known: the color her boat is painted and the word for it.
+ *
+ * A phone has no comfortable way to type a name, so the color is the name. The server
+ * hands one out and tells her which she got, and she is "Blue" to the rest of the fleet
+ * whether or not she ever said who she was.
+ */
+export interface FleetColor {
+  readonly name: string
+  readonly hex: string
+}
+
 export type Role = 'racer' | 'observer'
 export type Phase = 'lobby' | 'racing' | 'results'
 

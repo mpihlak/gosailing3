@@ -31,7 +31,7 @@ import {
 } from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
 import type { Placing } from '@/net'
-import { duel, GAME_PACE, playerSeconds, PLAYER_ID, randomSeed } from './scenario'
+import { DEFAULT_SERVER, duel, GAME_PACE, playerSeconds, PLAYER_ID, randomSeed } from './scenario'
 import { HELM_HZ, OnlineRace } from './online'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
@@ -132,11 +132,16 @@ overlay.addEventListener('pointerup', () => onCardTap?.())
  * A regatta to join, if there is one. Without it the race is sailed here against the
  * computer, which is the game as it was.
  *
- *   index.html?server=ws://localhost:8080&name=Ann
- *   index.html?server=ws://localhost:8080&watch=1
+ *   index.html?network                       the regatta everyone else is in
+ *   index.html?network&name=Ann              and say who you are
+ *   index.html?server=ws://localhost:8080    one of your own, for development
+ *   index.html?network&watch=1               watch rather than sail
+ *
+ * A name is optional on purpose. There is no comfortable way to type one on a phone, so
+ * the server gives every sailor a color and that is what she is called.
  */
 const asked = new URLSearchParams(window.location.search)
-const server = asked.get('server')
+const server = asked.has('network') ? DEFAULT_SERVER : asked.get('server')
 let online: OnlineRace | undefined
 
 if (server) joinRegatta(server, asked.get('name') ?? '', asked.get('watch') !== null)
@@ -147,7 +152,7 @@ function joinRegatta(url: string, name: string, watching: boolean): void {
   const role = watching ? 'observer' : 'racer'
   online = new OnlineRace({
     url,
-    name: name || (watching ? 'Watcher' : 'Sailor'),
+    name,
     role,
     helm: () => helm.rudder,
   })

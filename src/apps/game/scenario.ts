@@ -3,6 +3,7 @@ import type { Meters, Seconds } from '@/foundation/units'
 import { CRUISER_35_SPEC, type BoatId } from '@/domain/boat'
 import { pointAt } from '@/domain/course'
 import type { ScenarioSpec } from '@/sim'
+import type { FleetColor } from '@/net'
 import { PALETTE } from '@/presentation/render'
 
 export const PLAYER_ID = 'player'
@@ -101,19 +102,30 @@ export function regattaRace(
   }
 }
 
-/** Handed out in the order sailors arrive, so no two boats in a full fleet look alike. */
-export const FLEET_COLORS: readonly string[] = [
-  PALETTE.hullBlue,
-  PALETTE.hullRed,
-  PALETTE.hullRival,
-  '#e0a458',
-  '#9d7fd8',
-  '#5fc9b5',
-  '#d67fb0',
-  '#b8c45c',
-  '#6f9bd1',
-  '#cf8b6a',
+/** One for each of the ten boats a race will hold, so no two of them look alike. */
+export const FLEET_COLORS: readonly FleetColor[] = [
+  { name: 'Blue', hex: PALETTE.hullBlue },
+  { name: 'Red', hex: PALETTE.hullRed },
+  { name: 'Silver', hex: PALETTE.hullRival },
+  { name: 'Amber', hex: '#e0a458' },
+  { name: 'Violet', hex: '#9d7fd8' },
+  { name: 'Teal', hex: '#5fc9b5' },
+  { name: 'Rose', hex: '#d67fb0' },
+  { name: 'Olive', hex: '#b8c45c' },
+  { name: 'Azure', hex: '#6f9bd1' },
+  { name: 'Copper', hex: '#cf8b6a' },
 ]
+
+/** Nobody racing is painted this, so an onlooker is never taken for a boat. */
+export const WATCHER_COLOR: FleetColor = { name: 'Watcher', hex: '#9aa7b1' }
+
+/**
+ * The regatta the game joins when it is asked for a networked race and told no more.
+ *
+ * It must be `wss:`, because the page is served over https and a browser will not open a
+ * plain socket from one.
+ */
+export const DEFAULT_SERVER = 'wss://voyager.tail64dd71.ts.net'
 
 export function randomSeed(): string {
   return Math.floor(Math.random() * 1e9).toString(36)

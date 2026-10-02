@@ -13,6 +13,7 @@ import { Skipper } from '@/agents/ai'
 import {
   SNAPSHOT_HZ,
   type Addressed,
+  type FleetColor,
   type ClientMessage,
   type BoatReport,
   type Outcome,
@@ -64,21 +65,29 @@ export interface RegattaOptions {
   readonly seed: () => string
   /** Simulated seconds per second of a player's time. */
   readonly pace: number
-  /** Handed out in the order sailors arrive. */
-  readonly colors: readonly string[]
+  /** Handed out as sailors arrive, one boat to a color. */
+  readonly colors: readonly FleetColor[]
+  /** What an onlooker is marked with, who is not racing and needs no boat color. */
+  readonly watcherColor: FleetColor
   readonly limits?: Partial<RegattaLimits>
 }
 
 interface Entry {
+  /** What the fleet calls her: her color, and the name she gave in brackets after it. */
   readonly name: string
   readonly role: Role
-  readonly color: string
+  readonly color: FleetColor
   /** Set while she is waiting for the race being sailed to end. */
   waiting: boolean
   /** When she was last heard from, in the player's seconds since the server started. */
   heard: Seconds
   rudder: number
   robot?: Skipper
+}
+
+/** Her color, and the name she gave in brackets after it when she gave one. */
+function markedAs(color: FleetColor, given: string): string {
+  return given ? `${color.name} (${given})` : color.name
 }
 
 /**
@@ -122,7 +131,7 @@ export class Regatta {
       id,
       name: entry.name,
       role: entry.role,
-      color: entry.color,
+      color: entry.color.hex,
       waiting: entry.waiting,
     }))
   }
@@ -140,10 +149,11 @@ export class Regatta {
   /** A boat sailed by nobody, for trying the thing out with one human or none. */
   addRobot(name: string): BoatId {
     const id = `robot-${this.entries.size + 1}`
+    const color = this.colorFor('racer')
     this.entries.set(id, {
-      name,
+      name: markedAs(color, name),
       role: 'racer',
-      color: this.colorFor(),
+      color,
       waiting: this.phase !== 'lobby',
       heard: Number.POSITIVE_INFINITY,
       rudder: 0,
@@ -179,10 +189,11 @@ export class Regatta {
     if (this.entries.has(id)) return []
 
     const seated = role === 'racer' && this.racers().length < this.limits.maxRacers
+    const color = this.colorFor(seated ? 'racer' : 'observer')
     const entry: Entry = {
-      name,
+      name: markedAs(color, name),
       role: seated ? 'racer' : 'observer',
-      color: this.colorFor(),
+      color,
       waiting: seated && this.phase !== 'lobby',
       heard: this.now,
       rudder: 0,
@@ -209,9 +220,15 @@ export class Regatta {
     return out
   }
 
-  private colorFor(): string {
-    const { colors } = this.options
-    return colors[this.entries.size % colors.length] ?? '#ffffff'
+  /**
+   * The first color no boat is wearing, so a sailor told she is Blue is the only Blue.
+   * An onlooker is not a boat and takes none of them.
+   */
+  private colorFor(role: Role): FleetColor {
+    const { colors, watcherColor } = this.options
+    if (role === 'observer') return watcherColor
+    const worn = new Set(this.racers().map(([, entry]) => entry.color.hex))
+    return colors.find((color) => !worn.has(color.hex)) ?? watcherColor
   }
 
   private announceFleet(): Addressed {

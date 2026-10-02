@@ -68,7 +68,7 @@ export function read(text: string): ClientMessage | undefined {
         ? message.name.replace(NAME_ALLOWED, '').slice(0, NAME_LIMIT)
         : ''
     const role = message.role === 'observer' ? 'observer' : 'racer'
-    return { kind: 'join', name: name || 'Sailor', role }
+    return { kind: 'join', name, role }
   }
   if (message.kind === 'helm' && typeof message.rudder === 'number') {
     if (!Number.isFinite(message.rudder)) return undefined
