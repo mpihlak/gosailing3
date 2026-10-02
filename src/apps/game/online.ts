@@ -72,6 +72,8 @@ export class OnlineRace {
   watching: BoatId | undefined
   /** What went wrong, if the socket did. */
   trouble: string | undefined
+  /** Whether there is a socket to write to. Nothing is sent before there is. */
+  private connected = false
 
   constructor(private readonly options: OnlineOptions) {}
 
@@ -80,6 +82,7 @@ export class OnlineRace {
     const socket = open(this.options.url)
     this.socket = socket
     socket.addEventListener('open', (() => {
+      this.connected = true
       socket.send(
         JSON.stringify({ kind: 'join', name: this.options.name, role: this.options.role ?? 'racer' }),
       )
@@ -88,22 +91,33 @@ export class OnlineRace {
       this.heard(event.data)
     }) as unknown as (event: never) => void)
     socket.addEventListener('close', (() => {
+      this.connected = false
       this.trouble = 'The connection to the regatta closed.'
     }) as (event: never) => void)
   }
 
   /** Where the helm is. Sent whether or not it has moved: silence means gone. */
   sendHelm(): void {
-    if (this.phase !== 'racing' || this.role !== 'racer') return this.keepAlive()
-    this.socket?.send(JSON.stringify({ kind: 'helm', rudder: this.options.helm() }))
+    const racing = this.phase === 'racing' && this.role === 'racer'
+    // A sailor in the lobby still has to say she is there, so something goes up the wire
+    // either way; only the helm in it differs.
+    this.say({ kind: 'helm', rudder: racing ? this.options.helm() : 0 })
   }
 
-  /** A sailor in the lobby still has to say she is there. */
-  private keepAlive(): void {
-    this.socket?.send(JSON.stringify({ kind: 'helm', rudder: 0 }))
+  /**
+   * Write to the socket, if there is one yet to write to.
+   *
+   * The helm goes up twenty times a second from the moment she asks to join, which is
+   * well before the socket has opened. Sending into one that is still connecting throws,
+   * and a server that never answers made it throw every fifty milliseconds for ever.
+   */
+  private say(message: unknown): void {
+    if (!this.connected) return
+    this.socket?.send(JSON.stringify(message))
   }
 
   leave(): void {
+    this.connected = false
     this.socket?.close()
     this.socket = undefined
   }
