@@ -113,6 +113,7 @@ describe('a race in progress', () => {
 
   it('puts a latecomer in the lobby, and shows her the race', () => {
     const race = started()
+    pastTheGun(race, ['a', 'b'])
     const sent = race.say('c', joins('Cat'))
     expect(transcript(sent)).toEqual(['welcome', 'racing', 'fleet'])
     expect(race.fleet.find((sailor) => sailor.id === 'c')?.waiting).toBe(true)
@@ -144,6 +145,20 @@ function sail(
     if (options.until?.()) break
   }
   return sent
+}
+
+/** The countdown the test course runs, in the player's seconds. */
+const COUNTDOWN = 15
+
+/** Sail until the gun has gone, keeping the named sailors talking so none is dropped. */
+function pastTheGun(race: Regatta, alive: readonly string[] = []): void {
+  sail(race, COUNTDOWN + 2, { alive })
+}
+
+/** When the newest snapshot in a batch was taken, in simulated seconds. */
+function lastSnapshotTime(sent: Addressed[]): number {
+  const found = [...sent].reverse().find((one) => one.message.kind === 'snapshot')?.message
+  return found?.kind === 'snapshot' ? found.time : Number.NaN
 }
 
 function resultsIn(sent: Addressed[]) {
@@ -225,6 +240,7 @@ describe('how a race ends', () => {
     race.addRobot('Rob')
     race.addRobot('Bot')
     race.tick(1)
+    pastTheGun(race)
     race.say('c', joins('Cat'))
     expect(race.fleet.find(isCalled('Cat'))?.waiting).toBe(true)
 
@@ -324,5 +340,56 @@ describe('telling a sailor which boat is hers', () => {
     const race = regatta()
     race.say('a', joins('Ann'))
     expect(race.fleet[0]?.color).toBe('#4fa3dd')
+  })
+})
+
+describe('arriving while the fleet is still manoeuvring', () => {
+  function underStartersOrders() {
+    const race = regatta()
+    race.say('a', joins('Ann'))
+    race.say('b', joins('Bob'))
+    race.tick(1)
+    return race
+  }
+
+  it('takes her into the race rather than making her wait', () => {
+    const race = underStartersOrders()
+    race.say('c', joins('Cat'))
+    expect(race.fleet.find(isCalled('Cat'))?.waiting).toBe(false)
+  })
+
+  it('starts the race again with her in it', () => {
+    const race = underStartersOrders()
+    const sent = race.say('c', joins('Cat'))
+    const racing = sent.find((one) => one.message.kind === 'racing')!.message
+    expect(racing.kind === 'racing' && racing.scenario.boats.map((b) => b.name)).toEqual([
+      'Blue (Ann)',
+      'Red (Bob)',
+      'Green (Cat)',
+    ])
+  })
+
+  /** The clock the fleet is watching is the simulation's, so that is what must go back. */
+  it('puts the countdown back to the top', () => {
+    const race = underStartersOrders()
+    // Most of the countdown is gone before she arrives.
+    const before = sail(race, COUNTDOWN - 2, { alive: ['a', 'b'] })
+    expect(lastSnapshotTime(before)).toBeGreaterThan((COUNTDOWN * PACE) / 2)
+
+    race.say('c', joins('Cat'))
+    const after = sail(race, 0.2, { alive: ['a', 'b', 'c'] })
+    expect(lastSnapshotTime(after)).toBeLessThan(1)
+  })
+
+  /** Once the gun has gone she has missed it, and waits for the next race. */
+  it('leaves her out once the race is under way', () => {
+    const race = underStartersOrders()
+    pastTheGun(race, ['a', 'b'])
+    race.say('c', joins('Cat'))
+
+    expect(race.fleet.find(isCalled('Cat'))?.waiting).toBe(true)
+    const racing = race.say('d', joins('Dan')).find((one) => one.message.kind === 'racing')!.message
+    // She is sent the race in progress to watch, which has only the two boats in it.
+    expect(racing.kind === 'racing' && racing.scenario.boats).toHaveLength(2)
   })
 })

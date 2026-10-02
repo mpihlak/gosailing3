@@ -4,6 +4,7 @@ import {
   createSimulation,
   SimulationRunner,
   raceTime,
+  timeToStart,
   type InputSource,
   type ScenarioSpec,
   type Simulation,
@@ -192,12 +193,14 @@ export class Regatta {
     if (this.entries.has(id)) return []
 
     const seated = role === 'racer' && this.racers().length < this.limits.maxRacers
+    // Nobody has crossed a line yet, so she has missed nothing and can be let in.
+    const inTime = seated && this.beforeTheGun()
     const color = this.colorFor(seated ? 'racer' : 'observer')
     const entry: Entry = {
       name: markedAs(color, name),
       role: seated ? 'racer' : 'observer',
       color,
-      waiting: seated && this.phase !== 'lobby',
+      waiting: seated && this.phase !== 'lobby' && !inTime,
       heard: this.now,
       rudder: 0,
     }
@@ -215,12 +218,24 @@ export class Regatta {
         },
       },
     ]
+
+    // The fleet is still manoeuvring for the line, so the start is made again with her
+    // in it and the clock goes back to the top. Starting her on a countdown already run
+    // down would put her on the line with no time to reach it.
+    if (inTime) return [...out, ...this.startIfReady()]
+
     // A late arrival is shown the race in progress: she waits, but she watches.
     if (this.simulation && this.phase === 'racing') {
       out.push({ to: [id], message: { kind: 'racing', scenario: this.simulation.spec } })
     }
     out.push(this.announceFleet())
     return out
+  }
+
+  /** Whether the race on the water has yet to start. */
+  private beforeTheGun(): boolean {
+    if (this.phase !== 'racing' || !this.runner || !this.simulation) return false
+    return timeToStart(this.simulation.ctx, this.runner.world) > 0
   }
 
   /**
