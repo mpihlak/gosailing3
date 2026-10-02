@@ -64,6 +64,9 @@ const BOOST = 2
  * ground runs 42 to 46. Drawing the laylines at the pointing angle put them where no
  * boat could lay the mark.
  */
+/** The least time between two notices of who is being watched. */
+const WATCHING_NOTICE_GAP = 3000
+
 const LAYLINE_ANGLE = 45
 
 /** How to sail her, written once so no two cards can drift apart. */
@@ -116,6 +119,9 @@ let measuredAt = ''
  */
 let latest: WorldState
 let watching: BoatId = PLAYER_ID
+/** The boat a sailor with none of her own was last told she is watching. */
+let following: BoatId | undefined
+let followingSince = 0
 
 const helm = new Helm({ onCommand: handleCommand })
 helm.attach(canvas)
@@ -379,7 +385,9 @@ function takeFromRegatta(timestamp: number): boolean {
   if (!race) return false
 
   if (race.phase !== 'racing' || !race.simulation) {
-    if (race.phase === 'results' && race.results) showRegattaResults(race.results)
+    if (race.phase === 'results' && race.results) {
+      showRegattaResults(race.results, race.secondsToNextRace(timestamp))
+    }
     else showLobby()
     return false
   }
@@ -387,11 +395,24 @@ function takeFromRegatta(timestamp: number): boolean {
   const drawn = race.frameAt(timestamp)
   if (!drawn) return false
 
+  /*
+   * Whose boat the view sits on. Her own, when she has one in the water: an onlooker
+   * never does, and neither does a sailor who arrived while this race was already being
+   * sailed and is waiting for the next. Both of those follow whoever is leading.
+   *
+   * Asking for her own boat regardless is what put a late third sailor in front of a
+   * blank screen: the camera went to a boat that was not in the race, and every frame
+   * threw before it drew anything.
+   */
+  const own = race.watching
+  const hasBoat = own !== undefined && drawn.boats.some((boat) => boat.id === own)
+  const follow = hasBoat ? own : standings(race.simulation.ctx, drawn)[0]?.boatId
+  if (!follow) return false
+
   const fresh = simulation !== race.simulation
   simulation = race.simulation
   latest = drawn
-  // An observer has no boat of her own, so she is shown whoever is leading.
-  watching = race.watching ?? standings(simulation.ctx, drawn)[0]?.boatId ?? ''
+  watching = follow
 
   if (fresh) {
     trails = new TrailStore()
@@ -408,7 +429,10 @@ function takeFromRegatta(timestamp: number): boolean {
     camera = createCamera(surface.viewport, mine?.position ?? vec(0, 0), METERS_ACROSS, boatFloor())
     hideOverlay()
     running = true
+    following = undefined
   }
+
+  if (!hasBoat) noteFollowing(follow, race.role === 'observer', timestamp)
 
   /*
    * The banners are made from what the race did, and what it did comes down the wire with
@@ -436,8 +460,27 @@ function stylesFromFleet(race: OnlineRace): Record<string, BoatStyle> {
   )
 }
 
+/**
+ * Tell whoever has no boat in this race what she is looking at.
+ *
+ * The view follows the leader and the lead changes hands, so it is said again when it
+ * does — but not twice in a breath, or a pair swapping places down a run would say
+ * nothing else.
+ */
+function noteFollowing(boatId: BoatId, spectating: boolean, timestamp: number): void {
+  if (boatId === following) return
+  if (following !== undefined && timestamp - followingSince < WATCHING_NOTICE_GAP) return
+  following = boatId
+  followingSince = timestamp
+  const name = simulation.names[boatId] ?? boatId
+  hud.showBanner(
+    spectating ? `Watching the leader, ${name}` : `In the next race — watching ${name}`,
+    'info',
+  )
+}
+
 /** The finishing order as the server scored it, which is not always by crossing a line. */
-function showRegattaResults(places: readonly Placing[]): void {
+function showRegattaResults(places: readonly Placing[], startsIn: number | undefined): void {
   const rows = places
     .map((one) => {
       const how =
@@ -446,9 +489,16 @@ function showRegattaResults(places: readonly Placing[]): void {
       return `<tr${mine}><td>${escapeHtml(one.place ?? '')}</td><td>${escapeHtml(one.name)}</td><td>${how}</td></tr>`
     })
     .join('')
-  showOverlay('Results', `<table class="results">${rows}</table><p>The next race is coming.</p>`, () =>
+  showOverlay('Results', `<table class="results">${rows}</table>${comingUp(startsIn)}`, () =>
     undefined,
   )
+}
+
+/** The wait before the next race, counted down, so nobody is left wondering. */
+function comingUp(startsIn: number | undefined): string {
+  if (startsIn === undefined) return '<p>The next race is coming.</p>'
+  if (startsIn <= 0) return '<p>The next race is starting.</p>'
+  return `<p>The next race is coming in <b class="count">${startsIn}</b></p>`
 }
 
 function updateInstruments(player: BoatState, windSpeed: number): void {
