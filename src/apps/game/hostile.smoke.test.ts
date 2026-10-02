@@ -58,6 +58,8 @@ describe('a page pointed at a hostile server', () => {
       ],
     })
     page.frame(16)
+    // Past the moment that holds her colour up, which is the first card she sees.
+    page.frame(1600)
 
     const overlay = document.querySelector('#overlay')!
     expect(overlay.querySelector('img')).toBeNull()
@@ -71,7 +73,7 @@ describe('a page pointed at a hostile server', () => {
       kind: 'results',
       places: [{ boatId: POISON, name: POISON, outcome: 'finished', place: POISON, elapsed: 12 }],
     })
-    page.frame(32)
+    page.frame(2000)
 
     expect(document.querySelector('#overlay')!.querySelector('img')).toBeNull()
     expect(document.title).not.toBe('pwned')

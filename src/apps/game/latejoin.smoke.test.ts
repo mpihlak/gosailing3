@@ -45,7 +45,15 @@ class FakeSocket {
 /** Two boats on the water, far enough apart to be ranked. */
 const boatsAt = (y: number) => [
   { id: 'c1', position: { x: 0, y }, heading: 0, speed: 6, twa: 45, tack: 'starboard', trim: 1 },
-  { id: 'c2', position: { x: 20, y: y - 30 }, heading: 0, speed: 6, twa: 45, tack: 'starboard', trim: 1 },
+  {
+    id: 'c2',
+    position: { x: 20, y: y - 30 },
+    heading: 0,
+    speed: 6,
+    twa: 45,
+    tack: 'starboard',
+    trim: 1,
+  },
 ]
 
 let page: { frame: (at: number) => boolean }
@@ -76,7 +84,9 @@ beforeAll(async () => {
   page.frame(100)
   socket.says({ kind: 'snapshot', time: 10.05, boats: boatsAt(106), events: [] })
   page.frame(200)
-  page.frame(300)
+  // Her colour is held up for a second before the regatta reaches the screen.
+  page.frame(1400)
+  page.frame(1500)
 })
 
 describe('arriving while a race is on', () => {
@@ -108,14 +118,14 @@ describe('the controls that cannot apply to a regatta', () => {
 
   it('does not put a Paused card over a race that is still running', () => {
     press(' ')
-    page.frame(400)
+    page.frame(1600)
     expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')
     expect(bannerText()).toContain('cannot be paused')
   })
 
   it('stays in the regatta when the restart key is pressed', () => {
     press('r')
-    page.frame(500)
+    page.frame(1700)
     expect(bannerText()).toContain('host')
     // Still drawing the boats the server sent, not a race of its own.
     const roster = document.querySelector('#standings')?.textContent ?? ''

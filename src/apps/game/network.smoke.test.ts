@@ -58,9 +58,34 @@ describe('joining with ?network', () => {
       you: 'me',
       role: 'racer',
       phase: 'lobby',
-      fleet: [{ id: 'me', name: 'Blue (Ann)', role: 'racer', color: '#4fa3dd', waiting: false }],
+      fleet: [
+        {
+          id: 'me',
+          name: 'Blue (Ann)',
+          role: 'racer',
+          color: '#4fa3dd',
+          waiting: false,
+          host: true,
+        },
+      ],
     })
     page.frame(16)
     expect(overlayText()).toContain('Blue (Ann)')
+  })
+
+  /*
+   * A sailor on a phone never typed a name, so the colour is the only thing telling her
+   * which of the boats on the water is hers. She is shown it before anything else.
+   */
+  it('holds her colour up before the regatta reaches the screen', () => {
+    expect(overlayText()).toContain('You are')
+    expect(overlayText()).toContain('Blue (Ann)')
+    expect(document.querySelector<HTMLElement>('.yours')?.style.color).toBe('#4fa3dd')
+  })
+
+  it('moves on to the regatta once the moment has passed', () => {
+    page.frame(1200)
+    expect(overlayText()).not.toContain('You are')
+    expect(overlayText()).toContain('Waiting for another boat')
   })
 })

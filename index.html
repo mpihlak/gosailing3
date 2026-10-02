@@ -275,6 +275,20 @@
       #host button:active {
         background: var(--edge);
       }
+      /* A toggle has to say which way it is set; the others are one-shot and do not. */
+      #host button[data-on='true'] {
+        color: var(--good);
+        border-color: var(--good);
+      }
+      #host button[data-on='false'] {
+        color: var(--dim);
+      }
+      /* What boat she has been given, before anything else is on the screen. */
+      .card .yours {
+        font-size: 30px;
+        font-weight: 700;
+        margin: 6px 0 0;
+      }
 
       [data-banner][data-visible='true'] { opacity: 1; }
       [data-banner][data-tone='warn'] { color: var(--warn); }
@@ -399,6 +413,8 @@
       </div>
       <div data-banner data-visible="false"></div>
       <div id="host" data-visible="false">
+        <button type="button" data-command="toggleShadows">Shadows</button>
+        <button type="button" data-command="toggleLaylines">Laylines</button>
         <button type="button" data-command="endRace">End race</button>
         <button type="button" data-command="restart">Restart</button>
       </div>

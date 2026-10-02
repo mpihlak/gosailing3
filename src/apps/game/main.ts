@@ -79,6 +79,16 @@ const CONTROLS = BY_TOUCH
      <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>H</b> or <b>?</b> these keys
      <br />Hold <b>Shift</b> to watch the race run on`
 
+/** The same list, less what a race on a server has no answer for. */
+const REGATTA_CONTROLS = BY_TOUCH
+  ? `Pull the <b>tiller</b> at the foot of the screen to steer — hold it over and she
+     keeps turning, let go and it centres.
+     <br />The race is sailed on the server, so there is nothing here to pause.`
+  : `<b>← →</b> or <b>A D</b> steer · <b>W</b> wind shadows · <b>L</b> laylines
+     <br /><b>H</b> or <b>?</b> these keys
+     <br />The race is sailed on the server: it cannot be paused or hurried, and the
+     host is the one who ends it or starts another.`
+
 const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hullBlue, trail: PALETTE.trailBlue, trailWidth: 2 }
 
 /** Colors for the boats the player is racing against, handed out in order. */
@@ -120,6 +130,11 @@ let measuredAt = ''
  */
 let latest: WorldState
 let watching: BoatId = PLAYER_ID
+/** How long her colour is held up before the regatta is shown at all. */
+const GREETING = 1000
+/** When she was told which boat is hers, so it is told once and only once. */
+let greetedAt: number | undefined
+
 /** The boat a sailor with none of her own was last told she is watching. */
 let following: BoatId | undefined
 let followingSince = 0
@@ -166,10 +181,12 @@ function joinRegatta(url: string, name: string, watching: boolean): void {
   })
   online.join()
   hostControls.addEventListener('click', (event) => {
-    const button = (event.target as HTMLElement).closest('button')
-    const command = button?.dataset.command
-    if (command === 'endRace' || command === 'restart') online?.order(command)
+    const command = (event.target as HTMLElement).closest('button')?.dataset.command
+    if (command === 'endRace' || command === 'restart') return online?.order(command)
+    if (command === 'toggleShadows' || command === 'toggleLaylines') handleCommand(command)
   })
+  // The toggles carry their setting from the start, not only once one is tapped.
+  paintViewToggles()
   // On its own clock rather than the frame's: a tab that stops drawing still has to say
   // it is there, and silence is how the server decides a sailor has gone.
   window.setInterval(() => online?.sendHelm(), 1000 / HELM_HZ)
@@ -179,6 +196,16 @@ function joinRegatta(url: string, name: string, watching: boolean): void {
 /** The host's buttons belong on the water, where there is a race to cut short. */
 function showHostControls(visible: boolean): void {
   hostControls.dataset.visible = visible ? 'true' : 'false'
+}
+
+/** Which way the two view aids are set, since a button says nothing by being tapped. */
+function paintViewToggles(): void {
+  const mark = (command: string, on: boolean) => {
+    const button = hostControls.querySelector<HTMLElement>(`[data-command="${command}"]`)
+    if (button) button.dataset.on = on ? 'true' : 'false'
+  }
+  mark('toggleShadows', showShadows)
+  mark('toggleLaylines', showLaylines)
 }
 
 /** What the card says while there is no race to draw. */
@@ -283,7 +310,7 @@ function handleCommand(command: HelmCommand): void {
   if (command === 'help') {
     // Online the card is the only thing to put away, since there is no race here to
     // carry on with. Dismissing through toggleRun would leave it stuck on the screen.
-    showOverlay('Controls', `<p>${CONTROLS}</p>`, () =>
+    showOverlay('Controls', `<p>${online ? REGATTA_CONTROLS : CONTROLS}</p>`, () =>
       online ? hideOverlay() : handleCommand('toggleRun'),
     )
     if (!online) running = false
@@ -291,16 +318,20 @@ function handleCommand(command: HelmCommand): void {
   if (command === 'toggleShadows') {
     showShadows = !showShadows
     hud.showBanner(`Wind shadows ${showShadows ? 'on' : 'off'}`, 'info', 1400)
+    paintViewToggles()
   }
   if (command === 'toggleLaylines') {
     showLaylines = !showLaylines
     hud.showBanner(`Laylines ${showLaylines ? 'on' : 'off'}`, 'info', 1400)
+    paintViewToggles()
   }
 }
 
 /** The rate the player is watching at: her own, or doubled while she holds the key. */
 function watchRate(): number {
-  return helm.boost ? BOOST : 1
+  // A regatta runs at the server's pace. Nothing here can hurry it, so the key that
+  // hurries a race at home is left out rather than reported as doing something.
+  return helm.boost && !online ? BOOST : 1
 }
 
 /**
@@ -351,7 +382,7 @@ function drawFrame(timestamp: number): void {
   const elapsed = lastFrame === 0 ? 0 : (timestamp - lastFrame) / 1000
   lastFrame = timestamp
 
-  if (helm.boost !== boosting) {
+  if (!online && helm.boost !== boosting) {
     boosting = helm.boost
     hud.showBanner(`Watching at ${formatRate(watchRate())}`, 'info', 1200)
   }
@@ -418,6 +449,23 @@ function drawFrame(timestamp: number): void {
 function takeFromRegatta(timestamp: number): boolean {
   const race = online
   if (!race) return false
+
+  /*
+   * Which boat is hers, before anything else reaches the screen. A sailor on a phone
+   * never typed a name, so the colour is the only thing telling her which of the boats
+   * on the water to steer, and she should not have to find it in a list.
+   */
+  const hers = race.fleet.find((sailor) => sailor.id === race.you)
+  if (hers && greetedAt === undefined) {
+    greetedAt = timestamp
+    const paint = cssColor(hers.color)
+    showOverlay(
+      'You are',
+      `<p class="yours"${paint ? ` style="color: ${paint}"` : ''}>${escapeHtml(hers.name)}</p>`,
+      () => undefined,
+    )
+  }
+  if (greetedAt !== undefined && timestamp - greetedAt < GREETING) return false
 
   if (race.phase !== 'racing' || !race.simulation) {
     showHostControls(false)
