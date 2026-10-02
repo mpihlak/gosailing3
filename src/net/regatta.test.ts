@@ -119,7 +119,6 @@ describe('a race in progress', () => {
   })
 })
 
-
 /**
  * Sail the regatta forward, keeping the named sailors talking so they are not taken for
  * gone. Robots need no helm and are never silent.
@@ -224,5 +223,60 @@ describe('how a race ends', () => {
     sail(race, 400, { alive: ['c'], until: () => race.state === 'results' })
     sail(race, 5, { alive: ['c'], until: () => race.state === 'racing' })
     expect(race.fleet.find((sailor) => sailor.name === 'Cat')?.waiting).toBe(false)
+  })
+})
+
+describe('holding the gate', () => {
+  /*
+   * Every join tells the whole fleet, so a client repeating it turns one frame into as
+   * many as there are sailors. Measured before this was closed: two thousand joins from
+   * one connection produced twelve thousand messages to six onlookers.
+   */
+  it('answers a connection that joins twice with nothing', () => {
+    const race = regatta()
+    race.say('a', joins('Ann'))
+    expect(transcript(race.say('a', joins('Ann')))).toEqual([])
+    expect(transcript(race.say('a', joins('Someone')))).toEqual([])
+    expect(race.fleet).toHaveLength(1)
+  })
+
+  it('keeps the name she joined under when she tries for another', () => {
+    const race = regatta()
+    race.say('a', joins('Ann'))
+    race.say('a', joins('Bob'))
+    expect(race.fleet[0]?.name).toBe('Ann')
+  })
+
+  it('seats the racers it will sail and watches the rest', () => {
+    const race = regatta({ maxRacers: 3, fleetSize: 10 })
+    for (const id of ['a', 'b', 'c', 'd', 'e']) race.say(id, joins(id))
+
+    const roles = race.fleet.map((sailor) => sailor.role)
+    expect(roles).toEqual(['racer', 'racer', 'racer', 'observer', 'observer'])
+  })
+
+  it('tells the one it turned back that she is watching', () => {
+    const race = regatta({ maxRacers: 1, fleetSize: 10 })
+    race.say('a', joins('Ann'))
+    const welcome = race.say('b', joins('Bob'))[0]!.message
+    expect(welcome).toMatchObject({ kind: 'welcome', role: 'observer' })
+  })
+
+  it('never sails more boats than it seats', () => {
+    const race = regatta({ maxRacers: 2 })
+    for (const id of ['a', 'b', 'c', 'd']) race.say(id, joins(id))
+    const racing = race.tick(1).find((one) => one.message.kind === 'racing')!.message
+    expect(racing.kind === 'racing' && racing.scenario.boats).toHaveLength(2)
+  })
+
+  it('lets a seat go to the next arrival once it is given up', () => {
+    const race = regatta({ maxRacers: 1, fleetSize: 10 })
+    race.say('a', joins('Ann'))
+    race.say('b', joins('Bob'))
+    expect(race.fleet[1]?.role).toBe('observer')
+
+    race.leave('a')
+    race.say('c', joins('Cat'))
+    expect(race.fleet.find((sailor) => sailor.id === 'c')?.role).toBe('racer')
   })
 })

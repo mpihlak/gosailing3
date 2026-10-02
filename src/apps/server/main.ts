@@ -44,8 +44,15 @@ const web = createServer((request, response) => {
   response.end(JSON.stringify({ ok: true, phase: regatta.state, sailors: regatta.fleet.length }))
 })
 
+/**
+ * A sailor sends two kinds of message and the larger is a join carrying a twenty
+ * character name, so nothing legitimate comes near this. Left at the library's default a
+ * single connection could hand us hundred megabyte frames to hold and parse.
+ */
+const MAX_FRAME = 1024
+
 let connections = 0
-const server = new WebSocketServer({ server: web })
+const server = new WebSocketServer({ server: web, maxPayload: MAX_FRAME })
 
 server.on('connection', (socket) => {
   const id = `c${++connections}`

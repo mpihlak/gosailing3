@@ -32,11 +32,16 @@ beforeEach(() => {
   sessions = new Sessions(regatta(), (to, text) => written.push({ to, message: JSON.parse(text) }))
 })
 
-const kindsFor = (id: string) => written.filter((one) => one.to === id).map((one) => one.message.kind)
+const kindsFor = (id: string) =>
+  written.filter((one) => one.to === id).map((one) => one.message.kind)
 
 describe('reading what arrives', () => {
   it('takes a join and a helm', () => {
-    expect(read('{"kind":"join","name":"Ann"}')).toEqual({ kind: 'join', name: 'Ann', role: 'racer' })
+    expect(read('{"kind":"join","name":"Ann"}')).toEqual({
+      kind: 'join',
+      name: 'Ann',
+      role: 'racer',
+    })
     expect(read('{"kind":"helm","rudder":0.5}')).toEqual({ kind: 'helm', rudder: 0.5 })
   })
 
@@ -61,6 +66,29 @@ describe('reading what arrives', () => {
     expect(long?.kind === 'join' && long.name.length).toBe(20)
     expect(read('{"kind":"join","name":"   "}')).toMatchObject({ name: 'Sailor' })
     expect(read('{"kind":"join"}')).toMatchObject({ name: 'Sailor' })
+  })
+
+  /*
+   * A name goes out to the whole fleet and onto boards built by interpolating into
+   * `innerHTML`. Letters and digits cannot close a tag or open an attribute, and the
+   * twenty character limit is no defence on its own: `<svg onload=alert()>` is twenty.
+   */
+  it('keeps only letters and digits in a name', () => {
+    const cases: [string, string][] = [
+      ['<svg onload=alert()>', 'svgonloadalert'],
+      ['Ann', 'Ann'],
+      ["Ann O'Brien", 'AnnOBrien'],
+      ['<script>x</script>', 'scriptxscript'],
+      ['\u0000\u0007bad', 'bad'],
+      ['drop\ttabs and\nnewlines', 'droptabsandnewlines'],
+    ]
+    for (const [sent, kept] of cases) {
+      expect(read(JSON.stringify({ kind: 'join', name: sent }))).toMatchObject({ name: kept })
+    }
+  })
+
+  it('falls back to a name when nothing of one survives', () => {
+    expect(read('{"kind":"join","name":"<>!@#"}')).toMatchObject({ name: 'Sailor' })
   })
 })
 

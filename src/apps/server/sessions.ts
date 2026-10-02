@@ -5,6 +5,17 @@ import type { Addressed, ClientMessage, Regatta } from '@/net'
 const NAME_LIMIT = 20
 
 /**
+ * Letters and digits, and nothing else.
+ *
+ * A name is the one string a sailor chooses, and it goes out to the whole fleet to be put
+ * on their boards. Those are built by interpolating into `innerHTML`, where `<svg
+ * onload=alert()>` is twenty characters and runs. Taking the markup out of the name here
+ * leaves nothing to interpolate; the boards escape it as well, because a page can be
+ * pointed at a server that does not.
+ */
+const NAME_ALLOWED = /[^A-Za-z0-9]/g
+
+/**
  * Everything between a socket and the regatta: reading what arrives, deciding what it
  * meant, and handing back the lines to write.
  *
@@ -52,7 +63,10 @@ export function read(text: string): ClientMessage | undefined {
   const message = parsed as Record<string, unknown>
 
   if (message.kind === 'join') {
-    const name = typeof message.name === 'string' ? message.name.trim().slice(0, NAME_LIMIT) : ''
+    const name =
+      typeof message.name === 'string'
+        ? message.name.replace(NAME_ALLOWED, '').slice(0, NAME_LIMIT)
+        : ''
     const role = message.role === 'observer' ? 'observer' : 'racer'
     return { kind: 'join', name: name || 'Sailor', role }
   }

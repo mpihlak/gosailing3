@@ -26,6 +26,12 @@ import {
 export interface RegattaLimits {
   /** Racers wanted before a race starts. */
   readonly fleetSize: number
+  /**
+   * And the most that will ever sail one. Whoever arrives after that is seated as an
+   * observer: she sees the racing and is told what she is, rather than being turned away
+   * at a door that cannot explain itself.
+   */
+  readonly maxRacers: number
   /** What the rest of the fleet gets after the winner, as a fraction of her time. */
   readonly timeLimitFraction: number
   /**
@@ -45,6 +51,7 @@ export interface RegattaLimits {
 
 const DEFAULTS: RegattaLimits = {
   fleetSize: 2,
+  maxRacers: 10,
   timeLimitFraction: 0.3,
   abandonAfter: 600,
   idleAfter: 10,
@@ -166,18 +173,33 @@ export class Regatta {
   }
 
   private join(id: BoatId, name: string, role: Role): Addressed[] {
+    // One join to a connection. A second is ignored rather than answered, because every
+    // join tells the whole fleet and a client repeating it turns one frame into as many
+    // as there are sailors.
+    if (this.entries.has(id)) return []
+
+    const seated = role === 'racer' && this.racers().length < this.limits.maxRacers
     const entry: Entry = {
       name,
-      role,
+      role: seated ? 'racer' : 'observer',
       color: this.colorFor(),
-      waiting: role === 'racer' && this.phase !== 'lobby',
+      waiting: seated && this.phase !== 'lobby',
       heard: this.now,
       rudder: 0,
     }
     this.entries.set(id, entry)
 
     const out: Addressed[] = [
-      { to: [id], message: { kind: 'welcome', you: id, role, phase: this.phase, fleet: this.fleet } },
+      {
+        to: [id],
+        message: {
+          kind: 'welcome',
+          you: id,
+          role: entry.role,
+          phase: this.phase,
+          fleet: this.fleet,
+        },
+      },
     ]
     // A late arrival is shown the race in progress: she waits, but she watches.
     if (this.simulation && this.phase === 'racing') {
@@ -208,8 +230,12 @@ export class Regatta {
     return gone.flatMap((id) => this.leave(id))
   }
 
+  private racers(): [BoatId, Entry][] {
+    return [...this.entries].filter(([, entry]) => entry.role === 'racer')
+  }
+
   private startIfReady(): Addressed[] {
-    const racers = [...this.entries].filter(([, entry]) => entry.role === 'racer')
+    const racers = this.racers()
     if (racers.length < this.limits.fleetSize) return []
 
     const spec = this.options.race(

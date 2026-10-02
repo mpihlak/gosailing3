@@ -1,6 +1,7 @@
 import type { BoatId } from '@/domain/boat'
 import type { Knots } from '@/foundation/units'
 import type { Standing } from '@/sim'
+import { escapeHtml } from './text'
 
 /** What the board shows about a boat beyond where she lies in the fleet. */
 export interface CrewReading {
@@ -57,7 +58,7 @@ export class StandingsBoard {
 
     this.root.innerHTML = standings
       .map((standing) => {
-        const name = this.names[standing.boatId] ?? standing.boatId
+        const name = escapeHtml(this.names[standing.boatId] ?? standing.boatId)
         const says = reading[standing.boatId]?.doing ?? ''
         const classes = [
           'crew',

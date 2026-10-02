@@ -20,6 +20,7 @@ import { Helm, Tiller, type HelmCommand } from '@/presentation/input'
 import { formatRate } from '@/presentation/view/timescale'
 import {
   clock,
+  escapeHtml,
   Hud,
   OCS,
   StandingsBoard,
@@ -166,7 +167,7 @@ function showLobby(): void {
     .map((sailor) => {
       const mine = sailor.id === race.you ? ' — you' : ''
       const waiting = sailor.waiting ? ' (next race)' : ''
-      return `<b style="color: ${sailor.color}">${sailor.name}</b>${mine}${waiting}`
+      return `<b style="color: ${sailor.color}">${escapeHtml(sailor.name)}</b>${mine}${waiting}`
     })
     .join('<br />')
 
@@ -597,7 +598,7 @@ function showResults(): void {
     .map((boatId) => {
       const progress = race.progress[boatId]
       const elapsed = playerSeconds(progress?.finishTime ?? 0)
-      const name = simulation.names[boatId] ?? boatId
+      const name = escapeHtml(simulation.names[boatId] ?? boatId)
       const color = styles[boatId]?.hull ?? ''
       const mine = boatId === watching ? ' class="mine"' : ''
       return `<tr${mine}><td>${progress?.place ?? ''}</td><td style="color: ${color}">${name}</td><td>${timing(elapsed)}</td></tr>`

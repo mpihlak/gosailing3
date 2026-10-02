@@ -101,7 +101,7 @@ export function regattaRace(
   }
 }
 
-/** Handed out in the order sailors arrive, so no two boats look alike. */
+/** Handed out in the order sailors arrive, so no two boats in a full fleet look alike. */
 export const FLEET_COLORS: readonly string[] = [
   PALETTE.hullBlue,
   PALETTE.hullRed,
@@ -111,6 +111,8 @@ export const FLEET_COLORS: readonly string[] = [
   '#5fc9b5',
   '#d67fb0',
   '#b8c45c',
+  '#6f9bd1',
+  '#cf8b6a',
 ]
 
 export function randomSeed(): string {
