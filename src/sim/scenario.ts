@@ -1,4 +1,12 @@
-import { lerpVec, scale, sub, add, vectorToBearing, type Vec2 } from '@/foundation/geom'
+import {
+  lerpVec,
+  normalizeBearing,
+  scale,
+  sub,
+  add,
+  vectorToBearing,
+  type Vec2,
+} from '@/foundation/geom'
 import type { Degrees, Knots, Seconds } from '@/foundation/units'
 import { CRUISER_35_SPEC, spawnBoat, type BoatId, type BoatSpec, type BoatState } from '@/domain/boat'
 import { windwardLeeward, lineMidpoint, type Course, type WindwardLeewardOptions } from '@/domain/course'
@@ -120,22 +128,43 @@ interface Berth {
  * Where the fleet waits for the gun: spread along the line and a little to leeward of
  * it, reaching along it the way a fleet mills about before a start.
  */
+/** How far to leeward of the line the fleet waits, and how the ranks are spaced. */
+const BERTH_BEHIND = 70
+const RANKS = 3
+const RANK_SPACING = 15
+/**
+ * How much of the line a fleet spreads over: this much for each boat after the first,
+ * up to most of it. A pair put out at the two ends would barely meet before the gun.
+ */
+const SPREAD_PER_BOAT = 0.18
+const WIDEST_SPREAD = 0.7
+
 function startingBerths(course: Course, count: number): Berth[] {
   const startStage = course.stages.find((stage) => stage.kind === 'start')
   if (startStage?.kind !== 'start') return []
   const { line } = startStage
 
   const alongLine = vectorToBearing(sub(line.to, line.from))
-  const behindLine = scale(line.normal, -70)
   const midpoint = lineMidpoint(line)
 
   return Array.from({ length: count }, (_, index) => {
-    // Spread across the middle of the line, leaving the ends free.
-    const spread = count === 1 ? 0.5 : 0.25 + (index / Math.max(1, count - 1)) * 0.5
+    // Spread about the middle of the line, leaving the ends free.
+    const band = Math.min(WIDEST_SPREAD, SPREAD_PER_BOAT * (count - 1))
+    const spread = count === 1 ? 0.5 : 0.5 - band / 2 + (index / (count - 1)) * band
     const onLine = lerpVec(line.from, line.to, spread)
-    return {
-      position: add(count === 1 ? midpoint : onLine, behindLine),
-      heading: alongLine,
-    }
+    /*
+     * Three ranks rather than one, so a fleet waiting for the gun is a loose cloud and
+     * not a parade. The stagger is small and evens out across the fleet: a boat put a
+     * long way further back would be starting the race already behind.
+     */
+    const rank = ((index % RANKS) - 1) * RANK_SPACING
+    const berth = add(count === 1 ? midpoint : onLine, scale(line.normal, -(BERTH_BEHIND + rank)))
+    /*
+     * Those nearer the pin reach down towards it and those nearer the committee boat up
+     * towards that, so the fleet opens out instead of converging. Pointing them all the
+     * same way lined them up like a rank of soldiers; pointing neighbours at each other
+     * would have them trading paint before the countdown had run.
+     */
+    return { position: berth, heading: normalizeBearing(alongLine + (spread < 0.5 ? 180 : 0)) }
   })
 }

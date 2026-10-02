@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { angleDelta, distance } from '@/foundation/geom'
-import { CRUISER_35_SPEC, tackOf } from '@/domain/boat'
+import { CRUISER_35_SPEC, hullCentreline, hullRadius, tackOf, type BoatState } from '@/domain/boat'
+import { detectContacts } from '@/domain/collision'
 import { pointAt } from '@/domain/course'
 import { Skipper } from '@/agents/ai'
 import { createSimulation, runHeadless, timeToStart } from '@/sim'
-import { COUNTDOWN, duel, GAME_PACE, OPPONENT_ID, PLAYER_ID } from './scenario'
+import { COUNTDOWN, duel, GAME_PACE, OPPONENT_ID, PLAYER_ID, regattaRace } from './scenario'
 
 /**
  * The game runs its simulation faster than real time and divides every clock back down,
@@ -143,5 +144,59 @@ describe('the race finishing', () => {
     })
     expect(world.race.progress[PLAYER_ID]?.status).toBe('finished')
     expect(world.race.phase).not.toBe('complete')
+  })
+})
+
+describe('where a regatta fleet waits for the gun', () => {
+  const sailors = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({ id: `c${index}`, name: `S${index}` }))
+
+  const fleet = (count: number) =>
+    createSimulation(regattaRace('berths', sailors(count))).world.boats
+
+  const hulls = (boats: readonly BoatState[]) =>
+    boats.map((boat) => ({
+      id: boat.id,
+      centreline: hullCentreline(boat, CRUISER_35_SPEC),
+      radius: hullRadius(CRUISER_35_SPEC),
+    }))
+
+  const closestPair = (boats: readonly BoatState[]) => {
+    const gaps = boats.flatMap((boat, index) =>
+      boats.slice(index + 1).map((other) => distance(boat.position, other.position)),
+    )
+    return Math.min(...gaps)
+  }
+
+  /*
+   * Pointing a whole fleet the same way lined it up like a rank of soldiers. They now
+   * lie in three ranks and face both ways along the line: those nearer the pin reach
+   * down towards it and those nearer the committee boat up towards that.
+   */
+  it('faces them both ways along the line, never all one way', () => {
+    for (const count of [2, 3, 5, 10]) {
+      const headings = new Set(fleet(count).map((boat) => Math.round(boat.heading)))
+      expect(headings.size).toBe(2)
+    }
+  })
+
+  it('lies them in more than one rank', () => {
+    const behind = new Set(fleet(6).map((boat) => Math.round(boat.position.y)))
+    expect(behind.size).toBeGreaterThan(1)
+  })
+
+  it('starts nobody touching anybody, however many turn up', () => {
+    for (const count of [2, 3, 5, 8, 10]) {
+      expect(detectContacts({ boats: hulls(fleet(count)) })).toEqual([])
+    }
+  })
+
+  /** A pair put out at the two ends would barely meet before the gun. */
+  it('keeps a small fleet close enough to mix', () => {
+    expect(closestPair(fleet(2))).toBeLessThan(60)
+  })
+
+  it('still fits a full fleet in with room between the boats', () => {
+    expect(closestPair(fleet(10))).toBeGreaterThan(CRUISER_35_SPEC.length * 2)
   })
 })
