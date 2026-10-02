@@ -366,9 +366,16 @@ export class Regatta {
     this.pending.push(...runner.advance(dt * pace, this.helms(), 0.25 * pace))
 
     const out: Addressed[] = []
+    const interval = 1 / SNAPSHOT_HZ
     this.sinceSnapshot += dt
-    if (this.sinceSnapshot >= 1 / SNAPSHOT_HZ) {
-      this.sinceSnapshot = 0
+    if (this.sinceSnapshot >= interval) {
+      /*
+       * The remainder is carried rather than thrown away, and capped so a stall cannot
+       * make it burst afterwards. Zeroing it rounded the rate up to a whole number of
+       * ticks: at thirty a second that is two sixty-hertz ticks or three, it took three,
+       * and asking for thirty delivered twenty.
+       */
+      this.sinceSnapshot = Math.min(this.sinceSnapshot - interval, interval)
       const { boats, time } = runner.world
       const race = this.report()
       const written = JSON.stringify(race)

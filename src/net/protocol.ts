@@ -12,9 +12,18 @@ import type { BoatStatus, ScenarioSpec, TimedEvent } from '@/sim'
  * nothing to show for it.
  */
 
-/** How often the server sends the fleet, in messages per second of the player's time. */
-export const SNAPSHOT_HZ = 20
-/** And how often a client says where her helm is, whether or not it has moved. */
+/**
+ * How often the server sends the fleet, in messages per second of the player's time.
+ *
+ * The fleet is drawn one message behind, so this sets the delay between a boat moving
+ * and the move being on screen as well as the size of the stream. Thirty costs about
+ * half as much again on the wire and takes seventeen milliseconds off that delay.
+ */
+export const SNAPSHOT_HZ = 30
+/**
+ * The slowest a client says where her helm is. She says so the moment it moves as well:
+ * this is the floor that tells the server she is still there.
+ */
 export const HELM_HZ = 20
 
 /**

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { vec } from '@/foundation/geom'
 import type { ScenarioSpec } from '@/sim'
 import { Regatta, type RegattaLimits } from './regatta'
-import type { Addressed, ServerMessage } from './protocol'
+import { SNAPSHOT_HZ, type Addressed, type ServerMessage } from './protocol'
 
 /** The pace the game is played at, so the limits below read in the player's seconds. */
 const PACE = 4
@@ -98,8 +98,11 @@ describe('a race in progress', () => {
 
   it('sends the fleet at the rate it says it will', () => {
     const race = started()
-    const sent = [...Array(20)].flatMap(() => race.tick(1 / 20))
-    expect(sent.filter((one) => one.message.kind === 'snapshot')).toHaveLength(20)
+    // A second of it, stepped finer than the rate, so the count is the rate itself.
+    const sent = [...Array(60)].flatMap(() => race.tick(1 / 60))
+    const snapshots = sent.filter((one) => one.message.kind === 'snapshot').length
+    expect(snapshots).toBeGreaterThanOrEqual(SNAPSHOT_HZ - 1)
+    expect(snapshots).toBeLessThanOrEqual(SNAPSHOT_HZ)
   })
 
   it('sends the scenario once and the boats thereafter', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { vec } from '@/foundation/geom'
 import type { ScenarioSpec } from '@/sim'
-import type { ServerMessage } from '@/net'
+import { HELM_HZ, SNAPSHOT_HZ, type ServerMessage } from '@/net'
 import { OnlineRace, type Socket } from './online'
 
 const SCENARIO: ScenarioSpec = {
@@ -98,6 +98,67 @@ describe('joining', () => {
     expect(JSON.parse(socket.sent[0]!)).toEqual({ kind: 'helm', rudder: 0 })
   })
 
+  /*
+   * The helm is asked for every frame and sent the moment it moves. Waiting for a fixed
+   * cadence cost twenty-five milliseconds on average, on a message of thirty bytes.
+   */
+  describe('saying where the helm is', () => {
+    const helms = () => socket.sent.map((text) => JSON.parse(text)).filter((m) => m.kind === 'helm')
+
+    beforeEach(() => {
+      socket.open()
+      socket.say({ kind: 'racing', scenario: SCENARIO })
+      socket.say({ kind: 'welcome', you: 'c1', role: 'racer', phase: 'racing', fleet: [] })
+      socket.sent = []
+    })
+
+    it('goes the moment the tiller moves, without waiting for the beat', () => {
+      race.sendHelm()
+      socket.sent = []
+      clock += 1
+      rudder = 0.4
+      race.sendHelm()
+      expect(helms()).toEqual([{ kind: 'helm', rudder: 0.4 }])
+    })
+
+    it('falls back to the slow beat for a tiller held still', () => {
+      race.sendHelm()
+      socket.sent = []
+      // A second of frames with nobody touching the helm.
+      const frames = 60
+      for (let frame = 0; frame < frames; frame++) {
+        clock += 1000 / 60
+        race.sendHelm()
+      }
+      /*
+       * The beat, not one message a frame. It is not exactly HELM_HZ: three frames of
+       * 16.667ms fall a hair short of the 50ms it waits for, so it slips to four. That
+       * is well inside the ten seconds of silence the server allows.
+       */
+      expect(helms().length).toBeGreaterThanOrEqual(HELM_HZ / 2)
+      expect(helms().length).toBeLessThanOrEqual(HELM_HZ)
+      expect(helms().length).toBeLessThan(frames / 2)
+    })
+
+    it('still speaks up on the beat when nothing has moved', () => {
+      race.sendHelm()
+      socket.sent = []
+      clock += 1000 / HELM_HZ + 1
+      race.sendHelm()
+      expect(helms()).toHaveLength(1)
+    })
+
+    it('ignores a hair of movement, which is a thumb and not a course change', () => {
+      rudder = 0.4
+      race.sendHelm()
+      socket.sent = []
+      clock += 1
+      rudder = 0.4005
+      race.sendHelm()
+      expect(helms()).toEqual([])
+    })
+  })
+
   it('sends the helm once the race is on', () => {
     socket.open()
     socket.say({ kind: 'racing', scenario: SCENARIO })
@@ -118,20 +179,21 @@ describe('drawing what the server says', () => {
     expect(race.frameAt(0)).toBeUndefined()
   })
 
-  /** Two snapshots, fifty milliseconds apart, arriving when they say they do. */
+  /** One snapshot interval apart, arriving when they say they do. */
+  const GAP = 1000 / SNAPSHOT_HZ
   const twoSnapshots = () => {
     clock = 0
     socket.say({ kind: 'snapshot', time: 1, boats: boatsAt(0), events: [] })
-    clock = 50
+    clock = GAP
     socket.say({ kind: 'snapshot', time: 1.05, boats: boatsAt(10), events: [] })
   }
 
   it('slides the fleet between the last two, rather than jumping', () => {
     twoSnapshots()
-    // Drawn one message behind, so a hundred on the clock is the newest of the two.
-    expect(race.frameAt(50)?.boats[0]?.position.x).toBeCloseTo(0)
-    expect(race.frameAt(75)?.boats[0]?.position.x).toBeCloseTo(5)
-    expect(race.frameAt(100)?.boats[0]?.position.x).toBeCloseTo(10)
+    // Drawn one message behind, so two intervals on the clock is the newer of the two.
+    expect(race.frameAt(GAP)?.boats[0]?.position.x).toBeCloseTo(0)
+    expect(race.frameAt(GAP * 1.5)?.boats[0]?.position.x).toBeCloseTo(5)
+    expect(race.frameAt(GAP * 2)?.boats[0]?.position.x).toBeCloseTo(10)
   })
 
   it('holds on the last one rather than running ahead of it', () => {

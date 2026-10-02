@@ -187,8 +187,8 @@ function joinRegatta(url: string, name: string, watching: boolean): void {
   })
   // The toggles carry their setting from the start, not only once one is tapped.
   paintViewToggles()
-  // On its own clock rather than the frame's: a tab that stops drawing still has to say
-  // it is there, and silence is how the server decides a sailor has gone.
+  // A tab that has stopped drawing gets no frames, and silence is how the server decides
+  // a sailor has gone. This keeps her alive; the frame loop is what makes her quick.
   window.setInterval(() => online?.sendHelm(), 1000 / HELM_HZ)
   showLobby()
 }
@@ -360,6 +360,9 @@ function measurePanels(width: number, height: number): void {
  */
 function frame(timestamp: number): void {
   try {
+    // Before drawing, so a tiller that has just moved is on its way while this frame is
+    // still being painted. It sends only when the helm has moved or the beat is due.
+    online?.sendHelm()
     drawFrame(timestamp)
   } catch (trouble) {
     console.error(trouble)

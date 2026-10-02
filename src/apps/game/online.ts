@@ -48,6 +48,12 @@ export interface OnlineOptions {
 const PLAYBACK_DELAY = 1000 / SNAPSHOT_HZ
 
 /**
+ * How far the helm must move before it is worth a message of its own. A tiller under a
+ * thumb changes by a hair every frame, and a hair does not steer a boat.
+ */
+const HELM_STEP = 0.01
+
+/**
  * A seat in the regatta.
  *
  * The server sails the race and says where the boats are twenty times a second. Between
@@ -77,6 +83,10 @@ export class OnlineRace {
   trouble: string | undefined
   /** Whether there is a socket to write to. Nothing is sent before there is. */
   private connected = false
+  /** The helm as the server last heard it, and when, so a still tiller is not resent. */
+  private lastRudder = 0
+  /** Far enough back that the first helm after joining goes out at once. */
+  private lastHelmAt = Number.NEGATIVE_INFINITY
 
   /** Whether the regatta answers to this page, which is what shows the host's buttons. */
   get hosting(): boolean {
@@ -104,12 +114,24 @@ export class OnlineRace {
     }) as (event: never) => void)
   }
 
-  /** Where the helm is. Sent whether or not it has moved: silence means gone. */
+  /**
+   * Where the helm is.
+   *
+   * Called every frame, and sent the moment the tiller moves rather than waiting for the
+   * next turn of a fixed cadence: waiting cost twenty-five milliseconds on average for
+   * nothing, on a message of thirty bytes. When it has not moved this falls back to the
+   * slow beat, because silence is how the server decides a sailor has gone.
+   */
   sendHelm(): void {
     const racing = this.phase === 'racing' && this.role === 'racer'
-    // A sailor in the lobby still has to say she is there, so something goes up the wire
-    // either way; only the helm in it differs.
-    this.say({ kind: 'helm', rudder: racing ? this.options.helm() : 0 })
+    // A sailor in the lobby still has to say she is there; only the helm in it differs.
+    const rudder = racing ? this.options.helm() : 0
+    const at = this.clock()
+    const moved = Math.abs(rudder - this.lastRudder) >= HELM_STEP
+    if (!moved && at - this.lastHelmAt < 1000 / HELM_HZ) return
+    this.lastRudder = rudder
+    this.lastHelmAt = at
+    this.say({ kind: 'helm', rudder })
   }
 
   /**
