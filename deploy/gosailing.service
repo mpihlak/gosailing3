@@ -1,0 +1,19 @@
+[Unit]
+Description=Go Sailing regatta server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/gosailing
+Environment=PORT=8080
+# An absolute path, written by deploy.sh. Node is installed through nvm, which puts
+# nothing on the PATH systemd sees.
+ExecStart=@NODE@ %h/gosailing/main.js
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

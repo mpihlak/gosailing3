@@ -1,3 +1,4 @@
+import { createServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { Regatta } from '@/net'
 import { FLEET_COLORS, GAME_PACE, randomSeed, regattaRace } from '@/apps/game/scenario'
@@ -29,8 +30,22 @@ const sessions = new Sessions(regatta, (id, text) => {
   if (socket?.readyState === socket?.OPEN) socket?.send(text)
 })
 
+/**
+ * Sailors arrive over a websocket, but the port answers plain HTTP as well, so a deploy
+ * can ask whether the thing came up and the tunnel in front of it has something to talk
+ * to besides an upgrade.
+ */
+const web = createServer((request, response) => {
+  if (request.url !== '/health') {
+    response.writeHead(404)
+    return response.end()
+  }
+  response.writeHead(200, { 'content-type': 'application/json' })
+  response.end(JSON.stringify({ ok: true, phase: regatta.state, sailors: regatta.fleet.length }))
+})
+
 let connections = 0
-const server = new WebSocketServer({ port: PORT })
+const server = new WebSocketServer({ server: web })
 
 server.on('connection', (socket) => {
   const id = `c${++connections}`
@@ -51,4 +66,4 @@ setInterval(() => {
   sessions.tick(elapsed)
 }, 1000 / TICK_HZ)
 
-console.log(`regatta on ws://localhost:${PORT}`)
+web.listen(PORT, () => console.log(`regatta on ws://localhost:${PORT}`))
