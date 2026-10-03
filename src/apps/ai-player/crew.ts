@@ -1,4 +1,10 @@
-import { boatEndStarboardStart, pinEndPortStart, Skipper } from '@/agents/ai'
+import {
+  boatEndStarboardStart,
+  personalityFor,
+  pinEndPortStart,
+  Skipper,
+  type Personality,
+} from '@/agents/ai'
 import { standings, type Simulation } from '@/sim'
 import { OnlineRace, type Socket } from '@/net'
 
@@ -100,9 +106,17 @@ export class Robot {
     return `${place?.place ?? '-'}${leg} ${boat.speed.toFixed(1)}kn${owed}`
   }
 
+  /** Her own way of sailing, which follows her name from race to race. */
+  get personality(): Personality {
+    return personalityFor(this.options.name)
+  }
+
   private freshSkipper(): Skipper {
-    const start = this.options.end === 'committee' ? boatEndStarboardStart() : pinEndPortStart()
-    return new Skipper({ start })
+    const { personality } = this
+    const options = { clearance: personality.startClearance }
+    const start =
+      this.options.end === 'committee' ? boatEndStarboardStart(options) : pinEndPortStart(options)
+    return new Skipper({ start, personality })
   }
 
   private rudder(): number {

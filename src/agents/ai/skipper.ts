@@ -2,12 +2,15 @@ import type { BoatId, BoatInput } from '@/domain/boat'
 import { specFor, type InputSource, type SimContext, type WorldState } from '@/sim'
 import { rudderToHold } from './helm'
 import { planCourse, type NavigationPlan, type Spin } from './navigator'
+import { PLAIN, type Personality } from './personality'
 import { pinEndPortStart, type StartPhase, type StartStrategy } from './start'
 
 export interface SkipperOptions {
   /** How she goes about starting. Different boats can be given different ideas. */
   readonly start?: StartStrategy
   readonly degreesForFullRudder?: number
+  /** How she sails where the course leaves room for taste. */
+  readonly personality?: Personality
 }
 
 /**
@@ -23,6 +26,7 @@ export class Skipper implements InputSource {
 
   private readonly start: StartStrategy
   private readonly degreesForFullRudder: number
+  private readonly personality: Personality
   /**
    * The way she is going round a turn she owes, and how many she owed when she began.
    * Held between ticks because the direction cannot be decided afresh each time: see
@@ -33,6 +37,7 @@ export class Skipper implements InputSource {
   constructor(options: SkipperOptions = {}) {
     this.start = options.start ?? pinEndPortStart()
     this.degreesForFullRudder = options.degreesForFullRudder ?? 12
+    this.personality = options.personality ?? PLAIN
   }
 
   inputFor(boatId: BoatId, world: WorldState, ctx: SimContext): BoatInput {
@@ -47,7 +52,16 @@ export class Skipper implements InputSource {
     const owed = world.race.progress[boatId]?.penalties ?? 0
     if (owed === 0 || this.spin?.owed !== owed) this.spin = undefined
 
-    const plan = planCourse(ctx, world, boat, spec, wind, this.start, this.spin?.way)
+    const plan = planCourse(
+      ctx,
+      world,
+      boat,
+      spec,
+      wind,
+      this.start,
+      this.spin?.way,
+      this.personality,
+    )
     if (plan.spin) this.spin = { way: plan.spin, owed }
     this.lastPlan = plan
     this.lastStartPhase = plan.startPhase

@@ -27,6 +27,7 @@ import {
 } from '@/domain/course'
 import type { WindSample } from '@/domain/wind'
 import { raceTime, type SimContext, type WorldState } from '@/sim'
+import { PLAIN, type Personality } from './personality'
 import type { StartPhase, StartStrategy } from './start'
 
 /**
@@ -35,11 +36,11 @@ import type { StartPhase, StartStrategy } from './start'
  */
 const ROUNDING_OFFSET: Meters = 24
 /**
- * How far off the direct line the boat may stray before it tacks back, as a fraction of
- * the distance still to run. A cone rather than a fixed width: long tacks early, short
- * ones near the mark, which is how the leg is actually sailed.
+ * How far off the direct line the boat may stray before it tacks back is a fraction of
+ * the distance still to run, which each skipper chooses for herself. A cone rather than a
+ * fixed width: long tacks early, short ones near the mark, which is how the leg is
+ * actually sailed. These bound it.
  */
-const CORRIDOR_FRACTION = 0.42
 const CORRIDOR_MIN: Meters = 35
 const CORRIDOR_MAX: Meters = 320
 /**
@@ -103,6 +104,7 @@ export function planCourse(
    * two turns sailed off the course at four knots doing that, and timed out.
    */
   spinning: Spin | undefined,
+  personality: Personality = PLAIN,
 ): NavigationPlan {
   const progress = world.race.progress[boat.id]
   const stage = progress && ctx.course.stages[progress.stageIndex]
@@ -159,7 +161,9 @@ export function planCourse(
     })
     return { bearing: plan.bearing, reason: 'starting', startPhase: plan.phase }
   }
-  if (stage.kind === 'mark') return planMark(boat, spec, wind, stage, progress.passedMark)
+  if (stage.kind === 'mark') {
+    return planMark(boat, spec, wind, stage, progress.passedMark, personality)
+  }
   /*
    * Each boat makes for the part of the line straight ahead of her, not one point on it:
    * a fleet aimed at the middle arrives there together. A boat that still owes turns
@@ -167,8 +171,8 @@ export function planCourse(
    * there rather than circling on the line in everybody's way.
    */
   const ahead = closestPointOnSegment(insetLine(stage.line, spec), boat.position)
-  if (progress.penalties === 0) return planFor(boat, spec, wind, ahead, 'running')
-  return planFor(boat, spec, wind, standOff(world, boat, stage.line, ahead), 'running')
+  const target = progress.penalties === 0 ? ahead : standOff(world, boat, stage.line, ahead)
+  return planFor(boat, spec, wind, target, 'running', personality)
 }
 
 /** Short of the line, and along it away from the nearest boat if she is close. */
@@ -241,6 +245,7 @@ function planMark(
   wind: WindSample,
   stage: Extract<CourseStage, { kind: 'mark' }>,
   passedMark: boolean,
+  personality: Personality,
 ): NavigationPlan {
   const { mark, approach } = stage
   const clearingSide = approach + (mark.rounding === 'port' ? 90 : -90)
@@ -270,7 +275,7 @@ function planMark(
       ? offMark(-ROUNDING_OFFSET, ROUNDING_OFFSET * 1.3) // cross over, well clear to windward
       : offMark(-ROUNDING_OFFSET, -ROUNDING_OFFSET * 4) // away onto the next leg
 
-  const plan = planFor(boat, spec, wind, target, 'beating')
+  const plan = planFor(boat, spec, wind, target, 'beating', personality)
   return distance(boat.position, mark.position) < ROUNDING_OFFSET * 6
     ? { ...plan, reason: 'rounding' }
     : plan
@@ -287,6 +292,7 @@ function planFor(
   wind: WindSample,
   destination: Vec2,
   reason: NavigationPlan['reason'],
+  personality: Personality = PLAIN,
 ): NavigationPlan {
   const toDestination = sub(destination, boat.position)
   const direct = vectorToBearing(toDestination)
@@ -294,21 +300,30 @@ function planFor(
   const beatAngle = spec.polar.beatAngle(wind.speed)
   const runAngle = spec.polar.runAngle(wind.speed)
 
+  // Standing on past the layline is a choice: she keeps beating until the mark is that
+  // much further off the wind than she can point.
   const sailingAngle =
-    Math.abs(twaDirect) < beatAngle ? beatAngle : Math.abs(twaDirect) > runAngle ? runAngle : null
+    Math.abs(twaDirect) < beatAngle + personality.overstand
+      ? beatAngle
+      : Math.abs(twaDirect) > runAngle
+        ? runAngle
+        : null
 
   // Close enough to lay it: point at it and stop thinking.
   if (sailingAngle === null) return { bearing: direct, reason: reason === 'holding' ? reason : 'fetching' }
 
   // Hold the current tack until the boat strays outside the corridor, then take the one
   // that works back toward the direct line. Port tack carries you east of it, starboard
-  // west, whether the leg is a beat or a run.
+  // west, whether the leg is a beat or a run. A skipper who favors a side has more room
+  // on it and less on the other.
   const offset = crossTrack(boat.position, destination, direct)
   const corridor = Math.min(
     CORRIDOR_MAX,
-    Math.max(CORRIDOR_MIN, Math.hypot(toDestination.x, toDestination.y) * CORRIDOR_FRACTION),
+    Math.max(CORRIDOR_MIN, Math.hypot(toDestination.x, toDestination.y) * personality.corridor),
   )
-  const onPort = Math.abs(offset) > corridor ? offset < 0 : boat.twa >= 0
+  const east = corridor * (1 + personality.eastward)
+  const west = corridor * (1 - personality.eastward)
+  const onPort = offset > east ? false : offset < -west ? true : boat.twa >= 0
 
   return {
     bearing: normalizeBearing(wind.direction + (onPort ? sailingAngle : -sailingAngle)),

@@ -1,4 +1,5 @@
 import { crewName, Robot } from './crew'
+import { describePersonality } from '@/agents/ai'
 
 /**
  * Sailors who are not people, for trying the online game without finding opponents.
@@ -34,6 +35,7 @@ const crew = Array.from({ length: count }, (_, index) => {
 console.log(
   `${count} sailing at ${url}: ${crew.map((robot) => `${robot.name} (${robot.end})`).join(', ')}`,
 )
+for (const robot of crew) say(robot.name, describePersonality(robot.personality))
 
 for (const [index, robot] of crew.entries()) {
   setTimeout(() => {
