@@ -353,3 +353,49 @@ describe('when it ends', () => {
     expect(race.trouble).toContain('closed')
   })
 })
+
+/*
+ * A boat whose sailor has gone keeps sailing: the server hands her a helm amidships and
+ * she holds her last heading. Two robots did exactly that for forty seconds, dead
+ * straight to the horizon, while the one human left wondered what they were doing.
+ */
+describe('noticing that somebody has gone', () => {
+  const crew = (...names: string[]) =>
+    names.map((name) => ({
+      id: name,
+      name,
+      colorName: name,
+      role: 'racer' as const,
+      color: '#4fa3dd',
+      waiting: false,
+      host: false,
+    }))
+
+  const fleet = (...names: string[]) =>
+    socket.say({ kind: 'fleet', phase: 'racing', fleet: crew(...names) })
+
+  it('says nothing about a fleet that has only grown', () => {
+    fleet('Ann')
+    fleet('Ann', 'Bob')
+    expect(race.takeDepartures()).toEqual([])
+  })
+
+  it('names whoever is no longer in it', () => {
+    fleet('Ann', 'Bob', 'Cat')
+    fleet('Ann')
+    expect(race.takeDepartures().map((one) => one.name)).toEqual(['Bob', 'Cat'])
+  })
+
+  it('says it once', () => {
+    fleet('Ann', 'Bob')
+    fleet('Ann')
+    expect(race.takeDepartures()).toHaveLength(1)
+    expect(race.takeDepartures()).toEqual([])
+  })
+
+  it('keeps the fleet it was given', () => {
+    fleet('Ann', 'Bob')
+    fleet('Ann')
+    expect(race.fleet.map((one) => one.name)).toEqual(['Ann'])
+  })
+})

@@ -68,6 +68,8 @@ export class OnlineRace {
   private report: RaceReport = {}
   /** What the race has done since anyone last asked: the banners are made from these. */
   private events: TimedEvent[] = []
+  /** Sailors who have gone since anyone last asked. */
+  private departed: Sailor[] = []
 
   simulation: Simulation | undefined
   you: BoatId | undefined
@@ -171,6 +173,26 @@ export class OnlineRace {
     return Math.max(0, Math.ceil((this.nextRaceAt - now) / 1000))
   }
 
+  /**
+   * Take the fleet as it now stands, noting who is no longer in it.
+   *
+   * A boat whose sailor has gone keeps sailing: the server hands her a helm amidships,
+   * so she holds her last heading and stands off towards the horizon. Anyone watching
+   * deserves to be told why, rather than left to wonder what she is up to.
+   */
+  private muster(fleet: readonly Sailor[]): void {
+    const still = new Set(fleet.map((sailor) => sailor.id))
+    this.departed.push(...this.fleet.filter((sailor) => !still.has(sailor.id)))
+    this.fleet = fleet
+  }
+
+  /** Who has gone since this was last called. */
+  takeDepartures(): readonly Sailor[] {
+    const since = this.departed
+    this.departed = []
+    return since
+  }
+
   /** Everything the race has done since this was last called. */
   takeEvents(): readonly TimedEvent[] {
     const since = this.events
@@ -208,11 +230,11 @@ export class OnlineRace {
         this.role = message.role
         this.watching = message.role === 'racer' ? message.you : undefined
         this.phase = message.phase
-        this.fleet = message.fleet
+        this.muster(message.fleet)
         return
       case 'fleet':
         this.phase = message.phase
-        this.fleet = message.fleet
+        this.muster(message.fleet)
         return
       case 'racing':
         this.simulation = createSimulation(message.scenario)

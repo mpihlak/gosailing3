@@ -192,6 +192,17 @@ function joinRegatta(url: string, name: string, watching: boolean): void {
   showLobby()
 }
 
+/**
+ * Who has left, said once each. Her boat does not vanish with her — the server sails it
+ * on with the helm amidships, so it stands off in a straight line — and without this the
+ * only clue is a rival behaving very oddly.
+ */
+function sayWhoHasGone(race: OnlineRace): void {
+  for (const sailor of race.takeDepartures()) {
+    hud.showBanner(`${sailor.name} left the race`, 'warn', 2600)
+  }
+}
+
 /** The host's buttons belong on the water, where there is a race to cut short. */
 function showHostControls(visible: boolean): void {
   hostControls.dataset.visible = visible ? 'true' : 'false'
@@ -473,6 +484,7 @@ function takeFromRegatta(timestamp: number): boolean {
   if (greetedAt !== undefined && timestamp - greetedAt < GREETING) return false
 
   if (race.phase !== 'racing' || !race.simulation) {
+    sayWhoHasGone(race)
     showHostControls(false)
     if (race.phase === 'results' && race.results) {
       showRegattaResults(race.results, race.secondsToNextRace(timestamp))
@@ -523,6 +535,7 @@ function takeFromRegatta(timestamp: number): boolean {
 
   if (!hasBoat) noteFollowing(follow, race.role === 'observer', timestamp)
   showHostControls(race.hosting)
+  sayWhoHasGone(race)
 
   /*
    * The banners are made from what the race did, and what it did comes down the wire with

@@ -144,3 +144,39 @@ describe('the controls that cannot apply to a regatta', () => {
     expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')
   })
 })
+
+/*
+ * The boat of a sailor who has gone keeps sailing in a straight line, because the server
+ * hands her a helm amidships. Without a word about it the only clue is a rival behaving
+ * very strangely indeed.
+ */
+describe('when a rival disappears', () => {
+  it('says who left', () => {
+    const socket = sockets[0]!
+    socket.says({
+      kind: 'fleet',
+      phase: 'racing',
+      fleet: [
+        {
+          id: 'c1',
+          name: 'Ann',
+          colorName: 'Blue',
+          role: 'racer',
+          color: '#4fa3dd',
+          waiting: false,
+        },
+        {
+          id: WHO,
+          name: 'Cat',
+          colorName: 'Silver',
+          role: 'racer',
+          color: '#9fb6c6',
+          waiting: true,
+        },
+      ],
+    })
+    page.frame(3000)
+    expect(bannerText()).toContain('Bob')
+    expect(bannerText()).toContain('left')
+  })
+})

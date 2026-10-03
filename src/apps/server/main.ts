@@ -125,9 +125,12 @@ server.on('connection', (socket) => {
   // The ping carries the time it left, so the pong brings it back and nothing is held.
   socket.on('pong', (stamp) => latency.record(id, performance.now() - Number(stamp)))
   socket.on('close', () => {
+    // Her name while there still is one: leaving takes her out of the fleet.
+    const who = regatta.fleet.find((sailor) => sailor.id === id)?.name
     sockets.delete(id)
     latency.forget(id)
     sessions.closed(id)
+    if (who) console.log(`left ${who}`)
   })
   socket.on('error', () => socket.close())
 })
