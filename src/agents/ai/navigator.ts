@@ -54,7 +54,12 @@ export interface NavigationPlan {
     | 'holding'
   /** Set while a start strategy is in charge, for the lab and the tests to read. */
   readonly startPhase?: StartPhase
+  /** Which way she is spinning, while she is paying off a turn. */
+  readonly spin?: Spin
 }
+
+/** Which way round a penalty turn goes: clockwise, or the other way. */
+export type Spin = 1 | -1
 
 /*
  * TODO: she knows nothing of wind shadows. She will sail into another boat's dirty air
@@ -75,6 +80,14 @@ export function planCourse(
   spec: BoatSpec,
   wind: WindSample,
   start: StartStrategy,
+  /**
+   * The way she was already going round, if she was. Held by the skipper between ticks
+   * because the way out of a turn cannot be decided afresh every tick: taken from her
+   * tack, it flips several times a second when she is near dead downwind, and she is
+   * then ordered to turn both ways at once and goes straight on instead. A boat owing
+   * two turns sailed off the course at four knots doing that, and timed out.
+   */
+  spinning: Spin | undefined,
 ): NavigationPlan {
   const progress = world.race.progress[boat.id]
   const stage = progress && ctx.course.stages[progress.stageIndex]
@@ -85,8 +98,13 @@ export function planCourse(
    * opponent's penalty cancels yours, and a turn spent early is a chance thrown away.
    * They come due on the last leg, because she may not finish owing any.
    */
-  const direction = progress.penaltyTurn?.direction ?? (tackOf(boat.twa) === 'port' ? 1 : -1)
+  const direction: Spin =
+    progress.penaltyTurn?.direction ?? spinning ?? (tackOf(boat.twa) === 'port' ? 1 : -1)
   /*
+   * Turns are paid off as soon as there is water to do it in, rather than saved up: a
+   * boat shadowed the whole way down the last leg never finds the room, arrives at the
+   * line still owing them and is turned away from her own finish.
+   *
    * Room is asked for every tick, not only on the tick she begins. The simulation opens a
    * turn on any rotation while she owes one, so a mark rounding opens it for her, and
    * treating an open turn as a decision already taken had her commit to a circle ten
@@ -96,11 +114,15 @@ export function planCourse(
    */
   if (
     progress.penalties > 0 &&
-    stage.kind === 'finish' &&
+    progress.status === 'racing' &&
     roomToSpin(ctx, world, boat, spec, direction)
   ) {
     // Aiming a quarter turn ahead keeps the helm hard over all the way round.
-    return { bearing: normalizeBearing(boat.heading + direction * 90), reason: 'penalty' }
+    return {
+      bearing: normalizeBearing(boat.heading + direction * 90),
+      reason: 'penalty',
+      spin: direction,
+    }
   }
 
   /*

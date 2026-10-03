@@ -199,8 +199,11 @@ function payingTurns(seed: string, penalties: number, rival = false) {
   let closestToMark = Infinity
   let beganTurnAt: number | undefined
 
+  // One skipper a boat for the whole race, as there is on the water. Making a new one
+  // every tick threw away what she was in the middle of, which is how she sails.
+  const helms = Object.fromEntries(runner.world.boats.map((boat) => [boat.id, new Skipper()]))
+
   for (let tick = 0; tick < 60 * 60 * 25; tick++) {
-    const helms = Object.fromEntries(runner.world.boats.map((boat) => [boat.id, new Skipper()]))
     const events = runner.advance(1 / 60, helms, 10)
     const boat = runner.world.boats.find((other) => other.id === 'ai')
     const turning = runner.world.race.progress.ai?.penaltyTurn !== undefined

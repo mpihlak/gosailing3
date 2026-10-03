@@ -1,7 +1,7 @@
 import type { BoatId, BoatInput } from '@/domain/boat'
 import { specFor, type InputSource, type SimContext, type WorldState } from '@/sim'
 import { rudderToHold } from './helm'
-import { planCourse, type NavigationPlan } from './navigator'
+import { planCourse, type NavigationPlan, type Spin } from './navigator'
 import { pinEndPortStart, type StartPhase, type StartStrategy } from './start'
 
 export interface SkipperOptions {
@@ -23,6 +23,12 @@ export class Skipper implements InputSource {
 
   private readonly start: StartStrategy
   private readonly degreesForFullRudder: number
+  /**
+   * The way she is going round a turn she owes, and how many she owed when she began.
+   * Held between ticks because the direction cannot be decided afresh each time: see
+   * the note in planCourse.
+   */
+  private spin: { readonly way: Spin; readonly owed: number } | undefined
 
   constructor(options: SkipperOptions = {}) {
     this.start = options.start ?? pinEndPortStart()
@@ -35,7 +41,14 @@ export class Skipper implements InputSource {
 
     const spec = specFor(ctx, boatId)
     const wind = ctx.wind.sample(boat.position, world.time)
-    const plan = planCourse(ctx, world, boat, spec, wind, this.start)
+
+    // One turn, one direction. A turn paid off leaves a different number owing, which
+    // is when she is free to choose again.
+    const owed = world.race.progress[boatId]?.penalties ?? 0
+    if (owed === 0 || this.spin?.owed !== owed) this.spin = undefined
+
+    const plan = planCourse(ctx, world, boat, spec, wind, this.start, this.spin?.way)
+    if (plan.spin) this.spin = { way: plan.spin, owed }
     this.lastPlan = plan
     this.lastStartPhase = plan.startPhase
 
