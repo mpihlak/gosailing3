@@ -10,25 +10,51 @@ npm install
 npm run dev      # http://localhost:5173
 ```
 
-| Command | What it does |
-|---|---|
-| `npm run dev` | Development server |
-| `npm run build` | Typecheck and build to `dist/` |
-| `npm test` | Run the tests |
-| `npm run test:watch` | Run them as you edit |
-| `npm run lint` | Lint, including the architecture rules |
-| `npm run format` | Format |
+| Command              | What it does                                |
+| -------------------- | ------------------------------------------- |
+| `npm run dev`        | Development server                          |
+| `npm run build`      | Typecheck and build to `dist/`              |
+| `npm test`           | Run the tests                               |
+| `npm run test:watch` | Run them as you edit                        |
+| `npm run lint`       | Lint, including the architecture rules      |
+| `npm run format`     | Format                                      |
+| `npm run server`     | The regatta server, on port 8080            |
+| `npm run ai-player`  | Sailors who are not people, to race against |
+
+## Racing against nobody
+
+Opponents are not always to hand, so the game ships sailors who are not people. They
+join a server over a socket like anyone else and steer by the messages it sends them —
+no privileged view of the water, and the same lag a player has.
+
+```sh
+npm run server                                  # somewhere to race
+npm run ai-player -- ws://localhost:8080 --count 2
+```
+
+Two of them will start a race between themselves, which is enough to watch one sail. Add
+yourself with `?server=ws://localhost:8080` and one of them is opponent enough. They say
+what they are doing as they go:
+
+```
+11:13:47 Ann      2 leg 1+ 5.9kn
+11:13:47 Bob      1 leg 1+ 6.6kn
+11:14:37 Ann      2 leg 2 3.4kn 2 owed
+```
+
+Place, which leg they are on, `+` once they are round its mark, speed, and the turns they
+owe. `--name` prefixes them if you want to tell two fleets apart.
 
 ## Playing
 
-| Key | Action |
-|---|---|
-| ← → or A D | Steer |
-| Space | Start the countdown, and pause |
-| R | A new race, with a new wind |
-| W | Show or hide the wind shadows |
-| L | Show or hide the laylines |
-| H | Controls |
+| Key        | Action                         |
+| ---------- | ------------------------------ |
+| ← → or A D | Steer                          |
+| Space      | Start the countdown, and pause |
+| R          | A new race, with a new wind    |
+| W          | Show or hide the wind shadows  |
+| L          | Show or hide the laylines      |
+| H          | Controls                       |
 
 On a phone, pull the tiller at the foot of the screen to steer — hold it over and she
 keeps turning, let go and it centres. Tap the water to stop and carry on, and tap the card

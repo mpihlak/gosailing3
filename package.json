@@ -14,7 +14,9 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "build:server": "vite build --config vite.server.config.ts",
-    "server": "npm run build:server && node dist-server/main.js"
+    "server": "npm run build:server && node dist-server/main.js",
+    "build:ai": "vite build --config vite.ai.config.ts",
+    "ai-player": "npm run build:ai && node dist-ai/main.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

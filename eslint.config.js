@@ -62,7 +62,7 @@ const purity = {
 }
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'dist-server/**', 'coverage/**', 'node_modules/**'] },
+  { ignores: ['dist/**', 'dist-server/**', 'dist-ai/**', 'coverage/**', 'node_modules/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
