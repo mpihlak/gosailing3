@@ -61,7 +61,8 @@ describe('joining with ?network', () => {
       fleet: [
         {
           id: 'me',
-          name: 'Blue (Ann)',
+          name: 'Ann',
+          colorName: 'Blue',
           role: 'racer',
           color: '#4fa3dd',
           waiting: false,
@@ -70,7 +71,7 @@ describe('joining with ?network', () => {
       ],
     })
     page.frame(16)
-    expect(overlayText()).toContain('Blue (Ann)')
+    expect(overlayText()).toContain('Ann')
   })
 
   /*
@@ -79,8 +80,10 @@ describe('joining with ?network', () => {
    */
   it('holds her colour up before the regatta reaches the screen', () => {
     expect(overlayText()).toContain('You are')
-    expect(overlayText()).toContain('Blue (Ann)')
+    // Her colour, painted in it, with her own name under it. The one place both belong.
+    expect(document.querySelector('.yours')?.textContent).toBe('Blue')
     expect(document.querySelector<HTMLElement>('.yours')?.style.color).toBe('#4fa3dd')
+    expect(document.querySelector('.also')?.textContent).toBe('Ann')
   })
 
   it('moves on to the regatta once the moment has passed', () => {

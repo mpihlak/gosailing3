@@ -15,8 +15,8 @@ const SCENARIO = {
   name: 'test',
   seed: 'seed',
   boats: [
-    { id: 'c1', name: 'Blue (Ann)', controller: 'human' },
-    { id: 'c2', name: 'Red (Bob)', controller: 'human' },
+    { id: 'c1', name: 'Ann', controller: 'human' },
+    { id: 'c2', name: 'Bob', controller: 'human' },
   ],
   course: { legLength: 200, lineLength: 120, startCenter: { x: 0, y: 0 } },
   wind: { direction: 0, speed: 12 },
@@ -73,9 +73,9 @@ beforeAll(async () => {
     role: 'racer',
     phase: 'racing',
     fleet: [
-      { id: 'c1', name: 'Blue (Ann)', role: 'racer', color: '#4fa3dd', waiting: false },
-      { id: 'c2', name: 'Red (Bob)', role: 'racer', color: '#c4655c', waiting: false },
-      { id: WHO, name: 'Silver (Cat)', role: 'racer', color: '#9fb6c6', waiting: true },
+      { id: 'c1', name: 'Ann', colorName: 'Blue', role: 'racer', color: '#4fa3dd', waiting: false },
+      { id: 'c2', name: 'Bob', colorName: 'Red', role: 'racer', color: '#c4655c', waiting: false },
+      { id: WHO, name: 'Cat', colorName: 'Silver', role: 'racer', color: '#9fb6c6', waiting: true },
     ],
   })
   socket.says({ kind: 'racing', scenario: SCENARIO })
@@ -96,13 +96,16 @@ describe('arriving while a race is on', () => {
 
   it('shows the boats that are actually sailing', () => {
     const roster = document.querySelector('#standings')?.textContent ?? ''
-    expect(roster).toContain('Blue (Ann)')
-    expect(roster).toContain('Red (Bob)')
+    expect(roster).toContain('Ann')
+    expect(roster).toContain('Bob')
+    // One or the other on the board, never both: there is no room for a colour as well.
+    expect(roster).not.toContain('Blue')
+    expect(roster).not.toContain('Red')
   })
 
   it('says whose race she is watching, and that she is in the next one', () => {
     expect(bannerText()).toContain('next race')
-    expect(bannerText()).toContain('Blue (Ann)')
+    expect(bannerText()).toContain('Ann')
   })
 })
 
@@ -129,8 +132,7 @@ describe('the controls that cannot apply to a regatta', () => {
     expect(bannerText()).toContain('host')
     // Still drawing the boats the server sent, not a race of its own.
     const roster = document.querySelector('#standings')?.textContent ?? ''
-    expect(roster).toContain('Blue (Ann)')
-    expect(roster).not.toContain('Red\n')
+    expect(roster).toContain('Ann')
   })
 
   it('can put the controls card away again', () => {

@@ -461,9 +461,12 @@ function takeFromRegatta(timestamp: number): boolean {
   if (hers && greetedAt === undefined) {
     greetedAt = timestamp
     const paint = cssColor(hers.color)
+    // The one place both belong: she is told her colour, and her own name under it when
+    // she gave one, because this is the moment she learns which boat on the water is hers.
+    const also = hers.name === hers.colorName ? '' : `<p class="also">${escapeHtml(hers.name)}</p>`
     showOverlay(
       'You are',
-      `<p class="yours"${paint ? ` style="color: ${paint}"` : ''}>${escapeHtml(hers.name)}</p>`,
+      `<p class="yours"${paint ? ` style="color: ${paint}"` : ''}>${escapeHtml(hers.colorName)}</p>${also}`,
       () => undefined,
     )
   }

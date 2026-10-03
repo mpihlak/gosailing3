@@ -115,19 +115,17 @@ describe('a socket talking to the regatta', () => {
     expect(kindsFor('c1')).toEqual(['welcome', 'fleet'])
   })
 
-  /** What she is called is how she learns which boat is hers. */
-  it('calls her by her color, and adds the name she gave', () => {
+  /** One or the other: the name she gave, or her color when she gave none. */
+  it('calls her by the name she gave, and the nameless by their color', () => {
     sessions.received('c1', '{"kind":"join","name":"Ann"}')
     sessions.received('c2', '{"kind":"join"}')
 
     const welcome = written.find((one) => one.message.kind === 'welcome')!.message
-    expect(welcome.kind === 'welcome' && welcome.fleet[0]?.name).toBe('Blue (Ann)')
+    expect(welcome.kind === 'welcome' && welcome.fleet[0]?.name).toBe('Ann')
+    expect(welcome.kind === 'welcome' && welcome.fleet[0]?.colorName).toBe('Blue')
 
     const latest = written.filter((one) => one.message.kind === 'fleet').at(-1)!.message
-    expect(latest.kind === 'fleet' && latest.fleet.map((one) => one.name)).toEqual([
-      'Blue (Ann)',
-      'Red',
-    ])
+    expect(latest.kind === 'fleet' && latest.fleet.map((one) => one.name)).toEqual(['Ann', 'Red'])
   })
 
   it('writes the same line once for each of them', () => {
@@ -177,7 +175,7 @@ describe('a socket talking to the regatta', () => {
     }
 
     expect(scored).toHaveLength(1)
-    expect(scored[0]?.map((one) => one.name)).toEqual(['Blue (Ann)', 'Red (Bob)'])
+    expect(scored[0]?.map((one) => one.name)).toEqual(['Ann', 'Bob'])
   })
 
   it('ignores a helm from a socket that never joined', () => {

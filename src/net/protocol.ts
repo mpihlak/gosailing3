@@ -46,7 +46,14 @@ export type Outcome = 'finished' | 'timedOut' | 'retired'
 
 export interface Sailor {
   readonly id: BoatId
+  /**
+   * What to call her: the name she gave, or the colour of her boat when she gave none.
+   * One or the other, never both — a board with room for "Blue (Martin)" has no room
+   * left for what he is doing.
+   */
   readonly name: string
+  /** The word for her colour, for the one place that wants both: being told which boat is hers. */
+  readonly colorName: string
   readonly role: Role
   readonly color: string
   /** True while her race is the next one rather than the one being sailed. */

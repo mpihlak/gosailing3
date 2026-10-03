@@ -95,9 +95,9 @@ function place(placing: { readonly place?: number }): number {
   return placing.place ?? Number.POSITIVE_INFINITY
 }
 
-/** Her color, and the name she gave in brackets after it when she gave one. */
+/** The name she gave, or her colour when she gave none. */
 function markedAs(color: FleetColor, given: string): string {
-  return given ? `${color.name} (${given})` : color.name
+  return given || color.name
 }
 
 /**
@@ -147,6 +147,7 @@ export class Regatta {
     return [...this.entries].map(([id, entry]) => ({
       id,
       name: entry.name,
+      colorName: entry.color.name,
       role: entry.role,
       color: entry.color.hex,
       waiting: entry.waiting,

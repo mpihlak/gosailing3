@@ -42,9 +42,8 @@ function transcript(sent: Addressed[]): ServerMessage['kind'][] {
 }
 
 const joins = (name: string) => ({ kind: 'join', name }) as const
-/** A sailor is shown as her color with the name she gave after it, so match on that. */
-const isCalled = (given: string) => (one: { readonly name: string }) =>
-  one.name.endsWith(`(${given})`)
+/** She is shown by the name she gave, or by her color when she gave none. */
+const isCalled = (given: string) => (one: { readonly name: string }) => one.name === given
 const watches = (name: string) => ({ kind: 'join', name, role: 'observer' }) as const
 
 describe('the lobby', () => {
@@ -271,7 +270,7 @@ describe('holding the gate', () => {
     const race = regatta()
     race.say('a', joins('Ann'))
     race.say('a', joins('Bob'))
-    expect(race.fleet[0]?.name).toBe('Blue (Ann)')
+    expect(race.fleet[0]?.name).toBe('Ann')
   })
 
   it('seats the racers it will sail and watches the rest', () => {
@@ -318,7 +317,7 @@ describe('telling a sailor which boat is hers', () => {
   it('hands every boat a color of its own', () => {
     const race = regatta({ fleetSize: 10 })
     for (const id of ['a', 'b', 'c']) race.say(id, joins(id))
-    expect(race.fleet.map((one) => one.name)).toEqual(['Blue (a)', 'Red (b)', 'Green (c)'])
+    expect(race.fleet.map((one) => one.colorName)).toEqual(['Blue', 'Red', 'Green'])
   })
 
   it('gives a color back when the boat wearing it goes', () => {
@@ -327,7 +326,7 @@ describe('telling a sailor which boat is hers', () => {
     race.say('b', joins('Bob'))
     race.leave('a')
     race.say('c', joins('Cat'))
-    expect(race.fleet.find(isCalled('Cat'))?.name).toBe('Blue (Cat)')
+    expect(race.fleet.find(isCalled('Cat'))?.colorName).toBe('Blue')
   })
 
   /** An onlooker is not a boat, so she takes none of the colors the boats need. */
@@ -335,8 +334,8 @@ describe('telling a sailor which boat is hers', () => {
     const race = regatta({ fleetSize: 10 })
     race.say('w', watches('Wendy'))
     race.say('a', joins('Ann'))
-    expect(race.fleet.find((one) => one.id === 'w')?.name).toBe('Watcher (Wendy)')
-    expect(race.fleet.find(isCalled('Ann'))?.name).toBe('Blue (Ann)')
+    expect(race.fleet.find((one) => one.id === 'w')?.colorName).toBe('Watcher')
+    expect(race.fleet.find(isCalled('Ann'))?.colorName).toBe('Blue')
   })
 
   it('paints the boat the color it named', () => {
@@ -366,9 +365,9 @@ describe('arriving while the fleet is still manoeuvring', () => {
     const sent = race.say('c', joins('Cat'))
     const racing = sent.find((one) => one.message.kind === 'racing')!.message
     expect(racing.kind === 'racing' && racing.scenario.boats.map((b) => b.name)).toEqual([
-      'Blue (Ann)',
-      'Red (Bob)',
-      'Green (Cat)',
+      'Ann',
+      'Bob',
+      'Cat',
     ])
   })
 
