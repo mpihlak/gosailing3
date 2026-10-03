@@ -80,12 +80,12 @@ function underway() {
 
 describe('naming a crew', () => {
   it('hands them out in order', () => {
-    expect([0, 1, 2].map(crewName)).toEqual(['Ann', 'Bob', 'Alice'])
+    expect([0, 1, 2].map(crewName)).toEqual(['Alice', 'Bob', 'Carol'])
   })
 
   it('numbers them once the list runs out, so no two share a name', () => {
-    expect(crewName(10)).toBe('Ann2')
-    expect(crewName(22)).toBe('Alice3')
+    expect(crewName(10)).toBe('Alice2')
+    expect(crewName(22)).toBe('Carol3')
   })
 })
 

@@ -4,9 +4,9 @@ import { OnlineRace, type Socket } from '@/net'
 
 /** Names handed out in order, one to a boat, enough for a full fleet. */
 export const CREW_NAMES: readonly string[] = [
-  'Ann',
-  'Bob',
   'Alice',
+  'Bob',
+  'Carol',
   'Dan',
   'Eve',
   'Finn',

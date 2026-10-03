@@ -40,9 +40,9 @@ yourself with `?server=ws://localhost:8080` and one of them is opponent enough. 
 what they are doing as they go:
 
 ```
-11:13:47 Ann      2 leg 1+ 5.9kn
+11:13:47 Alice    2 leg 1+ 5.9kn
 11:13:47 Bob      1 leg 1+ 6.6kn
-11:14:37 Ann      2 leg 2 3.4kn 2 owed
+11:14:37 Alice    2 leg 2 3.4kn 2 owed
 ```
 
 Place, which leg they are on, `+` once they are round its mark, speed, and the turns they
