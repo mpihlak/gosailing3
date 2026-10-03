@@ -1,8 +1,10 @@
+import { normalizeBearing } from '@/foundation/geom'
 import type { BoatId, BoatInput } from '@/domain/boat'
 import { specFor, type InputSource, type SimContext, type WorldState } from '@/sim'
 import { rudderToHold } from './helm'
 import { planCourse, type NavigationPlan, type Spin } from './navigator'
 import { PLAIN, type Personality } from './personality'
+import { clearToTack, wouldTack } from './tacking'
 import { pinEndPortStart, type StartPhase, type StartStrategy } from './start'
 
 export interface SkipperOptions {
@@ -63,9 +65,27 @@ export class Skipper implements InputSource {
       this.personality,
     )
     if (plan.spin) this.spin = { way: plan.spin, owed }
-    this.lastPlan = plan
+
+    /*
+     * A tack into somebody is hers to answer for: from head to wind until she is
+     * close-hauled she keeps clear of everyone. If it is not clear she stands on,
+     * close-hauled on the tack she has, and asks again next tick. A penalty turn has
+     * already asked for its own room. A start is left to its strategy: it times the run
+     * at the line to the second, and a tack held back there put a boat into the pin.
+     */
+    const blocked =
+      !plan.spin &&
+      plan.reason !== 'starting' &&
+      wouldTack(boat, plan.bearing, wind.direction) &&
+      !clearToTack(world, boat, spec, plan.bearing)
+    const bearing = blocked
+      ? normalizeBearing(
+          wind.direction + Math.sign(boat.twa || 1) * spec.polar.beatAngle(wind.speed),
+        )
+      : plan.bearing
+    this.lastPlan = blocked ? { ...plan, bearing } : plan
     this.lastStartPhase = plan.startPhase
 
-    return { rudder: rudderToHold(boat.heading, plan.bearing, this.degreesForFullRudder) }
+    return { rudder: rudderToHold(boat.heading, bearing, this.degreesForFullRudder) }
   }
 }

@@ -144,6 +144,28 @@ describe('contacts', () => {
     expect(after.race.progress.b?.penalties).toBe(1)
   })
 
+  it('puts the turn on a boat that tacks into another before she is close-hauled', () => {
+    // Both on port. She tacks onto starboard across the bow of the boat to windward of
+    // her, and would have right of way by rule 10 if rule 13 did not come first.
+    const sim = createSimulation({
+      name: 'tack',
+      seed: 'tack',
+      boats: [
+        { id: 'tacker', name: 'Tacker', position: vec(0, -300), heading: 45 },
+        { id: 'other', name: 'Other', position: vec(-6, -294), heading: 45 },
+      ],
+      wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+      config: { startSequence: 0 },
+    })
+    const { events } = runHeadless(sim.ctx, sim.world, { tacker: fixedSource({ rudder: -1 }) }, { maxTicks: 240 })
+
+    expect(events.find((event) => event.kind === 'penalised')).toMatchObject({
+      boatId: 'tacker',
+      otherId: 'other',
+      rule: 13,
+    })
+  })
+
   it('puts the turn on the windward boat when the leeward boat luffs into her', () => {
     /*
      * Rule 11 asks who was to leeward, not who turned. The leeward boat closes the gap

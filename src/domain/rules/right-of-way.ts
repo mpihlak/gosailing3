@@ -10,13 +10,15 @@ import { hullCentreline, tackOf, type BoatId, type BoatSpec, type BoatState } fr
  *   11  on the same tack and overlapped, windward keeps clear of leeward
  *   12  on the same tack and not overlapped, clear astern keeps clear of clear ahead
  *
+ * One from Section B, which overrides those three:
+ *
+ *   13  after passing head to wind, a boat keeps clear until she is close-hauled
+ *
  * And one from Section D, which overrides them all:
  *
  *   24  a boat not racing keeps out of the way of one that is
- *
- * Rule 13, while tacking, is not here: a boat is judged on the tack she is on.
  */
-export type RightOfWayRule = 10 | 11 | 12 | 24
+export type RightOfWayRule = 10 | 11 | 12 | 13 | 24
 
 export interface Encounter {
   readonly rule: RightOfWayRule
@@ -29,6 +31,8 @@ export interface Contender {
   readonly spec: BoatSpec
   /** False once she has finished, which is when rule 24 starts to apply to her. */
   readonly racing: boolean
+  /** Past head to wind and not yet close-hauled, which is when rule 13 applies to her. */
+  readonly tacking?: boolean
 }
 
 /** How far along an axis the furthest-forward part of a hull reaches. */
@@ -83,6 +87,17 @@ export function encounter(a: Contender, b: Contender): Encounter {
     return { rule: 24, rightOfWay: still.boat.id, keepClear: done.boat.id }
   }
 
+  /*
+   * A boat who has tacked keeps clear of everyone sailing a course until she is sailing
+   * one herself. When both are tacking, the one on the other's port side keeps clear, or
+   * the one astern.
+   */
+  if (a.tacking || b.tacking) {
+    const giving = a.tacking && b.tacking ? keepsClearWhileBothTack(a, b) : a.tacking ? a : b
+    const other = giving === a ? b : a
+    return { rule: 13, rightOfWay: other.boat.id, keepClear: giving.boat.id }
+  }
+
   if (tackOf(a.boat.twa) !== tackOf(b.boat.twa)) {
     const port = tackOf(a.boat.twa) === 'port' ? a : b
     const starboard = port === a ? b : a
@@ -98,4 +113,13 @@ export function encounter(a: Contender, b: Contender): Encounter {
   const leeward = isToLeewardOf(b, a) ? b : a
   const windward = leeward === a ? b : a
   return { rule: 11, rightOfWay: leeward.boat.id, keepClear: windward.boat.id }
+}
+
+/** Rule 13's own tie-break: the one astern keeps clear, or else the one on the other's port side. */
+function keepsClearWhileBothTack(a: Contender, b: Contender): Contender {
+  if (isClearAstern(a, b)) return a
+  if (isClearAstern(b, a)) return b
+  // Positive is to port of her.
+  const aToPortOfB = cross(bearingToVector(b.boat.heading), sub(a.boat.position, b.boat.position)) > 0
+  return aToPortOfB ? a : b
 }

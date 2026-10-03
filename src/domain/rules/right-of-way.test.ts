@@ -173,3 +173,38 @@ describe('rule 24, a boat not racing', () => {
     expect(encounter(finished(port), finished(starboard)).rule).toBe(10)
   })
 })
+
+/** The same boat, past head to wind and not yet close-hauled. */
+function tacking(contender: Contender): Contender {
+  return { ...contender, tacking: true }
+}
+
+describe('rule 13, while tacking', () => {
+  it('makes a boat that has tacked keep clear, though she is now on starboard', () => {
+    const verdict = encounter(tacking(boat('t', vec(0, 0), 350)), boat('p', vec(30, 0), PORT))
+    expect(verdict).toEqual({ rule: 13, rightOfWay: 'p', keepClear: 't' })
+  })
+
+  it('makes her keep clear of a boat she has tacked to leeward of', () => {
+    const verdict = encounter(tacking(boat('t', vec(10, 0), 10)), boat('w', vec(0, 0), PORT))
+    expect(verdict).toEqual({ rule: 13, rightOfWay: 'w', keepClear: 't' })
+  })
+
+  it('gives way to rule 24 for a boat that has finished', () => {
+    const verdict = encounter(tacking(boat('t', vec(0, 0), 350)), finished(boat('f', vec(30, 0), PORT)))
+    expect(verdict).toEqual({ rule: 24, rightOfWay: 't', keepClear: 'f' })
+  })
+
+  it('makes the one astern keep clear when both are tacking', () => {
+    const ahead = tacking(boat('ahead', vec(0, 0), 0))
+    const astern = tacking(boat('astern', vec(0, -40), 0))
+    expect(encounter(ahead, astern)).toEqual({ rule: 13, rightOfWay: 'ahead', keepClear: 'astern' })
+  })
+
+  it('makes the one on the port side keep clear when both are tacking alongside', () => {
+    // Both heading north: west of the other is to port of her.
+    const west = tacking(boat('west', vec(-10, 0), 0))
+    const east = tacking(boat('east', vec(10, 0), 0))
+    expect(encounter(east, west)).toEqual({ rule: 13, rightOfWay: 'east', keepClear: 'west' })
+  })
+})

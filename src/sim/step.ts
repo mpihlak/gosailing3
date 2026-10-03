@@ -65,6 +65,12 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
     current: boats,
     raceTime: raceTime(ctx, { ...world, time }),
     dt,
+    closeHauled: Object.fromEntries(
+      boats.map((boat) => [
+        boat.id,
+        specFor(ctx, boat.id).polar.beatTarget(ctx.wind.sample(boat.position, time).speed).angle,
+      ]),
+    ),
   })
 
   // A contact is news on the tick it starts, not for every tick the boats stay locked.
@@ -105,9 +111,10 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
     if (!one || !two) continue
 
     const stillRacing = (id: string) => progress[id]?.status !== 'finished'
+    const tacking = (id: string) => world.race.progress[id]?.tacking === true
     const verdict = encounter(
-      { boat: one, spec: specFor(ctx, one.id), racing: stillRacing(one.id) },
-      { boat: two, spec: specFor(ctx, two.id), racing: stillRacing(two.id) },
+      { boat: one, spec: specFor(ctx, one.id), racing: stillRacing(one.id), tacking: tacking(one.id) },
+      { boat: two, spec: specFor(ctx, two.id), racing: stillRacing(two.id), tacking: tacking(two.id) },
     )
     penalise(progress, verdict.keepClear, verdict.rightOfWay, penaltyEvents, verdict.rule)
   }

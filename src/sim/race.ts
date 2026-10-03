@@ -48,6 +48,11 @@ export interface BoatProgress {
   readonly clearedToFinish: boolean
   /** A penalty turn under way: which way round she is going and how far she has got. */
   readonly penaltyTurn?: PenaltyTurn
+  /**
+   * Past head to wind and not yet bore away to close-hauled, when rule 13 has her keep
+   * clear of everyone. A boat who luffs to head to wind and falls back has not tacked.
+   */
+  readonly tacking?: boolean
   readonly distanceSailed: Meters
 }
 
@@ -118,6 +123,11 @@ export interface RaceStepInput {
   /** Elapsed race time. Negative before the gun. */
   readonly raceTime: Seconds
   readonly dt: Seconds
+  /**
+   * The close-hauled angle in the wind each boat has, which ends a tack. Without it no
+   * boat is ever counted as tacking.
+   */
+  readonly closeHauled?: Readonly<Record<BoatId, Degrees>>
 }
 
 export interface RaceStepResult {
@@ -150,6 +160,14 @@ export function stepRace(race: RaceState, input: RaceStepInput): RaceStepResult 
     }
 
     next = trackPenaltyTurn(next, previousState, boat, input.dt, events)
+
+    const closeHauled = input.closeHauled?.[boat.id]
+    const tacking =
+      closeHauled !== undefined &&
+      (next.tacking === true || crossed(previousState.twa, boat.twa, 0)) &&
+      Math.abs(boat.twa) < closeHauled
+    if (tacking) next = { ...next, tacking }
+    else if (next.tacking) next = withoutTacking(next)
 
     if (tackOf(previousState.twa) !== tackOf(boat.twa) && Math.abs(boat.twa) > 5) {
       events.push({
@@ -329,6 +347,12 @@ function advanceStage(input: StageInput): BoatProgress {
  */
 function hullClearOfLine(hull: Segment, line: RaceLine, halfBeam: Meters): boolean {
   return sideOfLine(line, hull.from) < -halfBeam && sideOfLine(line, hull.to) < -halfBeam
+}
+
+function withoutTacking(progress: BoatProgress): BoatProgress {
+  const done = { ...progress }
+  delete (done as { tacking?: boolean }).tacking
+  return done
 }
 
 function withoutTurn(progress: BoatProgress): BoatProgress {

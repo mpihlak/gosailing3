@@ -62,10 +62,10 @@ A boat is judged when two hulls touch. Real umpiring penalises a boat who fails 
 clear whether or not there is contact, so an AI boat can force a right-of-way boat to
 dodge and pay nothing for it, and a player can do the same.
 
-Rules 13 (while tacking), 14 (avoiding contact) and 15 and 16, which limit what a
-right-of-way boat may do, are not in either. A boat who tacks into someone is judged on
-the tack she ends up on, and a right-of-way boat may hold her course into a collision and
-be blameless.
+Rules 14 (avoiding contact) and 15 and 16, which limit what a right-of-way boat may do,
+are not in either. A right-of-way boat may hold her course into a collision and be
+blameless, and one who has just tacked into right of way may be hit before she has had
+time to be avoided.
 
 ## There is no race log
 
