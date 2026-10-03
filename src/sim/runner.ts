@@ -57,6 +57,23 @@ export class SimulationRunner {
     return this.accumulator / this.ctx.config.dt
   }
 
+  /**
+   * Take a boat off the water.
+   *
+   * For a sailor who has gone: her boat is handed a helm amidships and would otherwise
+   * hold her last heading out of the course and over the horizon, which looks like a
+   * fault in the boat rather than an absence of anyone aboard. Both worlds lose her, so
+   * nothing is left to interpolate towards.
+   */
+  withdraw(boatId: BoatId): void {
+    const without = (world: WorldState): WorldState => ({
+      ...world,
+      boats: world.boats.filter((boat) => boat.id !== boatId),
+    })
+    this.currentWorld = without(this.currentWorld)
+    this.previousWorld = without(this.previousWorld)
+  }
+
   tick(inputs: InputFrame): readonly TimedEvent[] {
     const result = step(this.ctx, this.currentWorld, inputs)
     this.previousWorld = this.currentWorld

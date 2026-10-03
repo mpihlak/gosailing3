@@ -233,7 +233,23 @@ export class Regatta {
   leave(id: BoatId): Addressed[] {
     this.tally.delete(id)
     if (!this.entries.delete(id)) return []
-    if (this.starters.has(id)) this.retired.add(id)
+    if (this.starters.has(id)) {
+      /*
+       * A boat already home has not given up; her sailor has shut the laptop. She keeps
+       * her finish and stays on the water, because her place and her time live in the
+       * race state her boat carries.
+       *
+       * One still sailing has given up, and goes off the water with her sailor. Left
+       * there she is handed a helm amidships and holds her last heading out of the
+       * course and over the horizon, which reads as a boat gone wrong rather than a
+       * boat with nobody aboard.
+       */
+      const home = this.runner?.world.race.progress[id]?.status === 'finished'
+      if (!home) {
+        this.retired.add(id)
+        this.runner?.withdraw(id)
+      }
+    }
     return [this.announceFleet()]
   }
 

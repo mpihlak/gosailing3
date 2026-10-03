@@ -530,3 +530,78 @@ describe('keeping score', () => {
     expect(hers.total).toBe(hers.points)
   })
 })
+
+describe('a sailor who goes', () => {
+  function racing(ids: readonly string[]) {
+    const race = regatta({ fleetSize: ids.length })
+    for (const id of ids) race.say(id, joins(id))
+    race.tick(1)
+    sail(race, 3, { alive: ids })
+    return race
+  }
+
+  const afloat = (sent: Addressed[]) => {
+    const last = [...sent].reverse().find((one) => one.message.kind === 'snapshot')?.message
+    return last?.kind === 'snapshot' ? last.boats.map((boat) => boat.id) : []
+  }
+
+  /*
+   * Her boat is handed a helm amidships when she goes, so left on the water she holds
+   * her last heading out of the course and over the horizon. That reads as a boat gone
+   * wrong rather than a boat with nobody aboard, and it confused a race.
+   */
+  it('takes her boat off the water with her', () => {
+    const race = racing(['a', 'b'])
+    expect(afloat(sail(race, 1, { alive: ['a', 'b'] }))).toEqual(['a', 'b'])
+
+    race.leave('a')
+    expect(afloat(sail(race, 1, { alive: ['b'] }))).toEqual(['b'])
+  })
+
+  it('still puts her on the result sheet, as retired', () => {
+    const race = racing(['a', 'b'])
+    race.leave('a')
+    const places = resultsIn(
+      sail(race, 900, { alive: ['b'], until: () => race.state === 'results' }),
+    )
+    expect(places?.find((one) => one.boatId === 'a')?.outcome).toBe('retired')
+  })
+
+  /** A boat already home has not given up; she has simply shut the laptop. */
+  it('leaves a finisher her finish', () => {
+    const race = regatta({ fleetSize: 2 })
+    const rob = race.addRobot('Rob')
+    race.say('a', joins('Ann'))
+    race.tick(1)
+
+    // Sail only until she is home, so the race is not yet scored when she goes.
+    let home = false
+    for (let n = 0; n < 20_000 && !home; n++) {
+      race.say('a', { kind: 'helm', rudder: 0 })
+      home = race
+        .tick(1 / 20)
+        .some(
+          (one) =>
+            one.message.kind === 'snapshot' &&
+            one.message.events.some(
+              (event) => event.kind === 'boatFinished' && event.boatId === rob,
+            ),
+        )
+    }
+    expect(home).toBe(true)
+
+    race.leave(rob)
+    const places = resultsIn(
+      sail(race, 900, { alive: ['a'], until: () => race.state === 'results' }),
+    )
+    const hers = places?.find((one) => one.boatId === rob)
+    expect(hers?.outcome).toBe('finished')
+    expect(hers?.place).toBe(1)
+  })
+
+  it('does not mind her going when there is no race on', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('a', joins('Ann'))
+    expect(() => race.leave('a')).not.toThrow()
+  })
+})
