@@ -72,6 +72,43 @@ describe('reading what arrives', () => {
     expect(read('{"kind":"helm"}')).toBeUndefined()
   })
 
+  it('takes a playback report in whole milliseconds', () => {
+    const stats = {
+      frames: 600,
+      frameP90: 16.7,
+      frameMax: 120.4,
+      gapP90: 40,
+      gapMax: 180,
+      held: 0,
+      delay: 66.6,
+    }
+    expect(read(JSON.stringify({ kind: 'stats', ...stats }))).toEqual({
+      kind: 'stats',
+      frames: 600,
+      frameP90: 17,
+      frameMax: 120,
+      gapP90: 40,
+      gapMax: 180,
+      held: 0,
+      delay: 67,
+    })
+  })
+
+  it('refuses a playback report with a field missing, negative or not a number', () => {
+    const stats = {
+      frames: 600,
+      frameP90: 17,
+      frameMax: 120,
+      gapP90: 40,
+      gapMax: 180,
+      held: 0,
+      delay: 67,
+    }
+    expect(read(JSON.stringify({ kind: 'stats', ...stats, delay: undefined }))).toBeUndefined()
+    expect(read(JSON.stringify({ kind: 'stats', ...stats, held: -1 }))).toBeUndefined()
+    expect(read(JSON.stringify({ kind: 'stats', ...stats, gapMax: '180' }))).toBeUndefined()
+  })
+
   it('cuts a long name short', () => {
     const long = read(`{"kind":"join","name":"${'x'.repeat(200)}"}`)
     expect(long?.kind === 'join' && long.name.length).toBe(20)

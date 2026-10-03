@@ -1,6 +1,7 @@
 import { boatEndStarboardStart, pinEndPortStart, Skipper } from '@/agents/ai'
 import { standings, type Simulation } from '@/sim'
 import { OnlineRace, type Socket } from '@/net'
+import { GAME_PACE } from '@/apps/game/scenario'
 
 /** Names handed out in order, one to a boat, enough for a full fleet. */
 export const CREW_NAMES: readonly string[] = [
@@ -60,6 +61,7 @@ export class Robot {
       // So the regatta hands the race controls to a person instead of to her.
       robot: true,
       helm: () => this.rudder(),
+      pace: GAME_PACE,
       ...(options.open ? { open: options.open } : {}),
       ...(options.now ? { now: options.now } : {}),
     })

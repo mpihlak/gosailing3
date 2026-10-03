@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { vec } from '@/foundation/geom'
 import type { ScenarioSpec } from '@/sim'
-import { HELM_HZ, SNAPSHOT_HZ, type ServerMessage } from './protocol'
+import { HELM_HZ, SNAPSHOT_HZ, STATS_EVERY, type ServerMessage } from './protocol'
 import { OnlineRace, type Socket } from './online'
 
 const SCENARIO: ScenarioSpec = {
@@ -42,6 +42,9 @@ class FakeSocket implements Socket {
   }
 }
 
+/** So that one snapshot interval is 0.05 simulated seconds. */
+const PACE = 1.5
+
 let socket: FakeSocket
 let race: OnlineRace
 let rudder = 0
@@ -55,6 +58,7 @@ beforeEach(() => {
     url: 'ws://test',
     name: 'Ann',
     helm: () => rudder,
+    pace: PACE,
     open: () => socket,
     now: () => clock,
   })
@@ -199,6 +203,78 @@ describe('drawing what the server says', () => {
   it('holds on the last one rather than running ahead of it', () => {
     twoSnapshots()
     expect(race.frameAt(5000)?.boats[0]?.position.x).toBeCloseTo(10)
+  })
+
+  /**
+   * A stream of snapshots one interval apart, the nth showing the boat at x = n, with the
+   * line stalling now and then: everything sent during a stall arrives when it ends.
+   * Returns where the boat was drawn on every frame, a frame every sixteen milliseconds.
+   */
+  const sailThrough = (seconds: number, stalled: (n: number) => number) => {
+    const count = seconds * SNAPSHOT_HZ
+    const arrivals = [...Array(count).keys()].map((n) => ({ n, at: n * GAP + stalled(n) }))
+    const drawn: number[] = []
+    for (let frame = 0; frame < count * GAP; frame += 16) {
+      while (arrivals[0] && arrivals[0].at <= frame) {
+        const { n, at } = arrivals.shift()!
+        clock = at
+        socket.say({ kind: 'snapshot', time: 1 + n * 0.05, boats: boatsAt(n), events: [] })
+      }
+      clock = frame
+      const x = race.frameAt(clock)?.boats[0]?.position.x
+      if (x !== undefined) drawn.push(x)
+    }
+    return drawn
+  }
+
+  /** A stall of a hundred milliseconds starting every second. */
+  const everySecond = (n: number) => {
+    const into = n % SNAPSHOT_HZ
+    return into * GAP < 100 ? 100 - into * GAP : 0
+  }
+
+  it('keeps the fleet moving through stalls, once it has seen the line stall', () => {
+    const drawn = sailThrough(6, everySecond)
+    // Past the first two stalls, which is what it learns from.
+    const later = drawn.slice(Math.round((2.5 * 1000) / 16))
+    for (let frame = 1; frame < later.length; frame++) {
+      expect(later[frame]).toBeGreaterThan(later[frame - 1]!)
+    }
+  })
+
+  it('never draws the fleet going backwards when it decides to wait longer', () => {
+    // A steady line, then one long stall out of nowhere.
+    const drawn = sailThrough(4, (n) => (n >= 60 && n < 66 ? (66 - n) * GAP + 150 : 0))
+    for (let frame = 1; frame < drawn.length; frame++) {
+      expect(drawn[frame]).toBeGreaterThanOrEqual(drawn[frame - 1]!)
+    }
+  })
+
+  it('draws a steady line only one interval behind', () => {
+    sailThrough(4, () => 0)
+    socket.open()
+    clock += STATS_EVERY
+    race.sendHelm()
+    clock += STATS_EVERY
+    race.sendHelm()
+    const stats = socket.sent.map((text) => JSON.parse(text)).find((m) => m.kind === 'stats')
+    expect(stats.delay).toBe(Math.round(GAP))
+    expect(stats.held).toBe(0)
+  })
+
+  it('reports how the playback went, and how far behind it is drawing', () => {
+    // A line that stalls for a second at a time: more than is worth waiting for.
+    sailThrough(4, (n) => (n % 60 < 30 ? (30 - (n % 60)) * GAP : 0))
+    socket.open()
+    clock += STATS_EVERY
+    race.sendHelm()
+    clock += STATS_EVERY
+    race.sendHelm()
+    const stats = socket.sent.map((text) => JSON.parse(text)).find((m) => m.kind === 'stats')
+    expect(stats).toMatchObject({ kind: 'stats', frameP90: 16, frameMax: 16, delay: 250 })
+    expect(stats.frames).toBeGreaterThan(200)
+    expect(stats.gapMax).toBeGreaterThan(900)
+    expect(stats.held).toBeGreaterThan(0)
   })
 
   it('keeps the standing of each boat from the last time it was sent', () => {

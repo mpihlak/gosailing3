@@ -122,6 +122,30 @@ export type ClientMessage =
     }
   | { readonly kind: 'helm'; readonly rudder: number }
   | { readonly kind: 'command'; readonly command: Command }
+  | ({ readonly kind: 'stats' } & PlaybackStats)
+
+/**
+ * How the race looked from one seat over the last stretch, in milliseconds. The server's
+ * pings say how the line is doing; only the page can say whether the fleet moved
+ * smoothly on it, and whether a stutter came from the line or from the drawing.
+ */
+export interface PlaybackStats {
+  /** Frames drawn. */
+  readonly frames: number
+  /** Time between one frame and the next: long ones are the page stalling. */
+  readonly frameP90: number
+  readonly frameMax: number
+  /** Time between one snapshot arriving and the next: long ones are the line stalling. */
+  readonly gapP90: number
+  readonly gapMax: number
+  /** How long the fleet stood still because the next snapshot had not arrived. */
+  readonly held: number
+  /** How far behind the newest snapshot the fleet was being drawn at the end. */
+  readonly delay: number
+}
+
+/** How often a seat reports its playback, in milliseconds. */
+export const STATS_EVERY = 10_000
 
 export type ServerMessage =
   /** First thing a client hears: who she is and what is going on. */
@@ -141,6 +165,7 @@ export type ServerMessage =
   | {
       readonly kind: 'snapshot'
       readonly time: Seconds
+      /** Rounded to what can be seen: see `onTheWire`. */
       readonly boats: readonly BoatState[]
       /** Sent only when it has changed, which is when a boat starts, rounds or finishes. */
       readonly race?: RaceReport
