@@ -19,7 +19,7 @@ import {
   type Role,
   type Sailor,
   type ServerMessage,
-} from '@/net'
+} from './protocol'
 
 /** Enough of a socket to be swapped for one in a test. */
 export interface Socket {
@@ -289,4 +289,3 @@ export class OnlineRace {
   }
 }
 
-export { HELM_HZ }

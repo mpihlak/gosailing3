@@ -30,9 +30,8 @@ import {
   timing,
 } from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
-import type { Placing } from '@/net'
+import { HELM_HZ, OnlineRace, type Placing } from '@/net'
 import { DEFAULT_SERVER, duel, GAME_PACE, playerSeconds, PLAYER_ID, randomSeed } from './scenario'
-import { HELM_HZ, OnlineRace } from './online'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
 const hud = new Hud(

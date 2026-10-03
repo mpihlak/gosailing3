@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { vec } from '@/foundation/geom'
 import type { ScenarioSpec } from '@/sim'
-import { HELM_HZ, SNAPSHOT_HZ, type ServerMessage } from '@/net'
+import { HELM_HZ, SNAPSHOT_HZ, type ServerMessage } from './protocol'
 import { OnlineRace, type Socket } from './online'
 
 const SCENARIO: ScenarioSpec = {
