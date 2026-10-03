@@ -242,12 +242,6 @@ describe('drawing what the server says', () => {
     }
   })
 
-  it('hands the newest snapshot to whoever steers, however far behind it is drawing', () => {
-    sailThrough(2, everySecond)
-    expect(race.newest()?.boats[0]?.position.x).toBe(2 * SNAPSHOT_HZ - 1)
-    expect(race.frameAt(clock)?.boats[0]?.position.x).toBeLessThan(2 * SNAPSHOT_HZ - 1)
-  })
-
   it('never draws the fleet going backwards when it decides to wait longer', () => {
     // A steady line, then one long stall out of nowhere.
     const drawn = sailThrough(4, (n) => (n >= 60 && n < 66 ? (66 - n) * GAP + 150 : 0))

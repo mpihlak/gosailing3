@@ -43,10 +43,8 @@ export interface RobotOptions {
  *
  * She joins over a socket like anybody else and is told no more than anybody else is:
  * the scenario when a race starts and where the boats are thirty times a second. What
- * she steers by is the newest snapshot, which reaches her over the same line as everybody
- * else's. Not the view a player is drawn: that is held back to ride out a stalling line,
- * by up to a quarter of a second, and a helm that late chases its own turns. A person
- * learns to lead them; she does not.
+ * she steers by is the view a player is shown, interpolated and a frame behind, so she
+ * sails under the same lag rather than a privileged one.
  */
 export class Robot {
   readonly race: OnlineRace
@@ -116,8 +114,8 @@ export class Robot {
       this.sailing = simulation
       this.skipper = this.freshSkipper()
     }
-    const world = this.race.newest()
-    // Nothing to steer until a snapshot has arrived, and nothing to steer with while
+    const world = this.race.frameAt((this.options.now ?? (() => performance.now()))())
+    // Nothing to steer until two snapshots have arrived, and nothing to steer with while
     // she waits out a race she arrived too late for: her boat is not in the water.
     if (!world) return 0
     return this.skipper.inputFor(you, world, simulation.ctx).rudder

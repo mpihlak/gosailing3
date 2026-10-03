@@ -313,11 +313,6 @@ export class OnlineRace {
     return interpolateWorld(before, after, (at - before.time) / (after.time - before.time))
   }
 
-  /** The fleet as the newest snapshot has it, for steering rather than drawing. */
-  newest(): WorldState | undefined {
-    return this.frames.at(-1)
-  }
-
   /** How far behind to draw to cover the lateness lately seen. */
   private wantedDelay(): number {
     const allowance = Math.max(...this.lateness) - Math.min(...this.lateness)
