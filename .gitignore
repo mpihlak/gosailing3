@@ -6,3 +6,4 @@ tmp/
 *.local
 dist-server
 dist-ai
+logs/
