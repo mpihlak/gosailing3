@@ -72,6 +72,47 @@ ssh martin@voyager 'journalctl --user -u gosailing -f'
 ssh martin@voyager 'systemctl --user restart gosailing'
 ```
 
+## The races on disk
+
+Every race is written to `~/gosailing/logs` as it is sailed, one file a race, named for
+when it began and the id it was given: `20261003T085901Z-3a6830f6.jsonl`. Beside them
+`races.jsonl` carries a line for each race that has ended, which is what a tool reads to
+find one without opening every file.
+
+```json
+{
+  "id": "3a6830f6",
+  "file": "20261003T085901Z-3a6830f6.jsonl",
+  "from": "2026-10-03T08:59:01.498Z",
+  "to": "2026-10-03T08:59:15.010Z",
+  "ms": 13512,
+  "ending": "scored",
+  "sailors": ["Blue (Remote)", "Red (Local)"]
+}
+```
+
+A race file is newline-delimited JSON. The first line is the scenario and the sailors,
+the last says how it ended, and between them is every message in order, each stamped with
+the milliseconds since the race began:
+
+| `t`    | what it is                                                                 |
+| ------ | -------------------------------------------------------------------------- |
+| `race` | the header: id, start time, seed, sailors, the whole scenario              |
+| `out`  | a message the server sent, with the sailors it went to                     |
+| `in`   | a helm or a command a sailor sent                                          |
+| `over` | the footer: end time, how long it ran, `scored` or `abandoned`, the places |
+
+What is recorded is the stream the clients were given, so a replayer needs no simulation
+of its own: play the `out` messages at their stamped times and the game itself builds the
+race from them. A race ends `abandoned` when it never reached a result — the host
+restarted it, a sailor arriving before the gun made the start again, or the server
+stopped.
+
+A nineteen-second race between two boats is about 385 KB, so roughly 20 KB a second, and
+a ten-boat race perhaps three times that. There is no retention: nothing deletes old
+races, and with 85 GB free that is years of sailing, but it is unbounded. `gzip` gets
+them down by about 3.8x if they ever need it.
+
 ## Reading the latency
 
 Each connection is pinged twice a second and the journal gets two kinds of line. `-o cat`

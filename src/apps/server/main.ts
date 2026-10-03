@@ -8,7 +8,10 @@ import {
   regattaRace,
   WATCHER_COLOR,
 } from '@/apps/game/scenario'
+import { randomUUID } from 'node:crypto'
+import { Files } from './journal'
 import { Latency, type LatencySummary } from './latency'
+import { Logbook } from './logbook'
 import { Sessions } from './sessions'
 
 /**
@@ -31,6 +34,8 @@ const TIMING_HZ = 1
 const RECENT_TRIPS = 10
 /** How often the journal gets a line for each sailor, in seconds. */
 const LOG_EVERY = 10
+/** Where every race is written down. Relative to where the server was started. */
+const LOGS = process.env.GOSAILING_LOGS ?? 'logs'
 
 const regatta = new Regatta({
   race: regattaRace,
@@ -44,18 +49,29 @@ const sockets = new Map<string, WebSocket>()
 const latency = new Latency()
 const round = (ms: number) => Math.round(ms)
 
+const logbook = new Logbook({
+  journal: new Files(LOGS),
+  now: () => Date.now(),
+  id: () => randomUUID().slice(0, 8),
+})
+
 const sessions = new Sessions(
   regatta,
   (id, text) => {
     const socket = sockets.get(id)
     if (socket?.readyState === socket?.OPEN) socket?.send(text)
   },
-  (places) => {
-    // The race as a whole, one line a sailor, written as the result goes out.
-    for (const place of places) {
-      const trips = latency.summary(place.boatId)
-      console.log(`latency race ${place.name} ${place.outcome} ${spread(trips)}`)
-    }
+  {
+    heard: (id, message) => logbook.heard(id, message),
+    sent: (to, message) => {
+      logbook.sent(to, message)
+      if (message.kind !== 'results') return
+      // The race as a whole, one line a sailor, written as the result goes out.
+      for (const place of message.places) {
+        const trips = latency.summary(place.boatId)
+        console.log(`latency race ${place.name} ${place.outcome} ${spread(trips)}`)
+      }
+    },
   },
 )
 
@@ -138,4 +154,16 @@ setInterval(() => {
   sessions.tick(elapsed)
 }, 1000 / TICK_HZ)
 
-web.listen(PORT, () => console.log(`regatta on ws://localhost:${PORT}`))
+// A race cut off by a restart is still worth what was written of it, so it is closed
+// rather than left without an ending.
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    logbook.close()
+    process.exit(0)
+  })
+}
+
+web.listen(PORT, () => {
+  console.log(`regatta on ws://localhost:${PORT}`)
+  console.log(`races written to ${LOGS}`)
+})

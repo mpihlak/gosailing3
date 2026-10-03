@@ -1,5 +1,5 @@
 import type { Seconds } from '@/foundation/units'
-import type { Addressed, ClientMessage, Placing, Regatta } from '@/net'
+import type { Addressed, ClientMessage, Regatta, ServerMessage } from '@/net'
 
 /** How long a name may be before it is cut short. */
 const NAME_LIMIT = 20
@@ -16,6 +16,17 @@ const NAME_LIMIT = 20
 const NAME_ALLOWED = /[^A-Za-z0-9]/g
 
 /**
+ * Told what crosses a session, after it has been read and before it goes out.
+ *
+ * One place rather than a callback for each thing somebody wants to watch: the latency
+ * log and the race recording both want the same traffic, for different reasons.
+ */
+export interface SessionWatcher {
+  readonly heard?: (id: string, message: ClientMessage) => void
+  readonly sent?: (to: readonly string[], message: ServerMessage) => void
+}
+
+/**
  * Everything between a socket and the regatta: reading what arrives, deciding what it
  * meant, and handing back the lines to write.
  *
@@ -26,13 +37,15 @@ export class Sessions {
   constructor(
     private readonly regatta: Regatta,
     private readonly send: (id: string, text: string) => void,
-    /** Handed the finishing order as it goes out, for whatever wants to write it down. */
-    private readonly scored: (places: readonly Placing[]) => void = () => undefined,
+    /** Shown everything that crosses the session, for whatever wants to write it down. */
+    private readonly watch: SessionWatcher = {},
   ) {}
 
   received(id: string, text: string): void {
     const message = read(text)
-    if (message) this.deliver(this.regatta.say(id, message))
+    if (!message) return
+    this.watch.heard?.(id, message)
+    this.deliver(this.regatta.say(id, message))
   }
 
   closed(id: string): void {
@@ -45,7 +58,7 @@ export class Sessions {
 
   private deliver(sent: readonly Addressed[]): void {
     for (const { to, message } of sent) {
-      if (message.kind === 'results') this.scored(message.places)
+      this.watch.sent?.(to, message)
       if (to.length === 0) continue
       // Written once however many it goes to: the fleet gets the same line.
       const text = JSON.stringify(message)

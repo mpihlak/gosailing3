@@ -38,7 +38,7 @@ beforeEach(() => {
   sessions = new Sessions(
     regatta(),
     (to, text) => written.push({ to, message: JSON.parse(text) }),
-    (places) => scored.push([...places]),
+    { sent: (_to, message) => message.kind === 'results' && scored.push([...message.places]) },
   )
 })
 
