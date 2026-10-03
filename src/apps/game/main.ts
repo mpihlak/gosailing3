@@ -573,11 +573,15 @@ function showRegattaResults(places: readonly Placing[], startsIn: number | undef
       const how =
         one.outcome === 'finished' ? timing(one.elapsed ?? 0) : one.outcome === 'retired' ? 'left' : 'DNF'
       const mine = one.boatId === online?.you ? ' class="mine"' : ''
-      return `<tr${mine}><td>${escapeHtml(one.place ?? '')}</td><td>${escapeHtml(one.name)}</td><td>${how}</td></tr>`
+      // What the race was worth, and what she has taken from the regatta so far.
+      const scored = `+${escapeHtml(one.points)}`
+      return `<tr${mine}><td>${escapeHtml(one.place ?? '')}</td><td>${escapeHtml(one.name)}</td><td>${how}</td><td class="won">${scored}</td><td class="tally">${escapeHtml(one.total)}</td></tr>`
     })
     .join('')
-  showOverlay('Results', `<table class="results">${rows}</table>${comingUp(startsIn)}`, () =>
-    undefined,
+  showOverlay(
+    'Results',
+    `<table class="results">${rows}</table>${comingUp(startsIn)}`,
+    () => undefined,
   )
 }
 

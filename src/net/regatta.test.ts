@@ -456,3 +456,78 @@ describe('the host', () => {
     expect(race.state).toBe('lobby')
   })
 })
+
+describe('keeping score', () => {
+  const scored = (sent: Addressed[]) => resultsIn(sent) ?? []
+
+  /**
+   * Robots sail; a sailor whose helm nobody touches goes straight on and is timed out.
+   * One of the latter is needed in every race, because results are only sent to people.
+   */
+  function raceOf(robots: number, people: readonly string[], limits: Partial<RegattaLimits> = {}) {
+    const race = regatta({ fleetSize: robots + people.length, ...limits })
+    for (let n = 0; n < robots; n++) race.addRobot(`Rob${n}`)
+    for (const id of people) race.say(id, joins(id))
+    race.tick(1)
+    return race
+  }
+
+  const sailItOut = (race: Regatta, alive: readonly string[]) =>
+    sail(race, 900, { alive, until: () => race.state === 'results' })
+
+  it('pays the fleet down from its own size to one', () => {
+    const race = raceOf(2, ['a'])
+    const places = scored(sailItOut(race, ['a']))
+    expect(places.map((one) => one.points)).toEqual([3, 2, 1])
+  })
+
+  it('pays a pair two and one', () => {
+    const race = raceOf(1, ['a'])
+    expect(scored(sailItOut(race, ['a'])).map((one) => one.points)).toEqual([2, 1])
+  })
+
+  /** The order they crossed, not the order they joined. */
+  it('puts the finishers first and in order', () => {
+    const race = raceOf(2, ['a'])
+    const places = scored(sailItOut(race, ['a']))
+    const crossed = places.filter((one) => one.place !== undefined).map((one) => one.place!)
+    expect(crossed).toEqual([...crossed].sort((one, two) => one - two))
+    // Whoever never crossed is behind all of those who did.
+    expect(places.at(-1)?.place).toBeUndefined()
+  })
+
+  it('adds a race to what she already had', () => {
+    const race = raceOf(1, ['a'], { resultsFor: 1 })
+    const first = scored(sailItOut(race, ['a']))
+    sail(race, 20, { alive: ['a'], until: () => race.state === 'racing' })
+    const second = scored(sailItOut(race, ['a']))
+
+    expect(second).not.toHaveLength(0)
+    for (const one of second) {
+      const before = first.find((other) => other.boatId === one.boatId)!
+      expect(one.total).toBe(before.total + one.points)
+    }
+  })
+
+  it('counts only the boats that sailed it, not everyone connected', () => {
+    const race = raceOf(1, ['a'], { maxRacers: 10 })
+    race.say('w', watches('Wendy'))
+    const places = scored(sailItOut(race, ['a', 'w']))
+    expect(places.map((one) => one.boatId)).not.toContain('w')
+    expect(places).toHaveLength(2)
+  })
+
+  /** She is a new sailor when she comes back, with nothing to her name. */
+  it('forgets a sailor who leaves', () => {
+    const race = raceOf(1, ['a'], { resultsFor: 1 })
+    const first = scored(sailItOut(race, ['a']))
+    expect(first.find((one) => one.boatId === 'a')?.total).toBeGreaterThan(0)
+
+    race.leave('a')
+    race.say('a', joins('Ann'))
+    sail(race, 20, { alive: ['a'], until: () => race.state === 'racing' })
+    const again = scored(sailItOut(race, ['a']))
+    const hers = again.find((one) => one.boatId === 'a')!
+    expect(hers.total).toBe(hers.points)
+  })
+})

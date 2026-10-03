@@ -90,6 +90,11 @@ interface Entry {
   robot?: Skipper
 }
 
+/** Where she came, with everyone who never crossed the line behind everyone who did. */
+function place(placing: { readonly place?: number }): number {
+  return placing.place ?? Number.POSITIVE_INFINITY
+}
+
 /** Her color, and the name she gave in brackets after it when she gave one. */
 function markedAs(color: FleetColor, given: string): string {
   return given ? `${color.name} (${given})` : color.name
@@ -115,6 +120,12 @@ export class Regatta {
    */
   private starters = new Map<BoatId, string>()
   private retired = new Set<BoatId>()
+  /**
+   * What each sailor has taken from the regatta, kept for as long as she is connected.
+   * Nothing writes it down: a server that restarts starts the scoring again, and a
+   * sailor who leaves and comes back is a new sailor with nothing to her name.
+   */
+  private readonly tally = new Map<BoatId, number>()
   private pending: TimedEvent[] = []
   /** The last report written out, so an unchanged one is not written again. */
   private lastRace: string | undefined
@@ -179,7 +190,7 @@ export class Regatta {
 
   /** Score the race where it stands and put the results up. */
   private callItOff(): Addressed[] {
-    const places = this.placings()
+    const places = this.scoreTheRace()
     if (!places) return []
     this.phase = 'results'
     this.resultsSince = 0
@@ -219,6 +230,7 @@ export class Regatta {
   }
 
   leave(id: BoatId): Addressed[] {
+    this.tally.delete(id)
     if (!this.entries.delete(id)) return []
     if (this.starters.has(id)) this.retired.add(id)
     return [this.announceFleet()]
@@ -446,15 +458,21 @@ export class Regatta {
     const abandoned = winner === undefined && elapsed > this.limits.abandonAfter
     if (!everyoneHome && !outOfTime && !abandoned) return undefined
 
-    return this.placings()
+    return this.scoreTheRace()
   }
 
-  /** The race scored as it stands, whether or not it was going to end here. */
-  private placings(): Placing[] | undefined {
+  /**
+   * The race scored as it stands, whether or not it was going to end here, in the order
+   * they crossed. Whoever never crossed comes after those who did, in the order they
+   * joined, since nothing else distinguishes them.
+   *
+   * This adds to the tally, so it is called once a race and nowhere else.
+   */
+  private scoreTheRace(): Placing[] | undefined {
     const progress = this.runner?.world.race.progress
     if (!progress) return undefined
 
-    return [...this.starters].map(([id, name]) => {
+    const sailed = [...this.starters].map(([id, name]) => {
       const boat = progress[id]
       const outcome: Outcome = this.retired.has(id)
         ? 'retired'
@@ -468,6 +486,17 @@ export class Regatta {
         ...(boat?.place === undefined ? {} : { place: boat.place }),
         ...(boat?.finishTime === undefined ? {} : { elapsed: boat.finishTime / this.options.pace }),
       }
+    })
+
+    // Sorting is stable, so boats with no place keep the order they joined in.
+    const home = [...sailed].sort((one, two) => place(one) - place(two))
+
+    return home.map((placing, index) => {
+      // The fleet's size to the winner, down to one for the boat at the back.
+      const points = home.length - index
+      const total = (this.tally.get(placing.boatId) ?? 0) + points
+      this.tally.set(placing.boatId, total)
+      return { ...placing, points, total }
     })
   }
 

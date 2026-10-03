@@ -68,6 +68,10 @@ export interface Placing {
   readonly place?: number
   /** Her elapsed time in the player's seconds, when she finished. */
   readonly elapsed?: Seconds
+  /** What this race was worth to her: the fleet's size for the winner, one for the last. */
+  readonly points: number
+  /** And what she has taken from the regatta so far, this race included. */
+  readonly total: number
 }
 
 /**

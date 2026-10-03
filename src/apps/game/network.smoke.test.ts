@@ -89,3 +89,49 @@ describe('joining with ?network', () => {
     expect(overlayText()).toContain('Waiting for another boat')
   })
 })
+
+/*
+ * The scoreboard is a function of the result the server sends, so it is driven straight
+ * rather than by sailing a race to see it: a race takes two minutes of wall clock and
+ * this takes none.
+ */
+describe('the scoreboard', () => {
+  const place = (name: string, at: number | undefined, points: number, total: number) => ({
+    boatId: name,
+    name,
+    outcome: at === undefined ? ('timedOut' as const) : ('finished' as const),
+    ...(at === undefined ? {} : { place: at, elapsed: 90 + at }),
+    points,
+    total,
+  })
+
+  function show(places: ReturnType<typeof place>[], at: number) {
+    opened[0]!.says({ kind: 'results', places, nextRaceIn: 5 })
+    page.frame(at)
+    return [...document.querySelectorAll('.results tr')].map((row) =>
+      [...row.querySelectorAll('td')].map((cell) => cell.textContent?.trim()),
+    )
+  }
+
+  it('gives the race to each of them and the regatta beside it', () => {
+    const rows = show(
+      [place('Blue', 1, 3, 7), place('Red', 2, 2, 5), place('Silver', 3, 1, 1)],
+      5000,
+    )
+    expect(rows).toEqual([
+      ['1', 'Blue', expect.any(String), '+3', '7'],
+      ['2', 'Red', expect.any(String), '+2', '5'],
+      ['3', 'Silver', expect.any(String), '+1', '1'],
+    ])
+  })
+
+  it('keeps the order the server sent, which is the order they crossed', () => {
+    const rows = show([place('Red', 1, 2, 2), place('Blue', 2, 1, 4)], 6000)
+    expect(rows.map((row) => row[1])).toEqual(['Red', 'Blue'])
+  })
+
+  it('shows a boat that never crossed, at the back and worth least', () => {
+    const rows = show([place('Blue', 1, 2, 2), place('Red', undefined, 1, 1)], 7000)
+    expect(rows[1]).toEqual(['', 'Red', 'DNF', '+1', '1'])
+  })
+})

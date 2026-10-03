@@ -64,7 +64,10 @@ setInterval(() => {
   if (done && was.get('results') !== JSON.stringify(done)) {
     was.set('results', JSON.stringify(done))
     for (const place of done) {
-      say('race', `${place.place ?? '-'} ${place.name} ${place.outcome}`)
+      say(
+        'race',
+        `${place.place ?? '-'} ${place.name} ${place.outcome} +${place.points} (${place.total})`,
+      )
     }
   }
 }, 250)

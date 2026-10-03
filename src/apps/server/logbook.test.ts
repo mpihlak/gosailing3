@@ -20,7 +20,7 @@ const race = (seed: string): ScenarioSpec => ({
 const racing = (seed: string): ServerMessage => ({ kind: 'racing', scenario: race(seed) })
 const results = (): ServerMessage => ({
   kind: 'results',
-  places: [{ boatId: 'c1', name: 'Blue (Ann)', outcome: 'finished', place: 1 }],
+  places: [{ boatId: 'c1', name: 'Blue (Ann)', outcome: 'finished', place: 1, points: 2, total: 2 }],
   nextRaceIn: 5,
 })
 

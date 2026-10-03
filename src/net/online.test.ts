@@ -295,7 +295,7 @@ describe('when it ends', () => {
   it('keeps the result and says so', () => {
     socket.say({
       kind: 'results',
-      places: [{ boatId: 'c1', name: 'Ann', outcome: 'finished', place: 1 }],
+      places: [{ boatId: 'c1', name: 'Ann', outcome: 'finished', place: 1, points: 2, total: 2 }],
       nextRaceIn: 5,
     })
     expect(race.phase).toBe('results')
@@ -307,7 +307,7 @@ describe('when it ends', () => {
     clock = 10_000
     socket.say({
       kind: 'results',
-      places: [{ boatId: 'c1', name: 'Ann', outcome: 'finished', place: 1 }],
+      places: [{ boatId: 'c1', name: 'Ann', outcome: 'finished', place: 1, points: 2, total: 2 }],
       nextRaceIn: 5,
     })
     expect(race.secondsToNextRace(10_000)).toBe(5)
