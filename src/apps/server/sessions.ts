@@ -1,5 +1,5 @@
 import type { Seconds } from '@/foundation/units'
-import type { Addressed, ClientMessage, Regatta } from '@/net'
+import type { Addressed, ClientMessage, Placing, Regatta } from '@/net'
 
 /** How long a name may be before it is cut short. */
 const NAME_LIMIT = 20
@@ -26,6 +26,8 @@ export class Sessions {
   constructor(
     private readonly regatta: Regatta,
     private readonly send: (id: string, text: string) => void,
+    /** Handed the finishing order as it goes out, for whatever wants to write it down. */
+    private readonly scored: (places: readonly Placing[]) => void = () => undefined,
   ) {}
 
   received(id: string, text: string): void {
@@ -43,6 +45,7 @@ export class Sessions {
 
   private deliver(sent: readonly Addressed[]): void {
     for (const { to, message } of sent) {
+      if (message.kind === 'results') this.scored(message.places)
       if (to.length === 0) continue
       // Written once however many it goes to: the fleet gets the same line.
       const text = JSON.stringify(message)

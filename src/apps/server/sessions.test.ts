@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { vec } from '@/foundation/geom'
 import { Regatta } from '@/net'
-import type { ServerMessage } from '@/net'
+import type { Placing, ServerMessage } from '@/net'
 import { Sessions, read } from './sessions'
 
 const PACE = 4
@@ -29,11 +29,17 @@ function regatta() {
 }
 
 let written: { to: string; message: ServerMessage }[]
+let scored: Placing[][]
 let sessions: Sessions
 
 beforeEach(() => {
   written = []
-  sessions = new Sessions(regatta(), (to, text) => written.push({ to, message: JSON.parse(text) }))
+  scored = []
+  sessions = new Sessions(
+    regatta(),
+    (to, text) => written.push({ to, message: JSON.parse(text) }),
+    (places) => scored.push([...places]),
+  )
 })
 
 const kindsFor = (id: string) =>
@@ -152,6 +158,26 @@ describe('a socket talking to the regatta', () => {
     written = []
     sessions.tick(1)
     expect(written.every((one) => one.to === 'c1')).toBe(true)
+  })
+
+  /*
+   * The finishing order is where a race's latency is written down, and the transport is
+   * the only part that knows what the connections have been doing.
+   */
+  it('hands the finishing order out when a race is scored', () => {
+    sessions.received('c1', '{"kind":"join","name":"Ann"}')
+    sessions.received('c2', '{"kind":"join","name":"Bob"}')
+    expect(scored).toEqual([])
+
+    // Sail until it is over, keeping both of them talking.
+    for (let n = 0; n < 20000 && scored.length === 0; n++) {
+      sessions.received('c1', '{"kind":"helm","rudder":0}')
+      sessions.received('c2', '{"kind":"helm","rudder":0}')
+      sessions.tick(1 / 20)
+    }
+
+    expect(scored).toHaveLength(1)
+    expect(scored[0]?.map((one) => one.name)).toEqual(['Blue (Ann)', 'Red (Bob)'])
   })
 
   it('ignores a helm from a socket that never joined', () => {

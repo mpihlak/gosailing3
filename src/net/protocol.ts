@@ -116,6 +116,14 @@ export type ServerMessage =
       readonly race?: RaceReport
       readonly events: readonly TimedEvent[]
     }
+  /**
+   * How long her messages are taking to go and come back, in milliseconds. Sent to each
+   * sailor about her own connection and nobody else's.
+   *
+   * A round trip, not an uplink: it is measured with websocket ping and pong, and
+   * splitting it in two would mean assuming the way out and the way back cost the same.
+   */
+  | { readonly kind: 'timing'; readonly rtt: number }
   | {
       readonly kind: 'results'
       readonly places: readonly Placing[]

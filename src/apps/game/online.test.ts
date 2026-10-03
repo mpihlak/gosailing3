@@ -322,6 +322,25 @@ describe('when it ends', () => {
     expect(race.secondsToNextRace(0)).toBeUndefined()
   })
 
+  /** Her own round trip, which only the server can measure, and only for her. */
+  it('takes the round trip the server reports', () => {
+    expect(race.rtt).toBeUndefined()
+    socket.say({ kind: 'timing', rtt: 26 })
+    expect(race.rtt).toBe(26)
+  })
+
+  it('refuses a round trip that is not a number', () => {
+    socket.say({ kind: 'timing', rtt: 26 })
+    socket.say({ kind: 'timing', rtt: 'quick' } as unknown as ServerMessage)
+    expect(race.rtt).toBeUndefined()
+  })
+
+  it('carries on when the server says something it has never heard of', () => {
+    socket.say({ kind: 'weather', outlook: 'brisk' } as unknown as ServerMessage)
+    expect(race.trouble).toBeUndefined()
+    expect(race.phase).toBe('lobby')
+  })
+
   it('notices the connection going away', () => {
     expect(race.trouble).toBeUndefined()
     socket.hangUp()

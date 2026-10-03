@@ -81,6 +81,11 @@ export class OnlineRace {
   watching: BoatId | undefined
   /** What went wrong, if the socket did. */
   trouble: string | undefined
+  /**
+   * How long a message takes to reach the server and come back, in milliseconds, as the
+   * server last measured it. Undefined until it has said.
+   */
+  rtt: number | undefined
   /** Whether there is a socket to write to. Nothing is sent before there is. */
   private connected = false
   /** The helm as the server last heard it, and when, so a still tiller is not resent. */
@@ -221,6 +226,10 @@ export class OnlineRace {
         if (message.race) this.report = message.race
         this.events.push(...message.events)
         this.remember(message.time, message.boats)
+        return
+      case 'timing':
+        // Whatever the far end says is only data. A number or nothing.
+        this.rtt = Number.isFinite(message.rtt) ? message.rtt : undefined
         return
       case 'results': {
         this.results = message.places
