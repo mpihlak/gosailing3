@@ -109,7 +109,17 @@ export interface BoatReport {
 export type RaceReport = Readonly<Record<BoatId, BoatReport>>
 
 export type ClientMessage =
-  | { readonly kind: 'join'; readonly name: string; readonly role?: Role }
+  | {
+      readonly kind: 'join'
+      readonly name: string
+      readonly role?: Role
+      /**
+       * Set by a sailor who is not a person, so the regatta knows not to hand her the
+       * race controls. Nothing checks it: a client that lies about being human gains
+       * only the buttons it would have had anyway.
+       */
+      readonly robot?: boolean
+    }
   | { readonly kind: 'helm'; readonly rudder: number }
   | { readonly kind: 'command'; readonly command: Command }
 

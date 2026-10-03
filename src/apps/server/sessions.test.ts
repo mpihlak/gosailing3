@@ -51,6 +51,7 @@ describe('reading what arrives', () => {
       kind: 'join',
       name: 'Ann',
       role: 'racer',
+      robot: false,
     })
     expect(read('{"kind":"helm","rudder":0.5}')).toEqual({ kind: 'helm', rudder: 0.5 })
   })
@@ -90,6 +91,12 @@ describe('reading what arrives', () => {
    * `innerHTML`. Letters and digits cannot close a tag or open an attribute, and the
    * twenty character limit is no defence on its own: `<svg onload=alert()>` is twenty.
    */
+  /** A sailor who is not a person says so, and is passed over for the race controls. */
+  it('takes a sailor who says she is not a person', () => {
+    expect(read('{"kind":"join","name":"Ann","robot":true}')).toMatchObject({ robot: true })
+    expect(read('{"kind":"join","name":"Ann","robot":"yes"}')).toMatchObject({ robot: false })
+  })
+
   it('keeps only letters and digits in a name', () => {
     const cases: [string, string][] = [
       ['<svg onload=alert()>', 'svgonloadalert'],

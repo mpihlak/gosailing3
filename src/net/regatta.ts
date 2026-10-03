@@ -87,6 +87,8 @@ interface Entry {
   /** When she was last heard from, in the player's seconds since the server started. */
   heard: Seconds
   rudder: number
+  /** Whether anybody is aboard, which is what the race controls are offered to. */
+  readonly person: boolean
   robot?: Skipper
 }
 
@@ -160,15 +162,19 @@ export class Regatta {
 
   /**
    * Who answers for the regatta: the racer who has been here longest, since the entries
-   * are held in the order they arrived. Nobody, when there is no racer to ask.
+   * are held in the order they arrived.
+   *
+   * Somebody has to be there to press the thing, so a boat with nobody aboard is passed
+   * over however long she has been here. A fleet of robots has no host and needs none.
    */
   private host(): BoatId | undefined {
-    return this.racers()[0]?.[0]
+    return this.racers().find(([, entry]) => entry.person)?.[0]
   }
 
   /** A sailor says something. Her connection id is the id her boat will race under. */
   say(id: BoatId, message: ClientMessage): Addressed[] {
-    if (message.kind === 'join') return this.join(id, message.name, message.role ?? 'racer')
+    if (message.kind === 'join')
+      return this.join(id, message.name, message.role ?? 'racer', message.robot === true)
     const entry = this.entries.get(id)
     if (!entry) return []
     entry.heard = this.now
@@ -228,6 +234,7 @@ export class Regatta {
       waiting: this.phase !== 'lobby',
       heard: Number.POSITIVE_INFINITY,
       rudder: 0,
+      person: false,
       robot: new Skipper(),
     })
     return id
@@ -270,7 +277,7 @@ export class Regatta {
     return out
   }
 
-  private join(id: BoatId, name: string, role: Role): Addressed[] {
+  private join(id: BoatId, name: string, role: Role, robot: boolean): Addressed[] {
     // One join to a connection. A second is ignored rather than answered, because every
     // join tells the whole fleet and a client repeating it turns one frame into as many
     // as there are sailors.
@@ -287,6 +294,7 @@ export class Regatta {
       waiting: seated && this.phase !== 'lobby' && !inTime,
       heard: this.now,
       rudder: 0,
+      person: !robot,
     }
     this.entries.set(id, entry)
 

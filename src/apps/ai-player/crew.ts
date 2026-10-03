@@ -57,6 +57,8 @@ export class Robot {
     this.race = new OnlineRace({
       url: options.url,
       name: options.name,
+      // So the regatta hands the race controls to a person instead of to her.
+      robot: true,
       helm: () => this.rudder(),
       ...(options.open ? { open: options.open } : {}),
       ...(options.now ? { now: options.now } : {}),

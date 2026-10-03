@@ -629,3 +629,57 @@ describe('scoring a race nobody finished', () => {
     expect(places.map((one) => one.points)).toEqual([2, 1])
   })
 })
+
+describe('who holds the race controls', () => {
+  const joinsAsRobot = (name: string) => ({ kind: 'join', name, robot: true }) as const
+
+  /*
+   * Somebody has to be there to press the thing. The robots join before a person does,
+   * so by seniority alone the controls went to a boat with nobody aboard and the one
+   * person in the race had no way to end it.
+   */
+  it('passes over a boat with nobody aboard, however long she has been here', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('bot', joinsAsRobot('Alice'))
+    race.say('her', joins('Martin'))
+    expect(race.fleet.filter((one) => one.host).map((one) => one.id)).toEqual(['her'])
+  })
+
+  it('gives them to a person who arrives after a whole fleet of robots', () => {
+    const race = regatta({ fleetSize: 10 })
+    for (const id of ['b1', 'b2', 'b3']) race.say(id, joinsAsRobot(id))
+    race.say('her', joins('Martin'))
+    expect(race.fleet.find((one) => one.host)?.id).toBe('her')
+  })
+
+  it('answers a command from the person, not from a robot who asks first', () => {
+    const race = regatta({ fleetSize: 2 })
+    race.say('bot', joinsAsRobot('Alice'))
+    race.say('her', joins('Martin'))
+    race.tick(1)
+    expect(race.state).toBe('racing')
+
+    expect(race.say('bot', { kind: 'command', command: 'endRace' })).toEqual([])
+    expect(race.state).toBe('racing')
+    expect(race.say('her', { kind: 'command', command: 'endRace' })).not.toEqual([])
+    expect(race.state).toBe('results')
+  })
+
+  /** A fleet of robots needs no host: there is nobody to offer the buttons to. */
+  it('leaves a fleet of robots without one', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('b1', joinsAsRobot('Alice'))
+    race.say('b2', joinsAsRobot('Bob'))
+    expect(race.fleet.some((one) => one.host)).toBe(false)
+  })
+
+  it('still passes them on when the person goes', () => {
+    const race = regatta({ fleetSize: 10 })
+    race.say('bot', joinsAsRobot('Alice'))
+    race.say('one', joins('Martin'))
+    race.say('two', joins('Ann'))
+    expect(race.fleet.find((one) => one.host)?.id).toBe('one')
+    race.leave('one')
+    expect(race.fleet.find((one) => one.host)?.id).toBe('two')
+  })
+})

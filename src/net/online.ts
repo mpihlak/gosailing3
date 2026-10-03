@@ -32,6 +32,8 @@ export interface OnlineOptions {
   readonly url: string
   readonly name: string
   readonly role?: Role
+  /** Set by a sailor who is not a person, so she is not handed the race controls. */
+  readonly robot?: boolean
   /** Where the tiller is. Asked for every time the helm goes up the wire. */
   readonly helm: () => number
   /** Swapped out in tests; a browser needs nothing here. */
@@ -109,7 +111,12 @@ export class OnlineRace {
     socket.addEventListener('open', (() => {
       this.connected = true
       socket.send(
-        JSON.stringify({ kind: 'join', name: this.options.name, role: this.options.role ?? 'racer' }),
+        JSON.stringify({
+          kind: 'join',
+          name: this.options.name,
+          role: this.options.role ?? 'racer',
+          ...(this.options.robot ? { robot: true } : {}),
+        }),
       )
     }) as (event: never) => void)
     socket.addEventListener('message', ((event: { data: string }) => {
