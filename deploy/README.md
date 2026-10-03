@@ -63,8 +63,38 @@ that answers anywhere between 100 and 766 feels like it is arguing.
 
 ## Operating
 
+It is a systemd **user** unit, so every command takes `--user`. Without it systemd looks
+in the system units and reports that there is no such service.
+
 ```sh
 ssh martin@voyager 'systemctl --user status gosailing'
 ssh martin@voyager 'journalctl --user -u gosailing -f'
 ssh martin@voyager 'systemctl --user restart gosailing'
 ```
+
+## Reading the latency
+
+Each connection is pinged twice a second and the journal gets two kinds of line. `-o cat`
+drops the timestamp and hostname, which is what makes them readable; leave it off when you
+want to tie a bad stretch to a time of day.
+
+```sh
+ssh martin@voyager 'journalctl --user -u gosailing -o cat | grep latency'
+```
+
+```
+latency now  Blue (Remote) n=20 p50 28ms p90 62ms max 102ms
+latency race Blue (Remote) finished n=203 p50 29ms p90 57ms max 183ms
+```
+
+`latency now` is every sailor every ten seconds, over those ten seconds alone, so a line
+that goes bad in the middle of a race shows as it happens. `latency race` is the whole
+race, written as the result goes out. Grep for one or the other to separate them.
+
+Percentiles rather than a mean: a line that answers in 70ms every time and one that
+answers anywhere between 100 and 700 can share a median, and only the second is
+unsteerable.
+
+What this measures is the round trip of the line, not the state of whoever is on it. The
+far end answers a ping in its network layer rather than its page, so a player whose phone
+is dropping frames still reads clean here.

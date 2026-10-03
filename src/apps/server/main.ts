@@ -8,7 +8,7 @@ import {
   regattaRace,
   WATCHER_COLOR,
 } from '@/apps/game/scenario'
-import { Latency } from './latency'
+import { Latency, type LatencySummary } from './latency'
 import { Sessions } from './sessions'
 
 /**
@@ -29,6 +29,8 @@ const PING_HZ = 2
 const TIMING_HZ = 1
 /** How many of the most recent trips the number she is shown is taken from. */
 const RECENT_TRIPS = 10
+/** How often the journal gets a line for each sailor, in seconds. */
+const LOG_EVERY = 10
 
 const regatta = new Regatta({
   race: regattaRace,
@@ -49,16 +51,32 @@ const sessions = new Sessions(
     if (socket?.readyState === socket?.OPEN) socket?.send(text)
   },
   (places) => {
-    // One line a sailor, so a race can be picked out of the journal with a grep.
+    // The race as a whole, one line a sailor, written as the result goes out.
     for (const place of places) {
       const trips = latency.summary(place.boatId)
-      const how = trips
-        ? `n=${trips.samples} p50 ${round(trips.p50)}ms p90 ${round(trips.p90)}ms max ${round(trips.max)}ms`
-        : 'no round trips measured'
-      console.log(`latency ${place.name} (${place.outcome}) ${how}`)
+      console.log(`latency race ${place.name} ${place.outcome} ${spread(trips)}`)
     }
   },
 )
+
+/** The shape of a set of round trips, or why there is none. */
+function spread(trips: LatencySummary | undefined): string {
+  if (!trips) return 'no round trips measured'
+  const { samples, p50, p90, max } = trips
+  return `n=${samples} p50 ${round(p50)}ms p90 ${round(p90)}ms max ${round(max)}ms`
+}
+
+/*
+ * How the fleet is doing right now, rather than how the race went. Taken over the last
+ * stretch alone, so a line that goes bad in the middle of a race shows as it happens
+ * instead of being averaged away by the good minutes either side of it.
+ */
+setInterval(() => {
+  for (const sailor of regatta.fleet) {
+    const trips = latency.summary(sailor.id, PING_HZ * LOG_EVERY)
+    if (trips) console.log(`latency now ${sailor.name} ${spread(trips)}`)
+  }
+}, LOG_EVERY * 1000)
 
 /**
  * Sailors arrive over a websocket, but the port answers plain HTTP as well, so a deploy
