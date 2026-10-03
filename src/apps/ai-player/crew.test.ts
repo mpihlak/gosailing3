@@ -19,7 +19,16 @@ const SCENARIO: ScenarioSpec = {
 
 /** Pointing away from the course, so anybody steering has something to do about it. */
 const boats = (y: number) => [
-  { id: 'c1', position: vec(0, y), heading: 180, speed: 5, turnRate: 0, twa: 180, course: 180, leeway: 0 },
+  {
+    id: 'c1',
+    position: vec(0, y),
+    heading: 180,
+    speed: 5,
+    turnRate: 0,
+    twa: 180,
+    course: 180,
+    leeway: 0,
+  },
 ]
 
 class FakeSocket implements Socket {
@@ -50,8 +59,7 @@ beforeEach(() => {
 })
 
 /** Every helm she has put on the wire. */
-const helms = () =>
-  socket.sent.map((text) => JSON.parse(text)).filter((one) => one.kind === 'helm')
+const helms = () => socket.sent.map((text) => JSON.parse(text)).filter((one) => one.kind === 'helm')
 
 function underway() {
   socket.say({ kind: 'welcome', you: 'c1', role: 'racer', phase: 'racing', fleet: [] })
@@ -113,5 +121,30 @@ describe('a robot sailing by what she is told', () => {
 
   it('has nothing to report before the first race', () => {
     expect(robot.standing()).toBeUndefined()
+  })
+})
+
+describe('which end of the line she goes for', () => {
+  const made = (end?: 'pin' | 'committee') =>
+    new Robot({
+      url: 'ws://test',
+      name: 'Ann',
+      ...(end ? { end } : {}),
+      open: () => new FakeSocket(),
+    })
+
+  it('goes to the pin unless told otherwise', () => {
+    expect(made().end).toBe('pin')
+  })
+
+  it('takes the end she was given', () => {
+    expect(made('committee').end).toBe('committee')
+  })
+
+  /** Building one must not throw: the skipper is made before her options exist if the
+   * field is initialised rather than assigned, which crashed every robot at startup. */
+  it('can be built at all, either way', () => {
+    expect(() => made('pin')).not.toThrow()
+    expect(() => made('committee')).not.toThrow()
   })
 })

@@ -32,6 +32,9 @@ npm run server                                  # somewhere to race
 npm run ai-player -- ws://localhost:8080 --count 2
 ```
 
+They take alternate ends of the line, so a fleet of them starts on both tacks and
+converges on the line from both directions rather than filing out together.
+
 Two of them will start a race between themselves, which is enough to watch one sail. Add
 yourself with `?server=ws://localhost:8080` and one of them is opponent enough. They say
 what they are doing as they go:

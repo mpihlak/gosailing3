@@ -1,4 +1,4 @@
-import { Skipper } from '@/agents/ai'
+import { boatEndStarboardStart, pinEndPortStart, Skipper } from '@/agents/ai'
 import { standings, type Simulation } from '@/sim'
 import { OnlineRace, type Socket } from '@/net'
 
@@ -26,6 +26,12 @@ export function crewName(index: number): string {
 export interface RobotOptions {
   readonly url: string
   readonly name: string
+  /**
+   * Which end of the line she goes for. Alternating them down the fleet is what stops
+   * the robots sailing the same path in a line, and puts boats on both tacks at the
+   * gun, which is a good deal more to sail through than a procession.
+   */
+  readonly end?: 'pin' | 'committee'
   /** Swapped out in tests; node needs nothing here. */
   readonly open?: (url: string) => Socket
   readonly now?: () => number
@@ -41,11 +47,13 @@ export interface RobotOptions {
  */
 export class Robot {
   readonly race: OnlineRace
-  private skipper = new Skipper()
+  /** Assigned in the constructor: a field initialiser runs before `options` exists. */
+  private skipper: Skipper
   /** The race the current skipper was made for, so a new one gets a fresh head. */
   private sailing: Simulation | undefined
 
   constructor(private readonly options: RobotOptions) {
+    this.skipper = this.freshSkipper()
     this.race = new OnlineRace({
       url: options.url,
       name: options.name,
@@ -57,6 +65,10 @@ export class Robot {
 
   get name(): string {
     return this.options.name
+  }
+
+  get end(): string {
+    return this.options.end ?? 'pin'
   }
 
   join(): void {
@@ -86,12 +98,17 @@ export class Robot {
     return `${place?.place ?? '-'}${leg} ${boat.speed.toFixed(1)}kn${owed}`
   }
 
+  private freshSkipper(): Skipper {
+    const start = this.options.end === 'committee' ? boatEndStarboardStart() : pinEndPortStart()
+    return new Skipper({ start })
+  }
+
   private rudder(): number {
     const { simulation, you } = this.race
     if (!simulation || !you) return 0
     if (simulation !== this.sailing) {
       this.sailing = simulation
-      this.skipper = new Skipper()
+      this.skipper = this.freshSkipper()
     }
     const world = this.race.frameAt((this.options.now ?? (() => performance.now()))())
     // Nothing to steer until two snapshots have arrived, and nothing to steer with while

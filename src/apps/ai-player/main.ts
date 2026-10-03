@@ -26,10 +26,14 @@ function valueOf(flag: string): string | undefined {
 
 const crew = Array.from({ length: count }, (_, index) => {
   const name = count === 1 && named ? named : (named ?? '') + crewName(index)
-  return new Robot({ url, name })
+  // Every other one goes to the other end, so a fleet of them starts on both tacks.
+  const end = index % 2 === 0 ? 'pin' : 'committee'
+  return new Robot({ url, name, end })
 })
 
-console.log(`${count} sailing at ${url}: ${crew.map((robot) => robot.name).join(', ')}`)
+console.log(
+  `${count} sailing at ${url}: ${crew.map((robot) => `${robot.name} (${robot.end})`).join(', ')}`,
+)
 
 for (const [index, robot] of crew.entries()) {
   setTimeout(() => {

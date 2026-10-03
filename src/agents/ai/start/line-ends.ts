@@ -16,7 +16,29 @@ import { bowPosition } from '@/domain/boat'
 import { sideOfLine } from '@/domain/course'
 import type { StartContext, StartPlan, StartStrategy } from './types'
 
-export interface PinEndPortOptions {
+/**
+ * Which way round a start is sailed.
+ *
+ * The two conventional ends of a line are mirror images about the wind: the pin is
+ * approached on port and the committee boat on starboard, and everything that differs
+ * between them is a sign. `toward` is the end she is aiming for, and `hand` is +1 when
+ * the wind is on her port side and -1 when it is on her starboard, which also decides
+ * which way bearing away turns her.
+ */
+interface Handedness {
+  readonly name: string
+  readonly hand: 1 | -1
+  readonly toward: 'from' | 'to'
+}
+
+const PIN_ON_PORT: Handedness = { name: 'pin end, port tack', hand: 1, toward: 'from' }
+const BOAT_ON_STARBOARD: Handedness = {
+  name: 'committee boat end, starboard tack',
+  hand: -1,
+  toward: 'to',
+}
+
+export interface LineEndOptions {
   /** How far up the line from the pin to aim, in boat lengths. Keeps her off the mark. */
   readonly clearance?: number
   /** Time allowed to get round from reaching out onto the approach. */
@@ -50,22 +72,39 @@ const DEFAULTS = {
  * TODO: bearing away spends time by running up the line, so a countdown too short to
  * reach out in leaves her nowhere to put it. That case wants a timed run instead.
  */
-export function pinEndPortStart(options: PinEndPortOptions = {}): StartStrategy {
+export function pinEndPortStart(options: LineEndOptions = {}): StartStrategy {
+  return endStart(PIN_ON_PORT, options)
+}
+
+/**
+ * A starboard tack start at the committee boat, which is the same start in a mirror.
+ *
+ * Worth having for more than variety: she arrives on starboard, so she has right of way
+ * over everyone coming the other way, and a fleet where some boats go each way has to
+ * sail around the rule rather than merely around each other.
+ */
+export function boatEndStarboardStart(options: LineEndOptions = {}): StartStrategy {
+  return endStart(BOAT_ON_STARBOARD, options)
+}
+
+function endStart(side: Handedness, options: LineEndOptions): StartStrategy {
   const { clearance, turnAllowance, maxBurn, maxReach } = {
     ...DEFAULTS,
     ...options,
   }
 
   return {
-    name: 'pin end, port tack',
+    name: side.name,
 
     plan(context: StartContext): StartPlan {
       const { boat, spec, wind, timeToStart, gunFired } = context
-      // Close-hauled on port: the wind on her port side, so her heading is the wind
-      // direction plus the angle she can hold.
-      const closeHauled = normalizeBearing(wind.direction + spec.polar.beatAngle(wind.speed))
+      // Close-hauled: the wind on one side of her, so her heading is the wind direction
+      // and the angle she can hold, taken to whichever side she is sailing on.
+      const closeHauled = normalizeBearing(
+        wind.direction + side.hand * spec.polar.beatAngle(wind.speed),
+      )
 
-      const target = startPoint(context, clearance * spec.length)
+      const target = startPoint(context, clearance * spec.length, side)
       const closeHauledSpeed = knotsToMps(spec.polar.beatTarget(wind.speed).speed)
       // Reach out for as long as there is a turning point she can still get back from.
       // When there is none left, the time is gone and the approach begins.
@@ -87,22 +126,23 @@ export function pinEndPortStart(options: PinEndPortOptions = {}): StartStrategy 
        */
       /*
        * Two reasons to bear away, and she takes whichever asks for more. One is the
-       * clock. The other is the pin: overstand the layline and close-hauled on port
-       * carries her across the line's extension outside the pin, which is no start at
-       * all. Bearing away moves her crossing back up the line and inside the mark.
+       * clock. The other is the end she is starting at: overstand the layline and
+       * close-hauled carries her across the line's extension outside it, which is no
+       * start at all. Bearing away moves her crossing back along the line and inside
+       * the mark.
        */
       const burn = Math.min(
         maxBurn,
         Math.max(
-          burnToDelay(context, closeHauled, timeToStart, maxBurn),
-          burnToClearPin(context, closeHauled, clearance * spec.length, maxBurn),
+          burnToDelay(context, closeHauled, timeToStart, maxBurn, side),
+          burnToClearEnd(context, closeHauled, clearance * spec.length, maxBurn, side),
         ),
       )
 
       // Past the gun there is nothing left to time: she is simply sailing at the line as
       // fast as she can.
       return {
-        bearing: normalizeBearing(closeHauled + burn),
+        bearing: normalizeBearing(closeHauled + side.hand * burn),
         phase: gunFired ? 'onTheWind' : burn > 1 ? 'burning' : 'approaching',
       }
     },
@@ -135,9 +175,11 @@ function burnToDelay(
   closeHauled: Degrees,
   timeToStart: Seconds,
   maxBurn: Degrees,
+  side: Handedness,
 ): Degrees {
-  if (timeToCross(context, closeHauled) >= timeToStart) return 0
-  if (timeToCross(context, closeHauled + maxBurn) <= timeToStart) return maxBurn
+  const off = (burn: Degrees) => closeHauled + side.hand * burn
+  if (timeToCross(context, off(0)) >= timeToStart) return 0
+  if (timeToCross(context, off(maxBurn)) <= timeToStart) return maxBurn
 
   // Bearing away always delays the crossing, so the answer is bracketed and the search
   // is a bisection.
@@ -145,17 +187,23 @@ function burnToDelay(
   let high = maxBurn
   for (let i = 0; i < 18; i++) {
     const middle = (low + high) / 2
-    if (timeToCross(context, closeHauled + middle) < timeToStart) low = middle
+    if (timeToCross(context, off(middle)) < timeToStart) low = middle
     else high = middle
   }
   return high
 }
 
-/** Where on the line she means to cross: up from the pin, clear of it. */
-function startPoint(context: StartContext, clearance: Meters): Vec2 {
-  const { line } = context
-  const upTheLine = normalize(sub(line.to, line.from))
-  return add(line.from, scale(upTheLine, clearance))
+/** Where on the line she means to cross: in from her end of it, clear of the mark. */
+function startPoint(context: StartContext, clearance: Meters, side: Handedness): Vec2 {
+  const { from, to } = ends(context.line, side)
+  return add(from, scale(normalize(sub(to, from)), clearance))
+}
+
+/** The line read from her end inward, so both ends are the same problem. */
+function ends(line: StartContext['line'], side: Handedness): { from: Vec2; to: Vec2 } {
+  return side.toward === 'from'
+    ? { from: line.from, to: line.to }
+    : { from: line.to, to: line.from }
 }
 
 /**
@@ -232,31 +280,33 @@ function crossingPoint(context: StartContext, bearing: Degrees): Vec2 | null {
   return closing > 0.01 ? add(bow, scale(along, behind / closing)) : null
 }
 
-/** How far up the line from the pin a point lies. Negative is outside the pin. */
-function upTheLine(line: StartContext['line'], point: Vec2): Meters {
-  return dot(sub(point, line.from), normalize(sub(line.to, line.from)))
+/** How far along the line from her end a point lies. Negative is outside the mark. */
+function alongFromEnd(line: StartContext['line'], point: Vec2, side: Handedness): Meters {
+  const { from, to } = ends(line, side)
+  return dot(sub(point, from), normalize(sub(to, from)))
 }
 
 /**
- * How far off the wind she must sail for her crossing to fall inside the pin rather than
- * outside it. Nothing if she is already fetching it, and no more than the cap if even
+ * How far off the wind she must sail for her crossing to fall inside her end of the line
+ * rather than outside it. Nothing if she is already fetching it, and no more than the cap if even
  * that will not do — which is the shift she cannot answer.
  */
-function burnToClearPin(
+function burnToClearEnd(
   context: StartContext,
   closeHauled: Degrees,
   clearance: Meters,
   maxBurn: Degrees,
+  side: Handedness,
 ): Degrees {
   const crossesAt = (burn: Degrees): Meters => {
-    const point = crossingPoint(context, closeHauled + burn)
-    return point ? upTheLine(context.line, point) : Infinity
+    const point = crossingPoint(context, closeHauled + side.hand * burn)
+    return point ? alongFromEnd(context.line, point, side) : Infinity
   }
 
   if (crossesAt(0) >= clearance) return 0
   if (crossesAt(maxBurn) < clearance) return maxBurn
 
-  // Bearing away always moves the crossing further up the line, so this is bracketed.
+  // Bearing away always moves the crossing further along the line, so this is bracketed.
   let low = 0
   let high = maxBurn
   for (let i = 0; i < 18; i++) {

@@ -1,3 +1,3 @@
 export * from './types'
-export * from './pin-end-port'
+export * from './line-ends'
 export * from './evaluate'

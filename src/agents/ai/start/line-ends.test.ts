@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { vec } from '@/foundation/geom'
 import type { Meters, Seconds } from '@/foundation/units'
 import type { ScenarioSpec } from '@/sim'
-import { pinEndPortStart } from './pin-end-port'
+import { pinEndPortStart } from './line-ends'
 import { trialStart, type StartReport } from './evaluate'
 
 /** The countdown the game itself uses, in simulation seconds. */
