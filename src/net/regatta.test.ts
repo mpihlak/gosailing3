@@ -605,3 +605,27 @@ describe('a sailor who goes', () => {
     expect(() => race.leave('a')).not.toThrow()
   })
 })
+
+describe('scoring a race nobody finished', () => {
+  /*
+   * A race called off part way leaves nobody with a place. Ordered by when they joined,
+   * a boat that quit on the first leg came out ahead of the boat that was leading when
+   * the race was called, and took the points for it.
+   */
+  it('puts a boat still sailing ahead of one that gave up', () => {
+    const race = regatta({ fleetSize: 2 })
+    race.say('quitter', joins('Quitter'))
+    race.say('stayer', joins('Stayer'))
+    race.tick(1)
+    sail(race, 5, { alive: ['quitter', 'stayer'] })
+
+    race.leave('quitter')
+    const sent = race.say('stayer', { kind: 'command', command: 'endRace' })
+    const places = resultsIn(sent)!
+
+    expect(places.map((one) => one.name)).toEqual(['Stayer', 'Quitter'])
+    expect(places.map((one) => one.outcome)).toEqual(['timedOut', 'retired'])
+    // And the points follow the order, so staying is worth more than leaving.
+    expect(places.map((one) => one.points)).toEqual([2, 1])
+  })
+})

@@ -90,9 +90,12 @@ interface Entry {
   robot?: Skipper
 }
 
-/** Where she came, with everyone who never crossed the line behind everyone who did. */
-function place(placing: { readonly place?: number }): number {
-  return placing.place ?? Number.POSITIVE_INFINITY
+/** First difference wins, as a sort on several keys at once. */
+function order(one: readonly number[], two: readonly number[]): number {
+  for (let at = 0; at < one.length; at++) {
+    if (one[at] !== two[at]) return one[at]! - two[at]!
+  }
+  return 0
 }
 
 /** The name she gave, or her colour when she gave none. */
@@ -500,15 +503,27 @@ export class Regatta {
         boatId: id,
         name,
         outcome,
+        /*
+         * Where she comes when nobody has finished. Whoever crossed is ahead of
+         * whoever did not; whoever was still sailing at the end is ahead of whoever
+         * had given up and gone; and among those still sailing, whoever was furthest
+         * round. Left to the order they joined in, a boat that quit on the first leg
+         * beat the boat that was leading when the race was called.
+         */
+        rank: [
+          boat?.place === undefined ? 1 : 0,
+          boat?.place ?? 0,
+          this.retired.has(id) ? 1 : 0,
+          -(boat?.stageIndex ?? 0),
+        ],
         ...(boat?.place === undefined ? {} : { place: boat.place }),
         ...(boat?.finishTime === undefined ? {} : { elapsed: boat.finishTime / this.options.pace }),
       }
     })
 
-    // Sorting is stable, so boats with no place keep the order they joined in.
-    const home = [...sailed].sort((one, two) => place(one) - place(two))
+    const home = [...sailed].sort((one, two) => order(one.rank, two.rank))
 
-    return home.map((placing, index) => {
+    return home.map(({ rank: _rank, ...placing }, index) => {
       // The fleet's size to the winner, down to one for the boat at the back.
       const points = home.length - index
       const total = (this.tally.get(placing.boatId) ?? 0) + points

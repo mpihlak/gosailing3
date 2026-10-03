@@ -468,6 +468,10 @@ function takeFromRegatta(timestamp: number): boolean {
    * never typed a name, so the colour is the only thing telling her which of the boats
    * on the water to steer, and she should not have to find it in a list.
    */
+  // Before anything that might not draw: the host's way out of a race must not depend
+  // on there being something to draw, which is exactly when she would want it.
+  showHostControls(race.phase === 'racing' && race.hosting)
+
   const hers = race.fleet.find((sailor) => sailor.id === race.you)
   if (hers && greetedAt === undefined) {
     greetedAt = timestamp
@@ -485,7 +489,6 @@ function takeFromRegatta(timestamp: number): boolean {
 
   if (race.phase !== 'racing' || !race.simulation) {
     sayWhoHasGone(race)
-    showHostControls(false)
     if (race.phase === 'results' && race.results) {
       showRegattaResults(race.results, race.secondsToNextRace(timestamp))
     }
@@ -534,7 +537,6 @@ function takeFromRegatta(timestamp: number): boolean {
   }
 
   if (!hasBoat) noteFollowing(follow, race.role === 'observer', timestamp)
-  showHostControls(race.hosting)
   sayWhoHasGone(race)
 
   /*
@@ -586,8 +588,8 @@ function noteFollowing(boatId: BoatId, spectating: boolean, timestamp: number): 
 function showRegattaResults(places: readonly Placing[], startsIn: number | undefined): void {
   const rows = places
     .map((one) => {
-      const how =
-        one.outcome === 'finished' ? timing(one.elapsed ?? 0) : one.outcome === 'retired' ? 'left' : 'DNF'
+      // A boat that never crossed is DNF, whether she gave up or simply ran out of time.
+      const how = one.outcome === 'finished' ? timing(one.elapsed ?? 0) : 'DNF'
       const mine = one.boatId === online?.you ? ' class="mine"' : ''
       // What the race was worth, and what she has taken from the regatta so far.
       const scored = `+${escapeHtml(one.points)}`
