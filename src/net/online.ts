@@ -268,8 +268,8 @@ export class OnlineRace {
         status: boat.status,
         stageIndex: boat.stageIndex,
         penalties: boat.penalties,
+        passedMark: boat.passedMark,
         // Nobody watching reads these, and the server does not send them.
-        passedMark: false,
         clearedPreStart: true,
         clearedToFinish: false,
         distanceSailed: 0,

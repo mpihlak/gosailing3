@@ -81,6 +81,15 @@ export interface BoatReport {
   readonly status: BoatStatus
   readonly stageIndex: number
   readonly penalties: number
+  /**
+   * Whether she is round the mark of this stage and on her way, or still coming at it.
+   *
+   * A latch, set once she is past on the required side and cleared when the stage
+   * changes, so it costs a handful of reports a race rather than one a tick. Anybody
+   * sailing by what the server sends needs it: without it she would be forever steering
+   * at a mark she had already rounded.
+   */
+  readonly passedMark: boolean
   readonly place?: number
   /** Her elapsed time, in simulated seconds, once she is home. */
   readonly finishTime?: Seconds

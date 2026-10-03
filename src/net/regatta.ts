@@ -418,6 +418,7 @@ export class Regatta {
         status: boat.status,
         stageIndex: boat.stageIndex,
         penalties: boat.penalties,
+        passedMark: boat.passedMark,
         ...(boat.place === undefined ? {} : { place: boat.place }),
         ...(boat.finishTime === undefined ? {} : { finishTime: boat.finishTime }),
       }

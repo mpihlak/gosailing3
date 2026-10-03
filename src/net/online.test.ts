@@ -207,12 +207,18 @@ describe('drawing what the server says', () => {
       time: 1,
       boats: boatsAt(0),
       events: [],
-      race: { c1: { status: 'racing', stageIndex: 1, penalties: 2 } },
+      race: { c1: { status: 'racing', stageIndex: 1, penalties: 2, passedMark: true } },
     })
     clock = 50
     socket.say({ kind: 'snapshot', time: 1.05, boats: boatsAt(1), events: [] })
     const drawn = race.frameAt(100)
-    expect(drawn?.race.progress.c1).toMatchObject({ status: 'racing', stageIndex: 1, penalties: 2 })
+    expect(drawn?.race.progress.c1).toMatchObject({
+      status: 'racing',
+      stageIndex: 1,
+      penalties: 2,
+      // Without this a boat steering by the wire would never finish rounding a mark.
+      passedMark: true,
+    })
   })
 
   it('puts the finishers in order', () => {
@@ -222,8 +228,8 @@ describe('drawing what the server says', () => {
       boats: boatsAt(0),
       events: [],
       race: {
-        c1: { status: 'finished', stageIndex: 3, penalties: 0, place: 2 },
-        c2: { status: 'finished', stageIndex: 3, penalties: 0, place: 1 },
+        c1: { status: 'finished', stageIndex: 3, penalties: 0, passedMark: false, place: 2 },
+        c2: { status: 'finished', stageIndex: 3, penalties: 0, passedMark: false, place: 1 },
       },
     })
     clock = 50
