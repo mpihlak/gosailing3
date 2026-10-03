@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { vec } from '@/foundation/geom'
 import type { ScenarioSpec } from '@/sim'
-import { onTheWire, Regatta, type RegattaLimits } from './regatta'
+import { Regatta, type RegattaLimits } from './regatta'
 import { SNAPSHOT_HZ, type Addressed, type ServerMessage } from './protocol'
 
 /** The pace the game is played at, so the limits below read in the player's seconds. */
@@ -111,29 +111,6 @@ describe('a race in progress', () => {
     const snapshot = sent.find((one) => one.message.kind === 'snapshot')!.message
     expect(snapshot).toMatchObject({ kind: 'snapshot' })
     if (snapshot.kind === 'snapshot') expect(snapshot.boats).toHaveLength(2)
-  })
-
-  it('sends a boat to a centimeter and a tenth of a degree', () => {
-    const boat = onTheWire({
-      id: 'a',
-      position: vec(80.29751891256868, -9.421573253770656),
-      heading: 330.13333333315177,
-      speed: 4.157875226910268,
-      turnRate: 2.6124502344830835e-10,
-      twa: -26.815180239359506,
-      course: 324.93335308254206,
-      leeway: -5.199980250609731,
-    })
-    expect(boat).toEqual({
-      id: 'a',
-      position: { x: 80.3, y: -9.42 },
-      heading: 330.1,
-      speed: 4.16,
-      turnRate: 0,
-      twa: -26.8,
-      course: 324.9,
-      leeway: -5.2,
-    })
   })
 
   it('puts a latecomer in the lobby, and shows her the race', () => {

@@ -1,5 +1,5 @@
 import type { Seconds } from '@/foundation/units'
-import type { BoatId, BoatState } from '@/domain/boat'
+import type { BoatId } from '@/domain/boat'
 import {
   createSimulation,
   SimulationRunner,
@@ -426,7 +426,7 @@ export class Regatta {
         message: {
           kind: 'snapshot',
           time,
-          boats: boats.map(onTheWire),
+          boats,
           events: this.pending,
           ...(changed ? { race } : {}),
         },
@@ -543,29 +543,5 @@ export class Regatta {
   private backToTheLobby(): Addressed[] {
     this.abandon()
     return [this.announceFleet(), ...this.startIfReady()]
-  }
-}
-
-/**
- * A boat to the precision anyone can see: a centimeter, a tenth of a degree, a hundredth
- * of a knot. The simulation keeps sixteen digits of each and sending them all made the
- * snapshot twice the size, most of it noise.
- */
-export function onTheWire(boat: BoatState): BoatState {
-  const to = (places: number) => (value: number) => {
-    const scale = 10 ** places
-    return Math.round(value * scale) / scale
-  }
-  const hundredth = to(2)
-  const tenth = to(1)
-  return {
-    id: boat.id,
-    position: { x: hundredth(boat.position.x), y: hundredth(boat.position.y) },
-    heading: tenth(boat.heading),
-    speed: hundredth(boat.speed),
-    turnRate: tenth(boat.turnRate),
-    twa: tenth(boat.twa),
-    course: tenth(boat.course),
-    leeway: tenth(boat.leeway),
   }
 }

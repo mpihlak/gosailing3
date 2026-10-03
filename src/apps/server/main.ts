@@ -62,16 +62,7 @@ const sessions = new Sessions(
     if (socket?.readyState === socket?.OPEN) socket?.send(text)
   },
   {
-    heard: (id, message) => {
-      logbook.heard(id, message)
-      if (message.kind !== 'stats') return
-      const who = regatta.fleet.find((sailor) => sailor.id === id)?.name ?? id
-      const { frames, frameP90, frameMax, gapP90, gapMax, held, delay } = message
-      console.log(
-        `playback ${who} frames=${frames} frame p90 ${frameP90}ms max ${frameMax}ms` +
-          ` gap p90 ${gapP90}ms max ${gapMax}ms held ${held}ms delay ${delay}ms`,
-      )
-    },
+    heard: (id, message) => logbook.heard(id, message),
     sent: (to, message) => {
       logbook.sent(to, message)
       if (message.kind !== 'results') return
@@ -124,20 +115,8 @@ const web = createServer((request, response) => {
  */
 const MAX_FRAME = 1024
 
-/**
- * Snapshots are compressed, each against the ones before it on the same connection, which
- * suits them: one differs from the last only in the digits that moved. That takes a
- * ten-boat snapshot from about 1.1 KB to under 200 bytes. A helm or a ping is too small to
- * be worth it.
- */
-const COMPRESS_FROM = 256
-
 let connections = 0
-const server = new WebSocketServer({
-  server: web,
-  maxPayload: MAX_FRAME,
-  perMessageDeflate: { threshold: COMPRESS_FROM },
-})
+const server = new WebSocketServer({ server: web, maxPayload: MAX_FRAME })
 
 server.on('connection', (socket) => {
   const id = `c${++connections}`

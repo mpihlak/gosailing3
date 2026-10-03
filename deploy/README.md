@@ -99,7 +99,7 @@ the milliseconds since the race began:
 | ------ | -------------------------------------------------------------------------- |
 | `race` | the header: id, start time, seed, sailors, the whole scenario              |
 | `out`  | a message the server sent, with the sailors it went to                     |
-| `in`   | a helm, a command or a playback report a sailor sent                       |
+| `in`   | a helm or a command a sailor sent                                          |
 | `over` | the footer: end time, how long it ran, `scored` or `abandoned`, the places |
 
 What is recorded is the stream the clients were given, so a replayer needs no simulation
@@ -108,9 +108,8 @@ race from them. A race ends `abandoned` when it never reached a result — the h
 restarted it, a sailor arriving before the gun made the start again, or the server
 stopped.
 
-A three-boat race writes about 20 KB a second and a ten-boat race about 60 KB, estimated
-by rounding the boats in two recorded races the way the server now sends them. There is
-no retention: nothing deletes old
+A nineteen-second race between two boats is about 385 KB, so roughly 20 KB a second, and
+a ten-boat race perhaps three times that. There is no retention: nothing deletes old
 races, and with 85 GB free that is years of sailing, but it is unbounded. `gzip` gets
 them down by about 3.8x if they ever need it.
 
@@ -140,32 +139,3 @@ unsteerable.
 What this measures is the round trip of the line, not the state of whoever is on it. The
 far end answers a ping in its network layer rather than its page, so a player whose phone
 is dropping frames still reads clean here.
-
-## Reading the playback
-
-Every ten seconds of a race each sailor's page reports how the fleet moved on her screen,
-and the journal gets a line for it:
-
-```sh
-ssh martin@voyager 'journalctl --user -u gosailing -o cat | grep playback'
-```
-
-```
-playback martin frames=600 frame p90 17ms max 40ms gap p90 35ms max 90ms held 0ms delay 33ms
-```
-
-| field    | what it is                                                                     |
-| -------- | ------------------------------------------------------------------------------ |
-| `frames` | frames drawn                                                                   |
-| `frame`  | time between frames: a long one is the page stalling, in drawing or collection |
-| `gap`    | time between snapshots arriving: a long one is the line stalling               |
-| `held`   | how long the fleet stood still because the next snapshot had not arrived       |
-| `delay`  | how far behind the newest snapshot the fleet was being drawn                   |
-
-The page draws the fleet far enough behind to cover the worst lateness of the last ten
-seconds, from one snapshot interval (33ms) up to 250ms. A line that stalls shows as a
-large `gap` with the `delay` grown to cover it and `held` at or near nought; `held`
-climbing means stalls longer than 250ms. A long `frame` with a steady `gap` is the
-player's device, not the line.
-
-The same reports are in the race file as `in` messages of kind `stats`.

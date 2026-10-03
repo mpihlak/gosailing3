@@ -177,7 +177,6 @@ function joinRegatta(url: string, name: string, watching: boolean): void {
     name,
     role,
     helm: () => helm.rudder,
-    pace: GAME_PACE,
   })
   online.join()
   hostControls.addEventListener('click', (event) => {

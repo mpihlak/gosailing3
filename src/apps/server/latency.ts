@@ -1,5 +1,3 @@
-import { nearestRank } from '@/foundation/rank'
-
 /** How a connection's round trips have been running. Milliseconds. */
 export interface LatencySummary {
   readonly samples: number
@@ -45,9 +43,14 @@ export class Latency {
     const sorted = [...recent].sort((a, b) => a - b)
     return {
       samples: sorted.length,
-      p50: nearestRank(sorted, 0.5),
-      p90: nearestRank(sorted, 0.9),
+      p50: at(sorted, 0.5),
+      p90: at(sorted, 0.9),
       max: sorted[sorted.length - 1]!,
     }
   }
+}
+
+/** Nearest rank, which needs no interpolation and cannot invent a number nobody saw. */
+function at(sorted: readonly number[], fraction: number): number {
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))]!
 }

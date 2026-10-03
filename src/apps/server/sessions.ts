@@ -1,20 +1,8 @@
 import type { Seconds } from '@/foundation/units'
-import type { Addressed, ClientMessage, PlaybackStats, Regatta, ServerMessage } from '@/net'
+import type { Addressed, ClientMessage, Regatta, ServerMessage } from '@/net'
 
 /** How long a name may be before it is cut short. */
 const NAME_LIMIT = 20
-
-const STATS_FIELDS: readonly (keyof PlaybackStats)[] = [
-  'frames',
-  'frameP90',
-  'frameMax',
-  'gapP90',
-  'gapMax',
-  'held',
-  'delay',
-]
-/** An hour, in milliseconds: more than any report covers. */
-const STATS_LIMIT = 3_600_000
 
 /**
  * Letters and digits, and nothing else.
@@ -105,16 +93,6 @@ export function read(text: string): ClientMessage | undefined {
   if (message.kind === 'command') {
     if (message.command !== 'endRace' && message.command !== 'restart') return undefined
     return { kind: 'command', command: message.command }
-  }
-  if (message.kind === 'stats') {
-    const stats: Record<string, number> = {}
-    for (const field of STATS_FIELDS) {
-      const value = message[field]
-      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return undefined
-      // Whole milliseconds and frames, and no number large enough to be anything but a lie.
-      stats[field] = Math.round(Math.min(value, STATS_LIMIT))
-    }
-    return { kind: 'stats', ...(stats as unknown as PlaybackStats) }
   }
   return undefined
 }

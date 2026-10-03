@@ -1,4 +1,3 @@
-import { nearestRank } from '@/foundation/rank'
 import type { Seconds } from '@/foundation/units'
 import type { BoatId } from '@/domain/boat'
 import {
@@ -13,11 +12,9 @@ import {
 import {
   HELM_HZ,
   SNAPSHOT_HZ,
-  STATS_EVERY,
   type Command,
   type Phase,
   type Placing,
-  type PlaybackStats,
   type RaceReport,
   type Role,
   type Sailor,
@@ -39,8 +36,6 @@ export interface OnlineOptions {
   readonly robot?: boolean
   /** Where the tiller is. Asked for every time the helm goes up the wire. */
   readonly helm: () => number
-  /** Simulated seconds to a second of the player's time: how the server runs the race. */
-  readonly pace: number
   /** Swapped out in tests; a browser needs nothing here. */
   readonly open?: (url: string) => Socket
   /** The clock snapshots are stamped with, in milliseconds. */
@@ -48,29 +43,11 @@ export interface OnlineOptions {
 }
 
 /**
- * The least the fleet is drawn behind the newest snapshot: one message, so on a steady
- * line there is always a later one to slide towards.
+ * How far behind the newest snapshot the fleet is drawn: one message, so there is always
+ * a later one to slide towards. Any less and a message arriving late leaves nothing to
+ * draw but the last position, and the fleet stutters.
  */
-const MIN_DELAY = 1000 / SNAPSHOT_HZ
-/**
- * The most. Every millisecond of it is a millisecond before her own helm shows, and past
- * this a sailor feels the boat answer late; a stall now and then is the better trade.
- */
-const MAX_DELAY = 250
-/**
- * How many snapshots lateness is judged over: ten seconds of them. The worst of them is
- * allowed for, not a percentile: a stall makes only its first snapshot that late, and a
- * line that stalls every few seconds needs the stalls covered.
- */
-const LATENESS_WINDOW = SNAPSHOT_HZ * 10
-/**
- * How fast a delay no longer needed is given back, as a share of the time passing. The
- * fleet plays that much faster until it has caught up, which nobody can see at five
- * percent.
- */
-const DELAY_RELEASE = 0.05
-/** Snapshots kept to draw from: enough to reach back the longest delay and one more. */
-const FRAMES_KEPT = Math.ceil(MAX_DELAY / MIN_DELAY) + 2
+const PLAYBACK_DELAY = 1000 / SNAPSHOT_HZ
 
 /**
  * How far the helm must move before it is worth a message of its own. A tiller under a
@@ -81,34 +58,15 @@ const HELM_STEP = 0.01
 /**
  * A seat in the regatta.
  *
- * The server sails the race and says where the boats are thirty times a second. Between
- * those the fleet is drawn moving, by playing back a little behind the newest message
- * and sliding from the one before to the one after — so what is on screen is always a
- * moment old and never a guess. Guessing is what prediction is for, and a hundred
- * milliseconds is two degrees of heading on a boat that turns at twenty-two a second.
+ * The server sails the race and says where the boats are twenty times a second. Between
+ * those the fleet is drawn moving, by playing back one message behind and sliding from
+ * the one before it to the one after — so what is on screen is always a moment old and
+ * never a guess. Guessing is what prediction is for, and a hundred milliseconds is two
+ * degrees of heading on a boat that turns at twenty-two a second.
  */
 export class OnlineRace {
   private socket: Socket | undefined
-  private frames: WorldState[] = []
-  /**
-   * How late each recent snapshot arrived: when it came, less when the server says it was
-   * sent. The two clocks have nothing in common, so only the differences between these
-   * mean anything, and the earliest is taken as on time. Kept for a window rather than
-   * for ever, so two clocks running at slightly different rates are followed, not lost.
-   */
-  private lateness: number[] = []
-  /** How far behind the newest snapshot the fleet is drawn now, in milliseconds. */
-  private delay = MIN_DELAY
-  /** The simulated moment last drawn. The fleet is never drawn going backwards. */
-  private playhead = Number.NEGATIVE_INFINITY
-  /** When the last frame was drawn, and when the last snapshot arrived. */
-  private lastFrameAt: number | undefined
-  private lastSnapshotAt: number | undefined
-  /** What has been seen since the last report went up. */
-  private frameGaps: number[] = []
-  private snapshotGaps: number[] = []
-  private held = 0
-  private lastStatsAt: number | undefined
+  private frames: { readonly at: number; readonly world: WorldState }[] = []
   private report: RaceReport = {}
   /** What the race has done since anyone last asked: the banners are made from these. */
   private events: TimedEvent[] = []
@@ -188,39 +146,6 @@ export class OnlineRace {
     this.lastRudder = rudder
     this.lastHelmAt = at
     this.say({ kind: 'helm', rudder })
-    this.sendStats(at)
-  }
-
-  /**
-   * What the playback has been like, once every so often while there is a race to play.
-   * Asked from the helm because the helm is asked often whatever the page is doing.
-   */
-  private sendStats(at: number): void {
-    this.lastStatsAt ??= at
-    if (at - this.lastStatsAt < STATS_EVERY) return
-    this.lastStatsAt = at
-    if (this.frameGaps.length > 0 || this.snapshotGaps.length > 0) {
-      this.say({ kind: 'stats', ...this.takeStats() })
-    }
-  }
-
-  private takeStats(): PlaybackStats {
-    const frames = [...this.frameGaps].sort((a, b) => a - b)
-    const gaps = [...this.snapshotGaps].sort((a, b) => a - b)
-    const whole = (ms: number | undefined) => Math.round(ms ?? 0)
-    const stats = {
-      frames: frames.length,
-      frameP90: whole(frames.length ? nearestRank(frames, 0.9) : 0),
-      frameMax: whole(frames.at(-1)),
-      gapP90: whole(gaps.length ? nearestRank(gaps, 0.9) : 0),
-      gapMax: whole(gaps.at(-1)),
-      held: whole(this.held),
-      delay: whole(this.delay),
-    }
-    this.frameGaps = []
-    this.snapshotGaps = []
-    this.held = 0
-    return stats
   }
 
   /**
@@ -283,45 +208,16 @@ export class OnlineRace {
   }
 
   /**
-   * The fleet as it should be drawn at this moment, or nothing until a snapshot has
-   * arrived.
-   *
-   * Snapshots are placed on the server's timeline, not by when they arrived, and drawn
-   * far enough behind the newest to ride out the lateness the line has lately shown. One
-   * that arrives late then changes nothing on screen, where stamping by arrival made the
-   * fleet stop and then jump.
+   * The fleet as it should be drawn at this moment, or nothing until two snapshots have
+   * arrived and there is something to slide between.
    */
   frameAt(now: number): WorldState | undefined {
-    const elapsed = this.lastFrameAt === undefined ? 0 : now - this.lastFrameAt
-    if (this.lastFrameAt !== undefined) this.frameGaps.push(elapsed)
-    this.lastFrameAt = now
-    const latest = this.frames.at(-1)
-    if (!latest) return undefined
-
-    this.delay = Math.max(this.wantedDelay(), this.delay - DELAY_RELEASE * elapsed)
-    const onTime = Math.min(...this.lateness)
-    const wanted = this.simulated(now - onTime - this.delay)
-    this.playhead = Math.max(this.playhead, wanted)
-    if (this.playhead > latest.time) this.held += elapsed
-    const at = Math.min(this.playhead, latest.time)
-
-    const next = this.frames.findIndex((frame) => frame.time > at)
-    if (next === -1) return latest
-    const before = this.frames[next - 1]
-    const after = this.frames[next]!
-    if (!before) return after
-    return interpolateWorld(before, after, (at - before.time) / (after.time - before.time))
-  }
-
-  /** How far behind to draw to cover the lateness lately seen. */
-  private wantedDelay(): number {
-    const allowance = Math.max(...this.lateness) - Math.min(...this.lateness)
-    return Math.min(MAX_DELAY, MIN_DELAY + allowance)
-  }
-
-  /** The server's clock, in milliseconds, as simulated seconds. */
-  private simulated(ms: number): Seconds {
-    return (ms / 1000) * this.options.pace
+    const [previous, latest] = this.frames
+    if (!previous || !latest) return this.frames[0]?.world
+    const playAt = now - PLAYBACK_DELAY
+    const span = latest.at - previous.at
+    const t = span > 0 ? (playAt - previous.at) / span : 1
+    return interpolateWorld(previous.world, latest.world, Math.max(0, Math.min(1, t)))
   }
 
   private clock(): number {
@@ -349,11 +245,7 @@ export class OnlineRace {
         return
       case 'racing':
         this.simulation = createSimulation(message.scenario)
-        // A new race starts its clock at nought, so what was learnt of the last one's is no use.
         this.frames = []
-        this.lateness = []
-        this.playhead = Number.NEGATIVE_INFINITY
-        this.lastSnapshotAt = undefined
         this.report = {}
         this.events = []
         this.results = undefined
@@ -389,14 +281,11 @@ export class OnlineRace {
       contacts: [],
       incidents: {},
     }
+    // Two is all that is needed to slide between, and a third would only be drawn later.
+    // Stamped with when it arrived rather than when it was meant to: a clock of our own
+    // would drift away from the server's for as long as the two disagreed.
     const at = this.clock()
-    if (this.lastSnapshotAt !== undefined) this.snapshotGaps.push(at - this.lastSnapshotAt)
-    this.lastSnapshotAt = at
-    this.lateness = [
-      ...this.lateness.slice(1 - LATENESS_WINDOW),
-      at - (time / this.options.pace) * 1000,
-    ]
-    this.frames = [...this.frames.slice(1 - FRAMES_KEPT), world]
+    this.frames = [...this.frames.slice(-1), { at, world }]
   }
 
   /** The race as the simulation would hold it, from the little the server sends. */
