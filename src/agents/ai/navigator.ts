@@ -93,11 +93,6 @@ export function planCourse(
   const stage = progress && ctx.course.stages[progress.stageIndex]
   if (!stage) return { bearing: boat.heading, reason: 'holding' }
 
-  /*
-   * Turns owed are carried rather than paid at once: this is match racing, where an
-   * opponent's penalty cancels yours, and a turn spent early is a chance thrown away.
-   * They come due on the last leg, because she may not finish owing any.
-   */
   const direction: Spin =
     progress.penaltyTurn?.direction ?? spinning ?? (tackOf(boat.twa) === 'port' ? 1 : -1)
   /*

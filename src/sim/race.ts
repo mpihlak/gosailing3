@@ -420,7 +420,7 @@ function crossed(before: Degrees, after: Degrees, angle: Degrees): boolean {
   return Math.sign(from) !== Math.sign(to) && Math.abs(from) < 90 && Math.abs(to) < 90
 }
 
-/** A turn owed. In match racing an opponent's outstanding turn cancels it instead. */
+/** A turn owed. It stands until she sails it, whatever the other boat owes. */
 export function penalise(
   progress: Record<BoatId, BoatProgress>,
   offender: BoatId,
@@ -428,13 +428,6 @@ export function penalise(
   events: SimEvent[],
   rule?: RightOfWayRule,
 ): void {
-  const theirs = progress[other]
-  if (theirs && theirs.penalties > 0) {
-    progress[other] = { ...theirs, penalties: theirs.penalties - 1 }
-    events.push({ kind: 'penaltiesCancelled', boatId: offender, otherId: other })
-    return
-  }
-
   const mine = progress[offender]
   if (mine) progress[offender] = { ...mine, penalties: mine.penalties + 1 }
   events.push(rule === undefined

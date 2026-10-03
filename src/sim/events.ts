@@ -27,8 +27,6 @@ export type SimEvent =
       readonly otherId: string
       readonly rule?: RightOfWayRule
     }
-  /** Match racing: her opponent's outstanding turn and this one cancel each other. */
-  | { readonly kind: 'penaltiesCancelled'; readonly boatId: BoatId; readonly otherId: string }
   | { readonly kind: 'penaltyCleared'; readonly boatId: BoatId; readonly remaining: number }
   /** She crossed the finishing line owing turns, so she has not finished. */
   | { readonly kind: 'finishRefused'; readonly boatId: BoatId; readonly penalties: number }

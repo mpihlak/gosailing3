@@ -125,6 +125,25 @@ describe('contacts', () => {
     expect(after.race.progress.b?.penalties).toBe(0)
   })
 
+  it('gives the turn even when the right-of-way boat already owes one', () => {
+    const sim = createSimulation({
+      name: 'right of way',
+      seed: 'row',
+      boats: [
+        { id: 'a', name: 'Alpha', position: vec(-1.5, -100), heading: 10 },
+        { id: 'b', name: 'Bravo', position: vec(1.5, -100), heading: 10 },
+      ],
+      wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
+    })
+    const progress = sim.world.race.progress
+    const owing = { ...sim.world, race: { ...sim.world.race, progress: { ...progress, b: { ...progress.b!, penalties: 1 } } } }
+    const { world: after, events } = runHeadless(sim.ctx, owing, {}, { maxTicks: 5 })
+
+    expect(events.filter((event) => event.kind === 'penalised')).toMatchObject([{ boatId: 'a', otherId: 'b' }])
+    expect(after.race.progress.a?.penalties).toBe(1)
+    expect(after.race.progress.b?.penalties).toBe(1)
+  })
+
   it('puts the turn on the windward boat when the leeward boat luffs into her', () => {
     /*
      * Rule 11 asks who was to leeward, not who turned. The leeward boat closes the gap

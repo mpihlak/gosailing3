@@ -703,8 +703,6 @@ function announce(event: TimedEvent): void {
         mine ? 3600 : 3000,
       )
     }
-    case 'penaltiesCancelled':
-      return hud.showBanner('Penalties cancel — nothing owed', 'good', 2600)
     // A coming-together is reported as the penalty it earns. Announcing the contact as
     // well overwrote that with a vaguer line naming a boat by her id.
     case 'penaltyCleared':

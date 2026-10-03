@@ -67,9 +67,6 @@ right-of-way boat may do, are not in either. A boat who tacks into someone is ju
 the tack she ends up on, and a right-of-way boat may hold her course into a collision and
 be blameless.
 
-Penalties cancelling one for one is defined between the two boats in the incident, which
-is what match racing means by it. With three boats or more it is undefined.
-
 ## There is no race log
 
 A race cannot be replayed or picked apart after the fact. The pieces are in place —
