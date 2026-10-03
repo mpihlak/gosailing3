@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { vec } from '@/foundation/geom'
-import type { ScenarioSpec, ServerMessage } from '@/net'
+import type { ScenarioSpec } from '@/sim'
+import type { ServerMessage } from '@/net'
 import { Logbook, type Journal } from './logbook'
 
 const race = (seed: string): ScenarioSpec => ({
