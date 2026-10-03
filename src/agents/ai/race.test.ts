@@ -266,3 +266,71 @@ describe('paying a penalty turn', () => {
     expect(result.finished).toBe(true)
   })
 })
+
+/**
+ * Five boats on the run to the finish, the two in front overlapped and owing turns.
+ * Aimed at the middle of the line and waiting there for room, they once circled on it
+ * and fouled each other and everyone arriving behind, and four of six timed out.
+ */
+function finishingInACrowd(seed: string) {
+  const at = (x: number, y: number) => ({ position: vec(x, y), heading: 180 })
+  const simulation = createSimulation({
+    name: 'crowded finish',
+    seed,
+    boats: [
+      { id: 'one', name: 'One', controller: 'ai', ...at(-5, 120) },
+      { id: 'two', name: 'Two', controller: 'ai', ...at(5, 120) },
+      { id: 'three', name: 'Three', controller: 'ai', ...at(-12, 160) },
+      { id: 'four', name: 'Four', controller: 'ai', ...at(0, 170) },
+      { id: 'five', name: 'Five', controller: 'ai', ...at(12, 180) },
+    ],
+    course: { legLength: 450, lineLength: 260, startCenter: vec(0, 0) },
+    wind: {
+      direction: 0,
+      speed: 12,
+      shiftAmplitude: 0,
+      startBias: 0,
+      gustiness: 0,
+      gradientStrength: 0,
+    },
+    config: { startSequence: 0 },
+    duration: 2400,
+  })
+  const finish = simulation.ctx.course.stages.length - 1
+  const owing: Record<string, number> = { one: 2, two: 2 }
+  const progress = Object.fromEntries(
+    Object.entries(simulation.world.race.progress).map(([id, entry]) => [
+      id,
+      {
+        ...entry,
+        status: 'racing' as const,
+        stageIndex: finish,
+        clearedPreStart: true,
+        penalties: owing[id] ?? 0,
+      },
+    ]),
+  )
+  const runner = new SimulationRunner(simulation.ctx, {
+    ...simulation.world,
+    race: { ...simulation.world.race, phase: 'racing', progress },
+  })
+  const helms = Object.fromEntries(runner.world.boats.map((boat) => [boat.id, new Skipper()]))
+  let contacts = 0
+  for (let tick = 0; tick < 60 * 240; tick++) {
+    contacts += runner.advance(1 / 60, helms, 10).filter((event) => event.kind === 'contact').length
+    if (Object.values(runner.world.race.progress).every((entry) => entry.status === 'finished'))
+      break
+  }
+  const unfinished = Object.values(runner.world.race.progress).filter(
+    (entry) => entry.status !== 'finished',
+  )
+  return { unfinished: unfinished.map((entry) => entry.boatId), contacts }
+}
+
+describe('finishing in a crowd', () => {
+  it('gets every boat over the line, the ones owing turns included', () => {
+    for (const seed of ['f1', 'f2', 'f3']) {
+      expect(finishingInACrowd(seed).unfinished).toEqual([])
+    }
+  })
+})

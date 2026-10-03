@@ -4,20 +4,22 @@ import {
   bearingToVector,
   closestPointOnSegment,
   distance,
+  dot,
   normalize,
   normalizeBearing,
   toRadians,
   scale,
   sub,
   vectorToBearing,
+  type Segment,
   type Vec2,
 } from '@/foundation/geom'
 import { clamp, knotsToMps, type Degrees, type Meters, type Seconds } from '@/foundation/units'
 import { tackOf, type BoatSpec, type BoatState } from '@/domain/boat'
 import {
   lineEndBodies,
-  lineMidpoint,
   pastMark,
+  sideOfLine,
   sideOfMark,
   type CourseBody,
   type CourseStage,
@@ -40,6 +42,19 @@ const ROUNDING_OFFSET: Meters = 24
 const CORRIDOR_FRACTION = 0.42
 const CORRIDOR_MIN: Meters = 35
 const CORRIDOR_MAX: Meters = 320
+/**
+ * How far short of the finish a boat owing turns stands off to take them. The line is
+ * where everybody converges, and a boat waiting for room there never finds it.
+ */
+const FINISH_STANDOFF: Meters = 60
+/**
+ * How far along the line a boat owing turns moves her stand-off from the nearest boat.
+ * Two of them side by side would make for the same water, and each would block the
+ * other's turn for as long as they stayed there.
+ */
+const STANDOFF_SPACING: Meters = 50
+/** How far past the finish a finished boat sails before she stops steering. */
+const FINISH_CLEARANCE: Meters = 150
 
 export interface NavigationPlan {
   readonly bearing: Degrees
@@ -91,7 +106,7 @@ export function planCourse(
 ): NavigationPlan {
   const progress = world.race.progress[boat.id]
   const stage = progress && ctx.course.stages[progress.stageIndex]
-  if (!stage) return { bearing: boat.heading, reason: 'holding' }
+  if (!stage) return clearOfFinish(ctx, boat, spec, wind)
 
   const direction: Spin =
     progress.penaltyTurn?.direction ?? spinning ?? (tackOf(boat.twa) === 'port' ? 1 : -1)
@@ -145,7 +160,61 @@ export function planCourse(
     return { bearing: plan.bearing, reason: 'starting', startPhase: plan.phase }
   }
   if (stage.kind === 'mark') return planMark(boat, spec, wind, stage, progress.passedMark)
-  return planFor(boat, spec, wind, lineMidpoint(stage.line), 'running')
+  /*
+   * Each boat makes for the part of the line straight ahead of her, not one point on it:
+   * a fleet aimed at the middle arrives there together. A boat that still owes turns
+   * stands off short of it to take them, and one turned away for owing them goes back
+   * there rather than circling on the line in everybody's way.
+   */
+  const ahead = closestPointOnSegment(insetLine(stage.line, spec), boat.position)
+  if (progress.penalties === 0) return planFor(boat, spec, wind, ahead, 'running')
+  return planFor(boat, spec, wind, standOff(world, boat, stage.line, ahead), 'running')
+}
+
+/** Short of the line, and along it away from the nearest boat if she is close. */
+function standOff(world: WorldState, boat: BoatState, line: RaceLine, ahead: Vec2): Vec2 {
+  const back = add(ahead, scale(line.normal, -FINISH_STANDOFF))
+  const nearest = world.boats
+    .filter((other) => other.id !== boat.id)
+    .reduce<BoatState | undefined>(
+      (best, other) =>
+        !best || distance(other.position, boat.position) < distance(best.position, boat.position)
+          ? other
+          : best,
+      undefined,
+    )
+  if (!nearest || distance(nearest.position, boat.position) > STANDOFF_SPACING) return back
+  const along = normalize(sub(line.to, line.from))
+  const away = Math.sign(dot(sub(boat.position, nearest.position), along)) || 1
+  return add(back, scale(along, away * STANDOFF_SPACING))
+}
+
+/**
+ * A finished boat sails on, square away from the line, until she is out of the way of
+ * those still finishing. Holding whatever heading she crossed on could take her straight
+ * back through them.
+ */
+function clearOfFinish(
+  ctx: SimContext,
+  boat: BoatState,
+  spec: BoatSpec,
+  wind: WindSample,
+): NavigationPlan {
+  const finish = ctx.course.stages.at(-1)
+  if (finish?.kind !== 'finish' || sideOfLine(finish.line, boat.position) > FINISH_CLEARANCE) {
+    return { bearing: boat.heading, reason: 'holding' }
+  }
+  const ahead = closestPointOnSegment(insetLine(finish.line, spec), boat.position)
+  const away = add(ahead, scale(finish.line.normal, FINISH_CLEARANCE * 2))
+  return { ...planFor(boat, spec, wind, away, 'holding'), reason: 'holding' }
+}
+
+/** The line short of its ends, which are a buoy and a moored boat. */
+function insetLine(line: RaceLine, spec: BoatSpec): Segment {
+  const along = sub(line.to, line.from)
+  const inset = Math.min(spec.length * 2, distance(line.from, line.to) / 2)
+  const off = scale(normalize(along), inset)
+  return { from: add(line.from, off), to: sub(line.to, off) }
 }
 
 /**
@@ -162,10 +231,7 @@ export function planCourse(
  * and no layline to judge.
  */
 function returnPoint(line: RaceLine, at: Vec2, spec: BoatSpec): Vec2 {
-  const along = sub(line.to, line.from)
-  const inset = Math.min(spec.length * 2, distance(line.from, line.to) / 2)
-  const off = scale(normalize(along), inset)
-  const onLine = closestPointOnSegment({ from: add(line.from, off), to: sub(line.to, off) }, at)
+  const onLine = closestPointOnSegment(insetLine(line, spec), at)
   return add(onLine, scale(line.normal, -spec.length))
 }
 
