@@ -60,11 +60,11 @@ setInterval(() => {
 const was = new Map<string, string>()
 setInterval(() => {
   for (const robot of crew) {
-    const { phase, you, rtt } = robot.race
-    const now = `${phase}${you ? ` as ${you}` : ''}`
+    const { phase, you, rtt, trouble } = robot.race
+    const now = trouble ?? `${phase}${you ? ` as ${you}` : ''}`
     if (was.get(robot.name) === now) continue
     was.set(robot.name, now)
-    say(robot.name, `${now}${rtt === undefined ? '' : ` (${rtt}ms)`}`)
+    say(robot.name, `${now}${rtt === undefined || trouble ? '' : ` (${rtt}ms)`}`)
   }
   const done = crew[0]?.race.results
   if (done && was.get('results') !== JSON.stringify(done)) {

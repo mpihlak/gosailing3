@@ -147,6 +147,11 @@ export type ServerMessage =
       readonly events: readonly TimedEvent[]
     }
   /**
+   * Sent to a robot whose place in a full fleet has gone to a person. The server closes
+   * her connection after it.
+   */
+  | { readonly kind: 'removed' }
+  /**
    * How long her messages are taking to go and come back, in milliseconds. Sent to each
    * sailor about her own connection and nobody else's.
    *

@@ -48,6 +48,10 @@ what they are doing as they go:
 Place, which leg they are on, `+` once they are round its mark, speed, and the turns they
 owe. `--name` prefixes them if you want to tell two fleets apart.
 
+A full fleet still has room for a person. When someone joins to race and every seat is
+taken, the robot with the fewest points gives up hers, the newest of them on a tie. She
+says so and disconnects.
+
 ## Playing
 
 | Key        | Action                         |

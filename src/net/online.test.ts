@@ -91,6 +91,12 @@ describe('joining', () => {
     expect(race.simulation?.wind.median.speed).toBeGreaterThan(0)
   })
 
+  it('says why when her place goes to a person, and keeps saying it once the line closes', () => {
+    socket.say({ kind: 'removed' })
+    socket.hangUp()
+    expect(race.trouble).toBe('Gave up her place to a person.')
+  })
+
   it('keeps talking while it waits, or it would be taken for gone', () => {
     socket.open()
     socket.sent = []

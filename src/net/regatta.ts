@@ -283,6 +283,12 @@ export class Regatta {
     // as there are sailors.
     if (this.entries.has(id)) return []
 
+    // A person who wants to race a full fleet takes a robot's place.
+    const room =
+      role === 'racer' && !robot && this.racers().length >= this.limits.maxRacers
+        ? this.makeRoom()
+        : []
+
     const seated = role === 'racer' && this.racers().length < this.limits.maxRacers
     // Nobody has crossed a line yet, so she has missed nothing and can be let in.
     const inTime = seated && this.beforeTheGun()
@@ -299,6 +305,7 @@ export class Regatta {
     this.entries.set(id, entry)
 
     const out: Addressed[] = [
+      ...room,
       {
         to: [id],
         message: {
@@ -322,6 +329,28 @@ export class Regatta {
     }
     out.push(this.announceFleet())
     return out
+  }
+
+  /**
+   * Take the robot with the fewest points out of the fleet, the newest of them on a tie:
+   * she has the least to lose. A robot sailing from somewhere else is told why, and her
+   * connection is closed after. Nothing, if every racer is a person.
+   */
+  private makeRoom(): Addressed[] {
+    let weakest: [BoatId, Entry] | undefined
+    for (const racer of this.racers()) {
+      if (racer[1].person) continue
+      // Later arrivals come later in the map, so a tie goes to the newest.
+      if (!weakest || this.points(racer[0]) <= this.points(weakest[0])) weakest = racer
+    }
+    if (!weakest) return []
+    const [id, entry] = weakest
+    const told: Addressed[] = entry.robot ? [] : [{ to: [id], message: { kind: 'removed' } }]
+    return [...told, ...this.leave(id)]
+  }
+
+  private points(id: BoatId): number {
+    return this.tally.get(id) ?? 0
   }
 
   /** Whether the race on the water has yet to start. */

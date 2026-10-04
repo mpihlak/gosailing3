@@ -124,7 +124,7 @@ export class OnlineRace {
     }) as unknown as (event: never) => void)
     socket.addEventListener('close', (() => {
       this.connected = false
-      this.trouble = 'The connection to the regatta closed.'
+      this.trouble ??= 'The connection to the regatta closed.'
     }) as (event: never) => void)
   }
 
@@ -255,6 +255,9 @@ export class OnlineRace {
         if (message.race) this.report = message.race
         this.events.push(...message.events)
         this.remember(message.time, message.boats)
+        return
+      case 'removed':
+        this.trouble = 'Gave up her place to a person.'
         return
       case 'timing':
         // Whatever the far end says is only data. A number or nothing.

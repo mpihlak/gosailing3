@@ -65,6 +65,13 @@ const sessions = new Sessions(
     heard: (id, message) => logbook.heard(id, message),
     sent: (to, message) => {
       logbook.sent(to, message)
+      // A robot that has given up her place goes once she has been told. This is heard
+      // before the message is written, so the closing waits until it has been.
+      if (message.kind === 'removed') {
+        setImmediate(() => {
+          for (const id of to) sockets.get(id)?.close()
+        })
+      }
       if (message.kind !== 'results') return
       // The race as a whole, one line a sailor, written as the result goes out.
       for (const place of message.places) {

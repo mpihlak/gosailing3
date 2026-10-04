@@ -307,6 +307,68 @@ describe('holding the gate', () => {
   })
 })
 
+describe('making room for a person', () => {
+  const robotJoins = (name: string) => ({ kind: 'join', name, robot: true }) as const
+
+  it("gives a person a full fleet's robot seat, and tells the robot why", () => {
+    const race = regatta({ maxRacers: 2, fleetSize: 10 })
+    race.say('a', joins('Ann'))
+    race.say('r', robotJoins('Rob'))
+    const sent = race.say('b', joins('Bob'))
+
+    expect(sent.find((one) => one.message.kind === 'removed')?.to).toEqual(['r'])
+    expect(race.fleet.map((sailor) => [sailor.id, sailor.role])).toEqual([
+      ['a', 'racer'],
+      ['b', 'racer'],
+    ])
+  })
+
+  it('takes the newest robot when none of them has any points', () => {
+    const race = regatta({ maxRacers: 2, fleetSize: 10 })
+    race.say('r1', robotJoins('One'))
+    race.say('r2', robotJoins('Two'))
+    race.say('b', joins('Bob'))
+    expect(race.fleet.map((sailor) => sailor.id)).toEqual(['r1', 'b'])
+  })
+
+  it('takes the robot with the fewest points', () => {
+    const race = regatta({ maxRacers: 3, fleetSize: 3, resultsFor: 1 })
+    race.addRobot('Rob')
+    race.addRobot('Bot')
+    race.say('a', joins('Ann'))
+    race.tick(1)
+    const places = resultsIn(
+      sail(race, 900, { alive: ['a'], until: () => race.state === 'results' }),
+    )!
+    const robots = places.filter((one) => one.boatId !== 'a')
+    const weakest = robots.reduce((one, two) => (two.total < one.total ? two : one))
+
+    race.say('b', joins('Bob'))
+    const ids = race.fleet.map((sailor) => sailor.id)
+    expect(ids).not.toContain(weakest.boatId)
+    expect(ids).toContain('b')
+    expect(robots.filter((one) => ids.includes(one.boatId))).toHaveLength(1)
+  })
+
+  it('leaves the people alone, and seats a person as an onlooker when they are all people', () => {
+    const race = regatta({ maxRacers: 1, fleetSize: 10 })
+    race.say('a', joins('Ann'))
+    const sent = race.say('b', joins('Bob'))
+    expect(sent.some((one) => one.message.kind === 'removed')).toBe(false)
+    expect(race.fleet.find((sailor) => sailor.id === 'b')?.role).toBe('observer')
+  })
+
+  it("does not let a robot take another robot's seat", () => {
+    const race = regatta({ maxRacers: 1, fleetSize: 10 })
+    race.say('r1', robotJoins('One'))
+    race.say('r2', robotJoins('Two'))
+    expect(race.fleet.map((sailor) => [sailor.id, sailor.role])).toEqual([
+      ['r1', 'racer'],
+      ['r2', 'observer'],
+    ])
+  })
+})
+
 describe('telling a sailor which boat is hers', () => {
   it('calls her by her color when she gave no name', () => {
     const race = regatta()
