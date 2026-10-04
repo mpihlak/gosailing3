@@ -58,7 +58,8 @@ export class Skipper implements InputSource {
    * The gybes she means to make on the run to the finish, drawn when she starts it, and
    * the side she was on when she began the one under way, if one is.
    */
-  private run: { readonly stage: number; readonly from: Seconds; readonly plan: GybePlan } | undefined
+  private run:
+    { readonly stage: number; readonly from: Seconds; readonly plan: GybePlan } | undefined
   private gybingFrom: number | undefined
 
   constructor(options: SkipperOptions = {}) {
@@ -127,7 +128,13 @@ export class Skipper implements InputSource {
     this.lastPlan = bearing === plan.bearing ? plan : { ...plan, bearing }
     this.lastStartPhase = plan.startPhase
 
-    return { rudder: rudderToHold(boat.heading, bearing, this.degreesForFullRudder) }
+    // The start strategies time their run at the line against the helm they were built
+    // with, which does not allow for the turn she is making. Allowing for it there had a
+    // boat over early.
+    const lead = plan.reason === 'starting' ? 0 : spec.turnResponse
+    return {
+      rudder: rudderToHold(boat.heading, bearing, this.degreesForFullRudder, boat.turnRate, lead),
+    }
   }
 
   /**
