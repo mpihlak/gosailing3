@@ -181,11 +181,8 @@ function joinRegatta(url: string, name: string, watching: boolean): void {
   online.join()
   hostControls.addEventListener('click', (event) => {
     const command = (event.target as HTMLElement).closest('button')?.dataset.command
-    if (command === 'endRace' || command === 'restart') return online?.order(command)
-    if (command === 'toggleShadows' || command === 'toggleLaylines') handleCommand(command)
+    if (command === 'endRace' || command === 'restart') online?.order(command)
   })
-  // The toggles carry their setting from the start, not only once one is tapped.
-  paintViewToggles()
   // A tab that has stopped drawing gets no frames, and silence is how the server decides
   // a sailor has gone. This keeps her alive; the frame loop is what makes her quick.
   window.setInterval(() => online?.sendHelm(), 1000 / HELM_HZ)
@@ -206,16 +203,6 @@ function sayWhoHasGone(race: OnlineRace): void {
 /** The host's buttons belong on the water, where there is a race to cut short. */
 function showHostControls(visible: boolean): void {
   hostControls.dataset.visible = visible ? 'true' : 'false'
-}
-
-/** Which way the two view aids are set, since a button says nothing by being tapped. */
-function paintViewToggles(): void {
-  const mark = (command: string, on: boolean) => {
-    const button = hostControls.querySelector<HTMLElement>(`[data-command="${command}"]`)
-    if (button) button.dataset.on = on ? 'true' : 'false'
-  }
-  mark('toggleShadows', showShadows)
-  mark('toggleLaylines', showLaylines)
 }
 
 /** What the card says while there is no race to draw. */
@@ -328,12 +315,10 @@ function handleCommand(command: HelmCommand): void {
   if (command === 'toggleShadows') {
     showShadows = !showShadows
     hud.showBanner(`Wind shadows ${showShadows ? 'on' : 'off'}`, 'info', 1400)
-    paintViewToggles()
   }
   if (command === 'toggleLaylines') {
     showLaylines = !showLaylines
     hud.showBanner(`Laylines ${showLaylines ? 'on' : 'off'}`, 'info', 1400)
-    paintViewToggles()
   }
 }
 

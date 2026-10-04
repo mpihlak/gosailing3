@@ -245,13 +245,14 @@
         text-overflow: ellipsis;
       }
       /* The host's buttons. Only her page shows them, and only while there is a race to
-         cut short. Sized for a thumb rather than a cursor: both ends sail on phones. */
+         cut short. Sized for a thumb rather than a cursor: both ends sail on phones. They
+         sit under the wind instruments, out of the middle where the boats are, and above
+         the banners so a message never pushes them down the screen. */
       #host {
         display: none;
         gap: 8px;
-        margin-top: 8px;
-        /* Out of the middle, where the boats are. */
-        align-self: flex-end;
+        grid-column: 3;
+        justify-self: start;
         /* #top lets taps through to the water; these are the one thing up here that
            has to catch them. */
         pointer-events: auto;
@@ -274,14 +275,6 @@
       }
       #host button:active {
         background: var(--edge);
-      }
-      /* A toggle has to say which way it is set; the others are one-shot and do not. */
-      #host button[data-on='true'] {
-        color: var(--good);
-        border-color: var(--good);
-      }
-      #host button[data-on='false'] {
-        color: var(--dim);
       }
       /* Her own name under her colour, quieter than it. */
       .card .also {
@@ -377,6 +370,9 @@
         /* The auto margin beats the centering on that line alone, putting the telltales
            against the same edge as the board at the foot of the screen. */
         #telltales { order: 7; margin-right: auto; }
+        /* On the telltales' line, at the other edge: under the wind instruments, which
+           close the row above. */
+        #host { order: 8; }
         /* No centered row to line up with any more, so the board takes the same edge, and
            the same width as the tiller below it. */
         #standings { margin-left: 0; width: auto; max-width: var(--tiller-width); }
@@ -429,14 +425,12 @@
           <div class="gauge" data-field="targetVmg"><span class="label">%VMG</span><span class="value">—</span></div>
         </div>
         <div class="row-break"></div>
+        <div id="host" data-visible="false">
+          <button type="button" data-command="endRace">End race</button>
+          <button type="button" data-command="restart">Restart</button>
+        </div>
       </div>
       <div data-banner data-visible="false"></div>
-      <div id="host" data-visible="false">
-        <button type="button" data-command="toggleShadows">Shadows</button>
-        <button type="button" data-command="toggleLaylines">Laylines</button>
-        <button type="button" data-command="endRace">End race</button>
-        <button type="button" data-command="restart">Restart</button>
-      </div>
     </div>
     <div id="bottom">
       <div id="standings"></div>
