@@ -116,7 +116,9 @@ export class Robot {
     const options = { clearance: personality.startClearance }
     const start =
       this.options.end === 'committee' ? boatEndStarboardStart(options) : pinEndPortStart(options)
-    return new Skipper({ start, personality })
+    // Her name and the race's seed: her chances fall differently each race.
+    const seed = `${this.options.name}:${this.sailing?.spec.seed ?? ''}`
+    return new Skipper({ start, personality, seed })
   }
 
   private rudder(): number {

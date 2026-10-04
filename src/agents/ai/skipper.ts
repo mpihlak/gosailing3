@@ -1,9 +1,12 @@
-import { normalizeBearing } from '@/foundation/geom'
+import { angleDelta, normalizeBearing } from '@/foundation/geom'
+import { createRng, type Rng } from '@/foundation/rng'
 import type { Degrees, Seconds } from '@/foundation/units'
 import type { BoatId, BoatInput, BoatSpec, BoatState } from '@/domain/boat'
+import { sideOfLine } from '@/domain/course'
 import type { WindSample } from '@/domain/wind'
 import { specFor, type InputSource, type SimContext, type WorldState } from '@/sim'
 import { giveWay } from './avoidance'
+import { GybePlan } from './gybing'
 import { rudderToHold } from './helm'
 import { planCourse, type NavigationPlan, type Spin } from './navigator'
 import { PLAIN, type Personality } from './personality'
@@ -21,6 +24,11 @@ export interface SkipperOptions {
   readonly degreesForFullRudder?: number
   /** How she sails where the course leaves room for taste. */
   readonly personality?: Personality
+  /**
+   * Where her chance decisions come from. Give a race's skipper the race's seed and she
+   * decides differently each race and the same way twice in the same one.
+   */
+  readonly seed?: string
 }
 
 /**
@@ -45,11 +53,19 @@ export class Skipper implements InputSource {
   private spin: { readonly way: Spin; readonly owed: number } | undefined
   /** The course she is steering to keep clear of somebody, and when she chose it. */
   private keepingClear: { readonly bearing: Degrees; readonly since: Seconds } | undefined
+  private readonly rng: Rng
+  /**
+   * The gybes she means to make on the run to the finish, drawn when she starts it, and
+   * the side she was on when she began the one under way, if one is.
+   */
+  private run: { readonly stage: number; readonly from: Seconds; readonly plan: GybePlan } | undefined
+  private gybingFrom: number | undefined
 
   constructor(options: SkipperOptions = {}) {
     this.start = options.start ?? pinEndPortStart()
     this.degreesForFullRudder = options.degreesForFullRudder ?? 12
     this.personality = options.personality ?? PLAIN
+    this.rng = createRng(options.seed ?? 'skipper')
   }
 
   inputFor(boatId: BoatId, world: WorldState, ctx: SimContext): BoatInput {
@@ -93,6 +109,7 @@ export class Skipper implements InputSource {
           wind.direction + Math.sign(boat.twa || 1) * spec.polar.beatAngle(wind.speed),
         )
       : plan.bearing
+    const course = this.gybeOnSchedule(ctx, world, boat, spec, wind, plan, wanted)
 
     /*
      * Then she keeps clear of anyone with right of way over her. Not while turning a
@@ -103,8 +120,8 @@ export class Skipper implements InputSource {
       !plan.spin &&
       plan.reason !== 'starting' &&
       world.race.progress[boatId]?.tacking !== true &&
-      !wouldTack(boat, wanted, wind.direction)
-    const bearing = free ? this.keepClear(ctx, world, boat, spec, wind, wanted) : wanted
+      !wouldTack(boat, course, wind.direction)
+    const bearing = free ? this.keepClear(ctx, world, boat, spec, wind, course) : course
     if (!free) this.keepingClear = undefined
 
     this.lastPlan = bearing === plan.bearing ? plan : { ...plan, bearing }
@@ -134,5 +151,64 @@ export class Skipper implements InputSource {
     const away = giveWay(ctx, world, boat, spec, wind, wanted, margin)
     this.keepingClear = away && { bearing: away.bearing, since: world.time }
     return away?.bearing ?? wanted
+  }
+
+  /**
+   * On the run to the finish, the gybes she planned at random, each made only when the
+   * water is clear for it. Left to the navigator alone every boat holds the gybe she
+   * rounded on, and a fleet that rounds together sails one line to the finish.
+   */
+  private gybeOnSchedule(
+    ctx: SimContext,
+    world: WorldState,
+    boat: BoatState,
+    spec: BoatSpec,
+    wind: WindSample,
+    plan: NavigationPlan,
+    wanted: Degrees,
+  ): Degrees {
+    const progress = world.race.progress[boat.id]
+    const stage = progress && ctx.course.stages[progress.stageIndex]
+    // A boat owing turns is making for clear water to take them, not racing to the line.
+    if (
+      !progress ||
+      stage?.kind !== 'finish' ||
+      plan.reason !== 'running' ||
+      progress.penalties > 0
+    ) {
+      return wanted
+    }
+
+    const toGo = -sideOfLine(stage.line, boat.position)
+    const run = this.run
+    // A new run, or a new race: a clock that went backwards is a race begun again.
+    if (!run || run.stage !== progress.stageIndex || world.time < run.from) {
+      const fresh = new GybePlan(this.rng, this.personality.gybing, toGo)
+      this.run = { stage: progress.stageIndex, from: world.time, plan: fresh }
+      this.gybingFrom = undefined
+    }
+    const gybes = this.run!.plan
+    const side = Math.sign(boat.twa || 1)
+
+    // The navigator holds whichever gybe she is on, so a gybe is done once she is on
+    // the other one, and until then she is steered across.
+    if (this.gybingFrom !== undefined) {
+      if (side !== this.gybingFrom) {
+        gybes.made()
+        this.gybingFrom = undefined
+        return wanted
+      }
+      return normalizeBearing(wind.direction - angleDelta(wind.direction, wanted))
+    }
+
+    if (!gybes.due(toGo)) return wanted
+    const twa = angleDelta(wind.direction, wanted)
+    // Already sent across by the navigator: nothing to add.
+    if (Math.sign(twa || 1) !== side) return wanted
+    const across = normalizeBearing(wind.direction - twa)
+    // The same look at the traffic as before a tack. If it is not clear, she waits.
+    if (!clearToTack(world, boat, spec, across)) return wanted
+    this.gybingFrom = side
+    return across
   }
 }
