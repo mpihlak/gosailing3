@@ -131,7 +131,7 @@ export class Skipper implements InputSource {
     const held = this.keepingClear
     if (held && world.time - held.since < RECHECK) return held.bearing
     const margin = held ? RELEASE : 1
-    const away = giveWay(ctx, world, boat, spec, wind.direction, wanted, margin)
+    const away = giveWay(ctx, world, boat, spec, wind, wanted, margin)
     this.keepingClear = away && { bearing: away.bearing, since: world.time }
     return away?.bearing ?? wanted
   }

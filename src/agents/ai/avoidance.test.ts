@@ -38,7 +38,7 @@ function racing(boats: { id: string; position: Vec2; heading: number }[]) {
 
 function decide(sim: ReturnType<typeof racing>, id: string) {
   const boat = sim.world.boats.find((one) => one.id === id)!
-  return giveWay(sim.ctx, sim.world, boat, sim.ctx.specs[id]!, STEADY.direction, boat.heading)
+  return giveWay(sim.ctx, sim.world, boat, sim.ctx.specs[id]!, STEADY, boat.heading)
 }
 
 describe('keeping clear', () => {

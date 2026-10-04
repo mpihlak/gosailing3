@@ -9,8 +9,16 @@ import {
   scale,
   sub,
 } from '@/foundation/geom'
-import { clamp, knotsToMps, type Degrees, type Meters, type Seconds } from '@/foundation/units'
+import {
+  clamp,
+  knotsToMps,
+  type Degrees,
+  type Knots,
+  type Meters,
+  type Seconds,
+} from '@/foundation/units'
 import type { BoatSpec, BoatState } from '@/domain/boat'
+import type { WindSample } from '@/domain/wind'
 import { encounter, type Contender, type RightOfWayRule } from '@/domain/rules'
 import { specFor, type SimContext, type WorldState } from '@/sim'
 
@@ -22,8 +30,18 @@ import { specFor, type SimContext, type WorldState } from '@/sim'
 const LOOKAHEAD: Seconds = 8
 /** How close, in her own lengths, a boat may come before it is a meeting to avoid. */
 const SEPARATION = 2
-/** The turns tried away from the course she wants, smallest first. */
-const TURNS: readonly Degrees[] = [10, 20, 30, 45, 60]
+/**
+ * The turns tried away from the course she wants, smallest first. A duck behind a boat
+ * crossing ahead needs a few degrees, not a run square away from her.
+ */
+const TURNS: readonly Degrees[] = [5, 10, 15, 20, 30]
+/**
+ * Larger turns, for when none of the small ones keeps her even a length away: about where
+ * the hulls would touch, and a penalty costs more than a hard turn.
+ */
+const HARD_TURNS: readonly Degrees[] = [45, 60]
+/** The room, in her own lengths, short of which she makes a hard turn rather than a small one. */
+const TOUCHING = 1
 /**
  * The angles to the wind she may be turned to: short of head to wind and of dead
  * downwind, so that keeping clear never tacks or gybes her and changes who has right of
@@ -42,27 +60,37 @@ export interface GiveWay {
  * The course to steer instead of `bearing` when holding it would bring her too close to a
  * boat she has to keep clear of, or nothing when it would not.
  *
- * Each boat is taken to hold her course and speed. That is what a right-of-way boat is
- * expected to do, and the only forecast that needs nothing but where she is now.
+ * Each other boat is taken to hold her course and speed. That is what a right-of-way boat
+ * is expected to do, and the only forecast that needs nothing but where she is now. Her
+ * own speed on a new course is taken halfway to what the polar gives there: luffed close
+ * to the wind she slows, and a forecast that kept her speed had her luff to head to wind
+ * to cross ahead of a boat she should have ducked.
  *
  * Of the courses she could turn to, she takes the smallest turn that keeps her clear of
  * everyone, turning first the way the rule makes cheapest: under rule 10 upwind she bears
  * away to pass astern, under rule 11 she luffs away from the boat to leeward. When nothing
- * keeps her clear she takes whatever leaves the most room.
+ * keeps her clear she takes whatever leaves the most room, turning harder only when even
+ * that would leave less than a length.
  *
- * `margin` scales the room asked for. A boat already keeping clear asks for more before
- * she goes back to her course, or she would turn back into the boat she just avoided.
+ * `margin` scales the room that sets her keeping clear, not the room she turns to find.
+ * A boat already keeping clear asks for more before she goes back to her course, or she
+ * would turn back into the boat she just avoided. Asked of every course she might turn
+ * to as well, the larger room is seldom there, and she would run off square looking for it.
  */
 export function giveWay(
   ctx: SimContext,
   world: WorldState,
   boat: BoatState,
   spec: BoatSpec,
-  windDirection: Degrees,
+  wind: WindSample,
   bearing: Degrees,
   margin = 1,
 ): GiveWay | undefined {
-  const limit = SEPARATION * spec.length * margin
+  const windDirection = wind.direction
+  const speedOn = (heading: Degrees) =>
+    (boat.speed + spec.polar.boatSpeed(angleDelta(windDirection, heading), wind.speed)) / 2
+  const room = SEPARATION * spec.length
+  const limit = room * margin
   const near = world.boats.filter(
     (other) =>
       other.id !== boat.id &&
@@ -87,6 +115,7 @@ export function giveWay(
   const pressing = closest(
     boat,
     bearing,
+    speedOn(bearing),
     giving.map(({ other }) => other),
   )
   if (!pressing || pressing.gap >= limit) return undefined
@@ -96,7 +125,10 @@ export function giveWay(
   // angle to it, so on port that is a turn to port and on starboard one to starboard.
   const luff = boat.twa >= 0 ? -1 : 1
   const upwind = Math.abs(boat.twa) < 90
-  const first = rule === 11 ? luff : rule === 10 && upwind ? -luff : 1
+  // A port tack boat meeting starboard upwind ducks. Luffing instead stops her head to
+  // wind in front of the boat she is meant to be avoiding.
+  const ducking = rule === 10 && upwind
+  const first = rule === 11 ? luff : ducking ? -luff : 1
 
   const sailable = (heading: Degrees) => {
     const twa = angleDelta(windDirection, heading)
@@ -106,17 +138,27 @@ export function giveWay(
       Math.abs(twa) <= FURTHEST_TWA
     )
   }
-  const candidates = TURNS.flatMap((turn) => [first * turn, -first * turn])
-    .map((turn) => normalizeBearing(bearing + turn))
-    .filter(sailable)
+  const headings = (turns: readonly Degrees[]) =>
+    turns
+      .flatMap((turn) => (ducking ? [first * turn] : [first * turn, -first * turn]))
+      .map((turn) => normalizeBearing(bearing + turn))
+      .filter(sailable)
 
   let best = { bearing, gap: pressing.gap }
-  for (const candidate of candidates) {
-    const gap = closest(boat, candidate, near)?.gap ?? Number.POSITIVE_INFINITY
-    if (gap >= limit) return { bearing: candidate, rule }
-    if (gap > best.gap) best = { bearing: candidate, gap }
+  const tryAll = (candidates: readonly Degrees[]) => {
+    for (const candidate of candidates) {
+      const gap =
+        closest(boat, candidate, speedOn(candidate), near)?.gap ?? Number.POSITIVE_INFINITY
+      if (gap >= room) return candidate
+      if (gap > best.gap) best = { bearing: candidate, gap }
+    }
+    return undefined
   }
-  return { bearing: best.bearing, rule }
+  const small = tryAll(headings(TURNS))
+  if (small !== undefined) return { bearing: small, rule }
+  if (best.gap >= TOUCHING * spec.length) return { bearing: best.bearing, rule }
+  const hard = tryAll(headings(HARD_TURNS))
+  return { bearing: hard ?? best.bearing, rule }
 }
 
 /**
@@ -127,9 +169,10 @@ export function giveWay(
 function closest(
   boat: BoatState,
   heading: Degrees,
+  speed: Knots,
   others: readonly BoatState[],
 ): { readonly other: BoatState; readonly gap: Meters } | undefined {
-  const mine = scale(bearingToVector(heading), knotsToMps(boat.speed))
+  const mine = scale(bearingToVector(heading), knotsToMps(speed))
   let found: { other: BoatState; gap: Meters } | undefined
   for (const other of others) {
     const apart = sub(other.position, boat.position)
