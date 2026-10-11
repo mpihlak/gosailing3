@@ -370,10 +370,11 @@ describe('making room for a person', () => {
 })
 
 describe('telling a sailor which boat is hers', () => {
-  it('calls her by her color when she gave no name', () => {
+  /** Nobody races anonymously. She is let in to watch, under the watchers' color. */
+  it('seats a sailor who gave no name as a watcher', () => {
     const race = regatta()
     race.say('a', { kind: 'join', name: '' })
-    expect(race.fleet[0]?.name).toBe('Blue')
+    expect(race.fleet[0]).toMatchObject({ role: 'observer', name: 'Watcher' })
   })
 
   it('hands every boat a color of its own', () => {
@@ -579,6 +580,15 @@ describe('keeping score', () => {
     for (const one of second) {
       const before = first.find((other) => other.boatId === one.boatId)!
       expect(one.total).toBe(before.total + one.points)
+    }
+  })
+
+  /** So a page can show the score to somebody who has not raced yet. */
+  it('tells the fleet what each sailor has taken so far', () => {
+    const race = raceOf(1, ['a'])
+    const places = scored(sailItOut(race, ['a']))
+    for (const one of places) {
+      expect(race.fleet.find((sailor) => sailor.id === one.boatId)?.points).toBe(one.total)
     }
   })
 

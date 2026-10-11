@@ -157,6 +157,7 @@ export class Regatta {
       color: entry.color.hex,
       waiting: entry.waiting,
       host: id === host,
+      points: this.points(id),
     }))
   }
 
@@ -282,13 +283,14 @@ export class Regatta {
     // as there are sailors.
     if (this.entries.has(id)) return []
 
+    // Nobody races without a name. She can still watch.
+    const racing = role === 'racer' && name !== ''
+
     // A person who wants to race a full fleet takes a robot's place.
     const room =
-      role === 'racer' && !robot && this.racers().length >= this.limits.maxRacers
-        ? this.makeRoom()
-        : []
+      racing && !robot && this.racers().length >= this.limits.maxRacers ? this.makeRoom() : []
 
-    const seated = role === 'racer' && this.racers().length < this.limits.maxRacers
+    const seated = racing && this.racers().length < this.limits.maxRacers
     // Nobody has crossed a line yet, so she has missed nothing and can be let in.
     const inTime = seated && this.beforeTheGun()
     const color = this.colorFor(seated ? 'racer' : 'observer')

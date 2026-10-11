@@ -77,10 +77,7 @@ describe('reading what arrives', () => {
     expect(long?.kind === 'join' && long.name.length).toBe(20)
   })
 
-  /*
-   * A sailor on a phone has no comfortable way to type, so no name is the ordinary case
-   * rather than a fault. The regatta calls her by her color instead.
-   */
+  /** A join without a name is still read. The regatta seats her to watch, not to race. */
   it('lets a sailor arrive without a name', () => {
     expect(read('{"kind":"join","name":"   "}')).toMatchObject({ name: '' })
     expect(read('{"kind":"join"}')).toMatchObject({ name: '' })
@@ -122,8 +119,8 @@ describe('a socket talking to the regatta', () => {
     expect(kindsFor('c1')).toEqual(['welcome', 'fleet'])
   })
 
-  /** One or the other: the name she gave, or her color when she gave none. */
-  it('calls her by the name she gave, and the nameless by their color', () => {
+  /** A nameless sailor is let in to watch, not to race. */
+  it('calls her by the name she gave, and seats the nameless as watchers', () => {
     sessions.received('c1', '{"kind":"join","name":"Ann"}')
     sessions.received('c2', '{"kind":"join"}')
 
@@ -132,7 +129,10 @@ describe('a socket talking to the regatta', () => {
     expect(welcome.kind === 'welcome' && welcome.fleet[0]?.colorName).toBe('Blue')
 
     const latest = written.filter((one) => one.message.kind === 'fleet').at(-1)!.message
-    expect(latest.kind === 'fleet' && latest.fleet.map((one) => one.name)).toEqual(['Ann', 'Red'])
+    expect(latest.kind === 'fleet' && latest.fleet.map((one) => [one.name, one.role])).toEqual([
+      ['Ann', 'racer'],
+      ['Watcher', 'observer'],
+    ])
   })
 
   it('writes the same line once for each of them', () => {

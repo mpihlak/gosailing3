@@ -26,13 +26,29 @@ export const SNAPSHOT_HZ = 30
  */
 export const HELM_HZ = 20
 
+/** How long a name may be before it is cut short. */
+export const NAME_LIMIT = 20
+
 /**
- * How a sailor is known: the color her boat is painted and the word for it.
+ * Letters and digits, and nothing else.
  *
- * A phone has no comfortable way to type a name, so the color is the name. The server
- * hands one out and tells her which she got, and she is "Blue" to the rest of the fleet
- * whether or not she ever said who she was.
+ * A name is the one string a sailor chooses, and it goes out to the whole fleet to be put
+ * on their boards. Those are built by interpolating into `innerHTML`, where `<svg
+ * onload=alert()>` is twenty characters and runs. Taking the markup out of the name here
+ * leaves nothing to interpolate; the boards escape it as well, because a page can be
+ * pointed at a server that does not.
  */
+const NAME_ALLOWED = /[^A-Za-z0-9]/g
+
+/**
+ * A name as the server will hold it. The server applies it to every join, and a page
+ * applies it as she types, so what she sees is what the fleet will see.
+ */
+export function cleanName(name: string): string {
+  return name.replace(NAME_ALLOWED, '').slice(0, NAME_LIMIT)
+}
+
+/** The color a boat is painted and the word for it. The server hands one out to each boat. */
 export interface FleetColor {
   readonly name: string
   readonly hex: string
@@ -47,9 +63,9 @@ export type Outcome = 'finished' | 'timedOut' | 'retired'
 export interface Sailor {
   readonly id: BoatId
   /**
-   * What to call her: the name she gave, or the colour of her boat when she gave none.
-   * One or the other, never both — a board with room for "Blue (Martin)" has no room
-   * left for what he is doing.
+   * What to call her: the name she gave. A watcher may give none and is called by her
+   * color. One or the other, never both — a board with room for "Blue (Martin)" has no
+   * room left for what he is doing.
    */
   readonly name: string
   /** The word for her colour, for the one place that wants both: being told which boat is hers. */
@@ -63,6 +79,8 @@ export interface Sailor {
    * passes to the next when she goes and the fleet is never left without one.
    */
   readonly host: boolean
+  /** What she has taken from the regatta so far, so a page can show the score before she races. */
+  readonly points: number
 }
 
 /** What a host may do to a race nobody else can get out of. */

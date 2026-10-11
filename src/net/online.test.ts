@@ -375,6 +375,7 @@ describe('noticing that somebody has gone', () => {
       color: '#4fa3dd',
       waiting: false,
       host: false,
+      points: 0,
     }))
 
   const fleet = (...names: string[]) =>
