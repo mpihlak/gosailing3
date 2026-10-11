@@ -191,8 +191,7 @@ export class Regatta {
     if (id !== this.host()) return []
     if (command === 'restart') {
       if (this.phase === 'lobby') return []
-      this.abandon()
-      return this.startIfReady()
+      return this.backToTheLobby()
     }
     if (this.phase !== 'racing') return []
     return this.callItOff()

@@ -502,6 +502,18 @@ describe('the host', () => {
     expect(racingAgain.kind === 'racing' && racingAgain.scenario.boats).toHaveLength(2)
   })
 
+  /** Silence left her page showing a race that no longer existed, frozen. */
+  it('sends her back to the lobby when too few are left to start another', () => {
+    const race = racing()
+    race.leave('b')
+    const sent = race.say('a', orders('restart'))
+    expect(race.state).toBe('lobby')
+    expect(sent).toContainEqual({
+      to: ['a'],
+      message: expect.objectContaining({ kind: 'fleet', phase: 'lobby' }),
+    })
+  })
+
   /** Otherwise one impatient sailor could cut everybody's race short. */
   it('does not answer to anybody else', () => {
     const race = racing()
