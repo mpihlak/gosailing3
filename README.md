@@ -54,6 +54,12 @@ says so and disconnects.
 
 ## Playing
 
+The page opens on a menu over the network race, which runs on behind it. **Standalone**
+races the computer here. **Network game** lists who is in the regatta with their points,
+and asks for a name before it lets you race. **Watch** puts the menu away and leaves you
+watching. The browser's back button returns to the menu from any of them. `?standalone`
+skips the menu.
+
 | Key        | Action                         |
 | ---------- | ------------------------------ |
 | ← → or A D | Steer                          |

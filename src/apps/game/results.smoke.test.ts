@@ -48,6 +48,7 @@ function raceClock(): number {
 let startReport: { late: number; clock: number } | undefined
 
 beforeAll(async () => {
+  window.history.replaceState({}, '', '/?standalone')
   const page = mountPage({ width: 900, height: 600 })
   await import('./main')
   tapOverlay()

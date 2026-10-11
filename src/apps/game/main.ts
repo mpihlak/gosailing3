@@ -30,8 +30,9 @@ import {
   timing,
 } from '@/presentation/ui'
 import { Skipper } from '@/agents/ai'
-import { HELM_HZ, OnlineRace, type Placing } from '@/net'
+import { cleanName, HELM_HZ, OnlineRace, type Placing } from '@/net'
 import { DEFAULT_SERVER, duel, GAME_PACE, playerSeconds, PLAYER_ID, randomSeed } from './scenario'
+import { Menu } from './menu'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
 const hud = new Hud(
@@ -151,42 +152,94 @@ overlay.addEventListener('pointerup', () => onCardTap?.())
 
 
 /**
- * A regatta to join, if there is one. Without it the race is sailed here against the
- * computer, which is the game as it was.
+ * Where the page starts.
  *
- *   index.html?network                       the regatta everyone else is in
- *   index.html?network&name=Ann              and say who you are
- *   index.html?server=ws://localhost:8080    one of your own, for development
- *   index.html?network&watch=1               watch rather than sail
+ *   index.html                               the menu, over the regatta
+ *   index.html?standalone                    straight into a race against the computer
+ *   index.html?network&name=Ann              straight into the regatta as Ann
+ *   index.html?network&watch=1               straight in to watch it
+ *   index.html?server=ws://localhost:8080    another server, for development
  *
- * A name is optional on purpose. There is no comfortable way to type one on a phone, so
- * the server gives every sailor a color and that is what she is called.
+ * Nobody races without a name, so a link that gives none opens the menu to ask for one.
  */
 const asked = new URLSearchParams(window.location.search)
-const server = asked.has('network') ? DEFAULT_SERVER : asked.get('server')
+const server = asked.get('server') ?? DEFAULT_SERVER
+const named = cleanName(asked.get('name') ?? '')
 let online: OnlineRace | undefined
 
-if (server) joinRegatta(server, asked.get('name') ?? '', asked.get('watch') !== null)
-else start(randomSeed())
+/** Whether the connection there is only watches, so the menu can keep it to watch through. */
+let onlyWatching = false
+
+const menu = new Menu(requireElement<HTMLElement>('#menu'), {
+  standalone: () => {
+    leaveMenu()
+    leaveRegatta()
+    start(randomSeed())
+  },
+  race: (name) => {
+    leaveMenu()
+    leaveRegatta()
+    joinRegatta(server, name, false)
+  },
+  // The page has been watching all along; all that is left is to put the menu away.
+  watch: () => leaveMenu(),
+})
+
+// Each choice made on the menu is a step in the history, so the browser's back button is
+// the way back to it.
+window.addEventListener('popstate', () => {
+  if (menu.open) return
+  menu.show()
+  if (onlyWatching) return
+  leaveRegatta()
+  // A race at home stops where it is; the regatta goes on behind the menu again.
+  running = false
+  joinRegatta(server, '', true)
+})
+
+hostControls.addEventListener('click', (event) => {
+  const command = (event.target as HTMLElement).closest('button')?.dataset.command
+  if (command === 'endRace' || command === 'restart') online?.order(command)
+})
+// A tab that has stopped drawing gets no frames, and silence is how the server decides
+// a sailor has gone. This keeps her alive; the frame loop is what makes her quick.
+window.setInterval(() => online?.sendHelm(), 1000 / HELM_HZ)
+
+if (asked.has('standalone')) start(randomSeed())
+else if (asked.has('watch')) joinRegatta(server, named, true)
+else if (named) joinRegatta(server, named, false)
+else {
+  menu.show()
+  joinRegatta(server, '', true)
+}
 requestAnimationFrame(frame)
 
+function leaveMenu(): void {
+  menu.hide()
+  window.history.pushState({ from: 'menu' }, '')
+}
+
 function joinRegatta(url: string, name: string, watching: boolean): void {
-  const role = watching ? 'observer' : 'racer'
+  onlyWatching = watching
   online = new OnlineRace({
     url,
     name,
-    role,
+    role: watching ? 'observer' : 'racer',
     helm: () => helm.rudder,
   })
   online.join()
-  hostControls.addEventListener('click', (event) => {
-    const command = (event.target as HTMLElement).closest('button')?.dataset.command
-    if (command === 'endRace' || command === 'restart') online?.order(command)
-  })
-  // A tab that has stopped drawing gets no frames, and silence is how the server decides
-  // a sailor has gone. This keeps her alive; the frame loop is what makes her quick.
-  window.setInterval(() => online?.sendHelm(), 1000 / HELM_HZ)
   showLobby()
+}
+
+/** Close the connection the menu was watching through, before racing on another. */
+function leaveRegatta(): void {
+  online?.leave()
+  online = undefined
+  onlyWatching = false
+  greetedAt = undefined
+  following = undefined
+  showHostControls(false)
+  hideOverlay()
 }
 
 /**
@@ -366,6 +419,7 @@ function frame(timestamp: number): void {
 }
 
 function drawFrame(timestamp: number): void {
+  if (menu.open) menu.update(online)
   if (online && !takeFromRegatta(timestamp)) return
   const surface = resizeSurface(canvas)
   // Recomputed rather than kept, so turning the phone or dragging the window resizes the
@@ -449,9 +503,9 @@ function takeFromRegatta(timestamp: number): boolean {
   if (!race) return false
 
   /*
-   * Which boat is hers, before anything else reaches the screen. A sailor on a phone
-   * never typed a name, so the colour is the only thing telling her which of the boats
-   * on the water to steer, and she should not have to find it in a list.
+   * Which boat is hers, before anything else reaches the screen. Her name is on the
+   * board, but on the water the colour is the only thing telling her which of the boats
+   * to steer, and she should not have to find it in a list.
    */
   // Before anything that might not draw: the host's way out of a race must not depend
   // on there being something to draw, which is exactly when she would want it.
@@ -773,6 +827,8 @@ function showResults(): void {
  * everything else is a paragraph.
  */
 function showOverlay(title: string, body: string, onTap: () => void): void {
+  // The menu is the card while it is up; the regatta behind it says nothing.
+  if (menu.open) return
   overlay.innerHTML = `<div class="card"><h1>${title}</h1>${body}</div>`
   overlay.dataset.visible = 'true'
   onCardTap = onTap

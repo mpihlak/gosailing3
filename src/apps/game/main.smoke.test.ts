@@ -21,6 +21,7 @@ const release = (key: string) =>
   window.dispatchEvent(new window.KeyboardEvent('keyup', { key, bubbles: true }))
 
 beforeAll(async () => {
+  window.history.replaceState({}, '', '/?standalone')
   page = mountPage({ width: 1200, height: 800, record: drawn })
   await import('./main')
   // A handful of frames, enough to fill the instruments in.

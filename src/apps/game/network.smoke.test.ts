@@ -4,8 +4,8 @@ import { DEFAULT_SERVER } from './scenario'
 import { mountPage, overlayText } from './page.harness'
 
 /**
- * `?network` is the whole of what a player has to type, and on a phone it is the whole of
- * what she can. No name, no server: the page knows the regatta and the server names her.
+ * A link with a name in it goes straight to the regatta and past the menu. No server: the
+ * page knows where the regatta is.
  */
 
 const opened: FakeSocket[] = []
@@ -75,8 +75,8 @@ describe('joining with ?network', () => {
   })
 
   /*
-   * A sailor on a phone never typed a name, so the colour is the only thing telling her
-   * which of the boats on the water is hers. She is shown it before anything else.
+   * Her name is on the board, but on the water the colour is the only thing telling her
+   * which of the boats is hers. She is shown it before anything else.
    */
   it('holds her colour up before the regatta reaches the screen', () => {
     expect(overlayText()).toContain('You are')

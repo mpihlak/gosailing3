@@ -35,15 +35,16 @@ ssh martin@voyager 'loginctl enable-linger'
 
 The server listens on port 8080 and answers `GET /health` with its phase and the number
 of sailors aboard. A Cloudflare tunnel fronts it at `https://ws.gosailing.online`, which
-is the address the game joins with `?network`. A page served over https must connect with
-`wss://`, so a plain `ws://` address only works from a page served over plain http.
+is the address the game's menu watches and joins. A page served over https must connect
+with `wss://`, so a plain `ws://` address only works from a page served over plain http.
 
 ```
-https://mpihlak.github.io/gosailing3/?network
-https://mpihlak.github.io/gosailing3/?network&name=Ann
+https://mpihlak.github.io/gosailing3/                     the menu
+https://mpihlak.github.io/gosailing3/?network&name=Ann    straight in, racing as Ann
+https://mpihlak.github.io/gosailing3/?network&watch=1     straight in, watching
 ```
 
-Add `&watch=1` to spectate instead of racing.
+Nobody races without a name. The server seats a sailor who gives none as a watcher.
 
 ### Why not tailscale funnel
 
