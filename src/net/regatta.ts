@@ -128,7 +128,9 @@ export class Regatta {
   /**
    * What each sailor has taken from the regatta, kept for as long as she is connected.
    * Nothing writes it down: a server that restarts starts the scoring again, and a
-   * sailor who leaves and comes back is a new sailor with nothing to her name.
+   * sailor who leaves and comes back is a new sailor with nothing to her name. It starts
+   * again when the first person sits down to race as well, so she does not join a table
+   * the robots have run up between themselves.
    */
   private readonly tally = new Map<BoatId, number>()
   private pending: TimedEvent[] = []
@@ -291,6 +293,7 @@ export class Regatta {
       racing && !robot && this.racers().length >= this.limits.maxRacers ? this.makeRoom() : []
 
     const seated = racing && this.racers().length < this.limits.maxRacers
+    if (seated && !robot && !this.racers().some(([, entry]) => entry.person)) this.tally.clear()
     // Nobody has crossed a line yet, so she has missed nothing and can be let in.
     const inTime = seated && this.beforeTheGun()
     const color = this.colorFor(seated ? 'racer' : 'observer')

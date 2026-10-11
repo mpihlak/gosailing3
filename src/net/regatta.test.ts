@@ -592,6 +592,43 @@ describe('keeping score', () => {
     }
   })
 
+  describe('starting again for people', () => {
+    const pointsOf = (race: Regatta) => race.fleet.map((sailor) => sailor.points)
+
+    /** One robot sailing, and one from elsewhere to be sent the results. */
+    function robotsAlone() {
+      const race = regatta({ fleetSize: 2, maxRacers: 10 })
+      race.addRobot('Rob')
+      race.say('r', { kind: 'join', name: 'Rita', robot: true })
+      race.tick(1)
+      scored(sailItOut(race, ['r']))
+      expect(pointsOf(race)).toEqual([2, 1])
+      return race
+    }
+
+    it('wipes what the robots ran up when the first person sits down to race', () => {
+      const race = robotsAlone()
+      race.say('a', joins('Ann'))
+      expect(pointsOf(race)).toEqual([0, 0, 0])
+    })
+
+    /** Every page watches from behind its menu, so watching cannot be what wipes it. */
+    it('leaves it alone for somebody who only watches', () => {
+      const race = robotsAlone()
+      race.say('w', watches('Wendy'))
+      expect(pointsOf(race)).toEqual([2, 1, 0])
+    })
+
+    it('keeps adding up while a person is still racing', () => {
+      const race = raceOf(1, ['a'], { maxRacers: 10 })
+      const places = scored(sailItOut(race, ['a']))
+      race.say('b', joins('Bob'))
+      const ann = race.fleet.find((sailor) => sailor.id === 'a')
+      expect(ann?.points).toBe(places.find((one) => one.boatId === 'a')?.total)
+      expect(ann?.points).toBeGreaterThan(0)
+    })
+  })
+
   it('counts only the boats that sailed it, not everyone connected', () => {
     const race = raceOf(1, ['a'], { maxRacers: 10 })
     race.say('w', watches('Wendy'))
