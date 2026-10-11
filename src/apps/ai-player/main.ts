@@ -76,6 +76,12 @@ setInterval(() => {
       )
     }
   }
+  // They do not reconnect. Leaving lets whatever started them, systemd on the host, start
+  // them again once the server is back.
+  if (crew.every((robot) => robot.race.trouble)) {
+    console.log('every connection has closed')
+    process.exit(1)
+  }
 }, 250)
 
 function say(who: string, what: string): void {

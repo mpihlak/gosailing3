@@ -1,0 +1,19 @@
+[Unit]
+Description=Go Sailing robot sailors
+After=gosailing.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/gosailing-ai
+# An absolute path, written by deploy-ai.sh, for the same reason as in gosailing.service.
+ExecStart=@NODE@ %h/gosailing-ai/main.js wss://ws.gosailing.online --count 2
+# They exit when their connections close, so this is what brings them back after the
+# server restarts or the tunnel drops.
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

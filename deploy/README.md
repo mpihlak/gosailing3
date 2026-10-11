@@ -72,6 +72,31 @@ ssh martin@voyager 'journalctl --user -u gosailing -f'
 ssh martin@voyager 'systemctl --user restart gosailing'
 ```
 
+## The robots
+
+Two robot sailors run on the same host as their own service, so there is always a race
+on to join or watch. They connect through the tunnel at `wss://ws.gosailing.online`, the
+same way a player does, and race each other for as long as nobody else turns up.
+
+```sh
+./deploy/deploy-ai.sh            # martin@voyager
+./deploy/deploy-ai.sh user@host  # somewhere else
+```
+
+| Path                                          | What                                          |
+| --------------------------------------------- | --------------------------------------------- |
+| `~/gosailing-ai/main.js`                      | the robots' bundle                            |
+| `~/.config/systemd/user/gosailing-ai.service` | the unit, written from `gosailing-ai.service` |
+
+The unit starts after `gosailing`. The robots do not reconnect: when every connection
+has closed, the process exits and systemd starts it again ten seconds later. That covers
+a server restart, a tunnel outage, and a boot where the tunnel is not up yet.
+
+```sh
+ssh martin@voyager 'systemctl --user status gosailing-ai'
+ssh martin@voyager 'journalctl --user -u gosailing-ai -o cat -f'
+```
+
 ## The races on disk
 
 Every race is written to `~/gosailing/logs` as it is sailed, one file a race, named for
