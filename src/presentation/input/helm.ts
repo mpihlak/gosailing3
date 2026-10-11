@@ -48,6 +48,8 @@ export class Helm implements InputSource {
 
   attach(target: HTMLElement): void {
     const keyDown = (event: KeyboardEvent) => {
+      // Somebody typing her name is not steering.
+      if (event.target instanceof HTMLInputElement) return
       const action = commandFor(event.key)
       if (action) {
         event.preventDefault()

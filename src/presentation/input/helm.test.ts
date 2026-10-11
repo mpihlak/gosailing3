@@ -26,6 +26,16 @@ describe('steering', () => {
     expect(helm.rudder).toBe(0)
   })
 
+  it('leaves alone the keys typed into a field', () => {
+    const field = document.body.appendChild(document.createElement('input'))
+    for (const key of ['a', 'r', 'h']) {
+      field.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }))
+    }
+    expect(helm.rudder).toBe(0)
+    expect(commands).toEqual([])
+    field.remove()
+  })
+
   it('cancels out when both are held', () => {
     press('ArrowLeft')
     press('ArrowRight')
