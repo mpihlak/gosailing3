@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { angleDelta, vec, type Vec2 } from '@/foundation/geom'
-import { createSimulation, SimulationRunner } from '@/sim'
+import { createSimulation, fixedSource, runHeadless, SimulationRunner } from '@/sim'
 import { giveWay } from './avoidance'
+import { personalityFor } from './personality'
+import { pinEndPortStart } from './start'
 import { Skipper } from './skipper'
 
 const STEADY = {
@@ -90,5 +92,56 @@ describe('keeping clear', () => {
         .filter((event) => event.kind === 'contact').length
     }
     expect(contacts).toBe(0)
+  })
+})
+
+describe('keeping clear before the gun', () => {
+  /*
+   * From a race on the server: a robot coming back to the pin close-hauled on port, and
+   * a person reaching down the line on starboard, steady on a course that meets hers.
+   * She held her course into the other boat and took the penalty.
+   */
+  it('has a port tack boat on her way to the line keep clear of a starboard one', () => {
+    const sim = createSimulation({
+      name: 'pre-start crossing',
+      seed: 'crossing',
+      boats: [
+        {
+          id: 'robot',
+          name: 'Alice',
+          controller: 'ai',
+          position: vec(-198.9, -125.6),
+          heading: 53.4,
+        },
+        {
+          id: 'person',
+          name: 'Martin',
+          controller: 'human',
+          position: vec(-119.4, -81.6),
+          heading: 244.1,
+        },
+      ],
+      course: { legLength: 450, lineLength: 260, startCenter: vec(0, 0) },
+      wind: STEADY,
+      config: { startSequence: 120 },
+      duration: 4800,
+    })
+    const speeds: Record<string, number> = { robot: 5.2, person: 7.2 }
+    const world = {
+      ...sim.world,
+      time: 64,
+      boats: sim.world.boats.map((boat) => ({ ...boat, speed: speeds[boat.id]! })),
+    }
+    // Her own way of starting, which is what put her on this line to the pin.
+    const personality = personalityFor('Alice')
+    const start = pinEndPortStart({ clearance: personality.startClearance })
+    const helms = {
+      robot: new Skipper({ start, personality, seed: 'Alice:944zw5' }),
+      person: fixedSource({ rudder: 0 }),
+    }
+    const { events } = runHeadless(sim.ctx, world, helms, {
+      until: (now) => now.time >= 120,
+    })
+    expect(events.filter((event) => event.kind === 'contact')).toEqual([])
   })
 })

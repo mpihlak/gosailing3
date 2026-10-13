@@ -65,7 +65,8 @@ const DEFAULTS = {
  * the approach rather than across it, and it slides toward the line as the clock runs
  * down — when it reaches the line, so should she.
  *
- * TODO: she takes no account of right of way and will sail through anyone in her way.
+ * TODO: she plans no room for traffic. The skipper turns her away from a boat with right
+ * of way, and she comes back to a later approach, which can make her start late.
  * TODO: nor of being over early despite all this; she needs to bear off, return and
  * start again.
  * TODO: a big shift can leave the pin unlayable on port, and she will sail at it anyway.

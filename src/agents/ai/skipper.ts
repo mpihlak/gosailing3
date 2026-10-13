@@ -113,13 +113,13 @@ export class Skipper implements InputSource {
     const course = this.gybeOnSchedule(ctx, world, boat, spec, wind, plan, wanted)
 
     /*
-     * Then she keeps clear of anyone with right of way over her. Not while turning a
-     * penalty circle, which asked for its own room, nor in a tack, which asked for its
-     * own, nor at the start, for the same reason as above.
+     * Then she keeps clear of anyone with right of way over her, the start included: the
+     * start strategy plans afresh from wherever she is each tick, so a boat turned away
+     * comes back to a later approach. Not while turning a penalty circle, which asked for
+     * its own room, nor in a tack, which asked for its own.
      */
     const free =
       !plan.spin &&
-      plan.reason !== 'starting' &&
       world.race.progress[boatId]?.tacking !== true &&
       !wouldTack(boat, course, wind.direction)
     const bearing = free ? this.keepClear(ctx, world, boat, spec, wind, course) : course
