@@ -29,6 +29,10 @@ export function crewName(index: number): string {
   return lap === 0 ? name : `${name}${lap + 1}`
 }
 
+/** How long she waits before trying again, doubled each time it fails, up to the most. */
+const RETRY_FIRST = 5_000
+const RETRY_MOST = 60_000
+
 export interface RobotOptions {
   readonly url: string
   readonly name: string
@@ -52,23 +56,23 @@ export interface RobotOptions {
  * sails under the same lag rather than a privileged one.
  */
 export class Robot {
-  readonly race: OnlineRace
   /** Assigned in the constructor: a field initialiser runs before `options` exists. */
   private skipper: Skipper
   /** The race the current skipper was made for, so a new one gets a fresh head. */
   private sailing: Simulation | undefined
+  /** Her connection to the regatta. A new one replaces it each time she comes back. */
+  private connection: OnlineRace
+  /** When she tries again, once her connection has gone. */
+  private retryAt: number | undefined
+  private retryWait = RETRY_FIRST
 
   constructor(private readonly options: RobotOptions) {
     this.skipper = this.freshSkipper()
-    this.race = new OnlineRace({
-      url: options.url,
-      name: options.name,
-      // So the regatta hands the race controls to a person instead of to her.
-      robot: true,
-      helm: () => this.rudder(),
-      ...(options.open ? { open: options.open } : {}),
-      ...(options.now ? { now: options.now } : {}),
-    })
+    this.connection = this.connect()
+  }
+
+  get race(): OnlineRace {
+    return this.connection
   }
 
   get name(): string {
@@ -85,7 +89,47 @@ export class Robot {
 
   /** One turn of the loop the browser would run on a frame. */
   step(): void {
+    this.keepConnected()
     this.race.sendHelm()
+  }
+
+  /**
+   * A connection that drops comes back on its own, after a wait that grows while it keeps
+   * failing, so a server that is down is not asked every few seconds for an hour. A seat
+   * given to a person is not taken back.
+   */
+  private keepConnected(): void {
+    const race = this.race
+    if (!race.trouble) {
+      if (race.you !== undefined) this.retryWait = RETRY_FIRST
+      return
+    }
+    if (race.removed) return
+    const now = this.clock()
+    this.retryAt ??= now + this.retryWait
+    if (now < this.retryAt) return
+    this.retryAt = undefined
+    this.retryWait = Math.min(this.retryWait * 2, RETRY_MOST)
+    race.leave()
+    this.connection = this.connect()
+    this.connection.join()
+  }
+
+  private connect(): OnlineRace {
+    const { options } = this
+    return new OnlineRace({
+      url: options.url,
+      name: options.name,
+      // So the regatta hands the race controls to a person instead of to her.
+      robot: true,
+      helm: () => this.rudder(),
+      ...(options.open ? { open: options.open } : {}),
+      ...(options.now ? { now: options.now } : {}),
+    })
+  }
+
+  private clock(): number {
+    return (this.options.now ?? (() => performance.now()))()
   }
 
   leave(): void {
@@ -96,7 +140,7 @@ export class Robot {
   standing(): string | undefined {
     const { simulation, you } = this.race
     if (!simulation || !you) return undefined
-    const world = this.race.frameAt((this.options.now ?? (() => performance.now()))())
+    const world = this.race.frameAt(this.clock())
     const boat = world?.boats.find((one) => one.id === you)
     if (!world || !boat) return undefined
     const place = standings(simulation.ctx, world).find((one) => one.boatId === you)
@@ -128,7 +172,7 @@ export class Robot {
       this.sailing = simulation
       this.skipper = this.freshSkipper()
     }
-    const world = this.race.frameAt((this.options.now ?? (() => performance.now()))())
+    const world = this.race.frameAt(this.clock())
     // Nothing to steer until two snapshots have arrived, and nothing to steer with while
     // she waits out a race she arrived too late for: her boat is not in the water.
     if (!world) return 0

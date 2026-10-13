@@ -89,9 +89,11 @@ same way a player does, and race each other for as long as nobody else turns up.
 | `~/gosailing-ai/main.js`                      | the robots' bundle                            |
 | `~/.config/systemd/user/gosailing-ai.service` | the unit, written from `gosailing-ai.service` |
 
-The unit starts after `gosailing`. The robots do not reconnect: when every connection
-has closed, the process exits and systemd starts it again ten seconds later. That covers
-a server restart, a tunnel outage, and a boot where the tunnel is not up yet.
+The unit starts after `gosailing`. Each robot reconnects on her own when her connection
+drops: five seconds later, and twice as long after each attempt that fails, up to a
+minute. That covers a server restart, a tunnel outage, a boot where the tunnel is not up
+yet, and the single connections the tunnel drops every hour or two. A robot who gave up
+her seat to a person stays away.
 
 ```sh
 ssh martin@voyager 'systemctl --user status gosailing-ai'

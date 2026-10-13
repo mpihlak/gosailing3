@@ -45,6 +45,10 @@ class FakeSocket implements Socket {
   say(message: ServerMessage) {
     this.listeners.get('message')?.({ data: JSON.stringify(message) } as never)
   }
+  /** The far end, or something between, closing it. */
+  drop() {
+    this.listeners.get('close')?.(undefined as never)
+  }
 }
 
 let socket: FakeSocket
@@ -146,5 +150,72 @@ describe('which end of the line she goes for', () => {
   it('can be built at all, either way', () => {
     expect(() => made('pin')).not.toThrow()
     expect(() => made('committee')).not.toThrow()
+  })
+})
+
+describe('a robot whose connection drops', () => {
+  let sockets: FakeSocket[]
+  let robot: Robot
+
+  beforeEach(() => {
+    sockets = []
+    clock = 0
+    robot = new Robot({
+      url: 'ws://test',
+      name: 'Ann',
+      open: () => {
+        const opened = new FakeSocket()
+        sockets.push(opened)
+        return opened
+      },
+      now: () => clock,
+    })
+    robot.join()
+  })
+
+  /** Step her at a given time, as the loop would. */
+  const at = (ms: number) => {
+    clock = ms
+    robot.step()
+  }
+  const joins = (socket: FakeSocket | undefined) =>
+    socket?.sent.map((text) => JSON.parse(text)).filter((one) => one.kind === 'join')
+
+  it('comes back on her own, after a wait', () => {
+    sockets[0]!.drop()
+    at(0)
+    at(4_999)
+    expect(sockets).toHaveLength(1)
+    at(5_000)
+    expect(sockets).toHaveLength(2)
+    expect(joins(sockets[1])).toEqual([{ kind: 'join', name: 'Ann', role: 'racer', robot: true }])
+  })
+
+  /** A server that is down for an hour should not be asked every five seconds of it. */
+  it('waits twice as long each time coming back fails, and starts over once she is in', () => {
+    sockets[0]!.drop()
+    at(0)
+    at(5_000)
+    sockets[1]!.drop()
+    at(5_000)
+    at(14_999)
+    expect(sockets).toHaveLength(2)
+    at(15_000)
+    expect(sockets).toHaveLength(3)
+
+    sockets[2]!.say({ kind: 'welcome', you: 'c9', role: 'racer', phase: 'lobby', fleet: [] })
+    at(15_001)
+    sockets[2]!.drop()
+    at(15_002)
+    at(20_002)
+    expect(sockets).toHaveLength(4)
+  })
+
+  it('stays away once her seat has gone to a person', () => {
+    sockets[0]!.say({ kind: 'removed' })
+    sockets[0]!.drop()
+    at(0)
+    at(600_000)
+    expect(sockets).toHaveLength(1)
   })
 })

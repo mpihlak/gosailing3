@@ -85,6 +85,8 @@ export class OnlineRace {
   watching: BoatId | undefined
   /** What went wrong, if the socket did. */
   trouble: string | undefined
+  /** Whether her seat went to a person, which is a reason to stay away rather than come back. */
+  removed = false
   /**
    * How long a message takes to reach the server and come back, in milliseconds, as the
    * server last measured it. Undefined until it has said.
@@ -257,6 +259,7 @@ export class OnlineRace {
         this.remember(message.time, message.boats)
         return
       case 'removed':
+        this.removed = true
         this.trouble = 'Gave up her place to a person.'
         return
       case 'timing':
