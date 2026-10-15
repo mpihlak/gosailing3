@@ -17,6 +17,11 @@ import { pinEndPortStart, type StartPhase, type StartStrategy } from './start'
 const RECHECK: Seconds = 0.25
 /** How much more room she wants before she stops keeping clear. */
 const RELEASE = 1.5
+/**
+ * The least time she holds the tack she made to get away from a boat luffing her. After
+ * it she goes back to her own plans once tacking back is clear.
+ */
+const TACKED_AWAY_FOR: Seconds = 6
 
 export interface SkipperOptions {
   /** How she goes about starting. Different boats can be given different ideas. */
@@ -53,6 +58,8 @@ export class Skipper implements InputSource {
   private spin: { readonly way: Spin; readonly owed: number } | undefined
   /** The course she is steering to keep clear of somebody, and when she chose it. */
   private keepingClear: { readonly bearing: Degrees; readonly since: Seconds } | undefined
+  /** The tack she went onto to keep clear, as the side the wind is on, and when. */
+  private tackedAway: { readonly side: number; readonly since: Seconds } | undefined
   private readonly rng: Rng
   /**
    * The gybes she means to make on the run to the finish, drawn when she starts it, and
@@ -110,7 +117,9 @@ export class Skipper implements InputSource {
           wind.direction + Math.sign(boat.twa || 1) * spec.polar.beatAngle(wind.speed),
         )
       : plan.bearing
-    const course = this.gybeOnSchedule(ctx, world, boat, spec, wind, plan, wanted)
+    const course =
+      this.holdTackAway(world, boat, spec, wind, plan) ??
+      this.gybeOnSchedule(ctx, world, boat, spec, wind, plan, wanted)
 
     /*
      * Then she keeps clear of anyone with right of way over her, the start included: the
@@ -124,6 +133,9 @@ export class Skipper implements InputSource {
       !wouldTack(boat, course, wind.direction)
     const bearing = free ? this.keepClear(ctx, world, boat, spec, wind, course) : course
     if (!free) this.keepingClear = undefined
+    if (bearing !== course && wouldTack(boat, bearing, wind.direction)) {
+      this.tackedAway = { side: -Math.sign(boat.twa || 1), since: world.time }
+    }
 
     this.lastPlan = bearing === plan.bearing ? plan : { ...plan, bearing }
     this.lastStartPhase = plan.startPhase
@@ -158,6 +170,30 @@ export class Skipper implements InputSource {
     const away = giveWay(ctx, world, boat, spec, wind, wanted, margin)
     this.keepingClear = away && { bearing: away.bearing, since: world.time }
     return away?.bearing ?? wanted
+  }
+
+  /** Close-hauled on the tack she went onto to keep clear, while she is holding it. */
+  private holdTackAway(
+    world: WorldState,
+    boat: BoatState,
+    spec: BoatSpec,
+    wind: WindSample,
+    plan: NavigationPlan,
+  ): Degrees | undefined {
+    const held = this.tackedAway
+    // A clock that went backwards is a race begun again.
+    const done =
+      !held ||
+      plan.spin ||
+      world.time < held.since ||
+      (world.time - held.since > TACKED_AWAY_FOR &&
+        (!wouldTack(boat, plan.bearing, wind.direction) ||
+          clearToTack(world, boat, spec, plan.bearing)))
+    if (done) {
+      this.tackedAway = undefined
+      return undefined
+    }
+    return normalizeBearing(wind.direction + held.side * spec.polar.beatAngle(wind.speed))
   }
 
   /**

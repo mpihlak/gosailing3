@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { angleDelta, vec, type Vec2 } from '@/foundation/geom'
-import { createSimulation, fixedSource, runHeadless, SimulationRunner } from '@/sim'
+import { add, angleDelta, bearingToVector, scale, vec, type Vec2 } from '@/foundation/geom'
+import { clamp } from '@/foundation/units'
+import {
+  createSimulation,
+  fixedSource,
+  runHeadless,
+  SimulationRunner,
+  type InputSource,
+} from '@/sim'
 import { giveWay } from './avoidance'
 import { personalityFor } from './personality'
-import { pinEndPortStart } from './start'
+import { boatEndStarboardStart, pinEndPortStart } from './start'
 import { Skipper } from './skipper'
 
 const STEADY = {
@@ -143,5 +150,112 @@ describe('keeping clear before the gun', () => {
       until: (now) => now.time >= 120,
     })
     expect(events.filter((event) => event.kind === 'contact')).toEqual([])
+  })
+})
+
+describe('being luffed before the gun', () => {
+  /** Luffs steadily from close-hauled on starboard to just short of head to wind. */
+  const luffing: InputSource = {
+    inputFor: (id, world) => {
+      const boat = world.boats.find((one) => one.id === id)!
+      const wanted = 315 + clamp((world.time - 101) * 5, 0, 37)
+      return { rudder: clamp(angleDelta(boat.heading, wanted) / 10 - boat.turnRate / 30, -1, 1) }
+    },
+  }
+
+  it('tacks away when the world comes from the server', () => {
+    // A robot online is told each boat's status and never the race's phase, which reads
+    // as racing from the first snapshot. Luffed to twenty degrees off the wind, overlapped
+    // to windward of a boat sitting head to wind a little ahead of her.
+    const sim = racing([
+      { id: 'leeward', position: vec(-6, -97), heading: 352 },
+      { id: 'windward', position: vec(0, -100), heading: 340 },
+    ])
+    const progress = Object.fromEntries(
+      Object.entries(sim.world.race.progress).map(([id, entry]) => [
+        id,
+        { ...entry, status: 'prestart' as const },
+      ]),
+    )
+    const world = {
+      ...sim.world,
+      boats: sim.world.boats.map((boat) => ({
+        ...boat,
+        speed: boat.id === 'windward' ? 3 : 1,
+        twa: angleDelta(STEADY.direction, boat.heading),
+      })),
+      race: { ...sim.world.race, progress },
+    }
+    const boat = world.boats.find((one) => one.id === 'windward')!
+    const away = giveWay(sim.ctx, world, boat, sim.ctx.specs.windward!, STEADY, 320)
+    expect(angleDelta(STEADY.direction, away!.bearing)).toBeGreaterThan(0)
+  })
+
+  it('does not tack away from a boat that is not luffing her', () => {
+    // From a race on the server: a boat stopped head to wind some way ahead, which she
+    // was keeping clear of from astern. She tacked away from it and started a minute late.
+    const sim = racing([
+      { id: 'stopped', position: vec(-14, -78), heading: 352 },
+      { id: 'robot', position: vec(0, -100), heading: 340 },
+    ])
+    const progress = Object.fromEntries(
+      Object.entries(sim.world.race.progress).map(([id, entry]) => [
+        id,
+        { ...entry, status: 'prestart' as const },
+      ]),
+    )
+    const world = {
+      ...sim.world,
+      boats: sim.world.boats.map((boat) => ({
+        ...boat,
+        speed: boat.id === 'robot' ? 4 : 0,
+        twa: angleDelta(STEADY.direction, boat.heading),
+      })),
+      race: { ...sim.world.race, progress },
+    }
+    const boat = world.boats.find((one) => one.id === 'robot')!
+    const away = giveWay(sim.ctx, world, boat, sim.ctx.specs.robot!, STEADY, 330)
+    expect(away?.rule).toBe(12)
+    expect(angleDelta(STEADY.direction, away!.bearing)).toBeLessThan(0)
+  })
+
+  it('has the windward boat tack away rather than stop head to wind beside her', () => {
+    // Both close-hauled on starboard below the line, the robot to windward and a little
+    // behind, so she cannot sail out ahead as the other boat slows.
+    const leeward = vec(80, -120)
+    const robot = add(add(leeward, scale(bearingToVector(45), 9)), scale(bearingToVector(315), -8))
+    const sim = createSimulation({
+      name: 'luffed',
+      seed: 'luffed',
+      boats: [
+        { id: 'person', name: 'Martin', controller: 'human', position: leeward, heading: 315 },
+        { id: 'robot', name: 'Bob', controller: 'ai', position: robot, heading: 315 },
+      ],
+      course: { legLength: 450, lineLength: 260, startCenter: vec(0, 0) },
+      wind: STEADY,
+      config: { startSequence: 120 },
+      duration: 4800,
+    })
+    const world = {
+      ...sim.world,
+      time: 100,
+      boats: sim.world.boats.map((b) => ({ ...b, speed: 6 })),
+    }
+    const runner = new SimulationRunner(sim.ctx, world)
+    const helms = { person: luffing, robot: new Skipper({ start: boatEndStarboardStart() }) }
+    let slowest = Infinity
+    let tacked = false
+    const penalties = []
+    for (let tick = 0; tick < 60 * 25; tick++) {
+      const events = runner.advance(1 / 60, helms, 10)
+      penalties.push(...events.filter((event) => event.kind === 'penalised'))
+      const boat = runner.world.boats.find((one) => one.id === 'robot')!
+      if (tick > 60 * 2) slowest = Math.min(slowest, boat.speed)
+      tacked ||= boat.twa > 0
+    }
+    expect(penalties).toEqual([])
+    expect(tacked).toBe(true)
+    // Followed up to head to wind she was down to a fifth of a knot.
+    expect(slowest).toBeGreaterThan(1.5)
   })
 })

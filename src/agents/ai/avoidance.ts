@@ -21,6 +21,7 @@ import type { BoatSpec, BoatState } from '@/domain/boat'
 import type { WindSample } from '@/domain/wind'
 import { encounter, type Contender, type RightOfWayRule } from '@/domain/rules'
 import { specFor, type SimContext, type WorldState } from '@/sim'
+import { clearToTack } from './tacking'
 
 /**
  * How far ahead a meeting is looked for. Far enough to turn away in time — she comes
@@ -49,6 +50,18 @@ const TOUCHING = 1
  */
 const NEAREST_TWA: Degrees = 15
 const FURTHEST_TWA: Degrees = 170
+/**
+ * How far above close-hauled a boat may luff her before the gun before she tacks away
+ * instead, if the tack is clear. Followed further up she stops head to wind beside the
+ * boat luffing her. After the gun she stays on the tack she is racing on.
+ */
+const LUFFED_PAST: Degrees = 10
+/**
+ * How close, in her own lengths, the boat to leeward has to be for her to count as
+ * luffing her. Further off, the luff is her own keeping clear of a forecast, and a tack
+ * there only throws away her start.
+ */
+const LUFFED_WITHIN = 1.5
 
 export interface GiveWay {
   readonly bearing: Degrees
@@ -121,6 +134,13 @@ export function giveWay(
   if (!pressing || pressing.gap >= limit) return undefined
   const rule = giving.find(({ other }) => other === pressing.other)!.verdict.rule
 
+  const luffedBy =
+    rule === 11 &&
+    world.race.progress[boat.id]?.status === 'prestart' &&
+    distance(pressing.other.position, boat.position) < LUFFED_WITHIN * spec.length
+  const away = luffedBy ? tackAway(world, boat, spec, wind) : undefined
+  if (away !== undefined) return { bearing: away, rule }
+
   // Turning towards the wind is a luff. Her heading is the wind's direction plus her
   // angle to it, so on port that is a turn to port and on starboard one to starboard.
   const luff = boat.twa >= 0 ? -1 : 1
@@ -159,6 +179,19 @@ export function giveWay(
   if (best.gap >= TOUCHING * spec.length) return { bearing: best.bearing, rule }
   const hard = tryAll(headings(HARD_TURNS))
   return { bearing: hard ?? best.bearing, rule }
+}
+
+/** Close-hauled on the other tack, when she has been luffed past `LUFFED_PAST` and it is clear. */
+function tackAway(
+  world: WorldState,
+  boat: BoatState,
+  spec: BoatSpec,
+  wind: WindSample,
+): Degrees | undefined {
+  const beat = spec.polar.beatAngle(wind.speed)
+  if (Math.abs(boat.twa) > beat - LUFFED_PAST) return undefined
+  const heading = normalizeBearing(wind.direction - Math.sign(boat.twa || 1) * beat)
+  return clearToTack(world, boat, spec, heading) ? heading : undefined
 }
 
 /**
