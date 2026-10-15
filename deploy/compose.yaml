@@ -1,0 +1,21 @@
+# The server and the robots on one host. The robots reach the server over the compose
+# network, not through the tunnel.
+#
+# HOST_PORT is where the server listens on the host, for the tunnel, and only on
+# loopback. It defaults to 8081 so this can run beside the systemd server on 8080.
+services:
+  server:
+    image: mpihlak/gosailing-server:${SERVER_TAG:-latest}
+    restart: unless-stopped
+    ports: ['127.0.0.1:${HOST_PORT:-8081}:8080']
+    volumes: ['./logs:/data/logs']
+    logging: &logging
+      driver: json-file
+      options: { max-size: 10m, max-file: '5' }
+  ai:
+    image: mpihlak/gosailing-ai:${AI_TAG:-latest}
+    restart: unless-stopped
+    command: ['ws://server:8080', '--count', '2']
+    depends_on:
+      server: { condition: service_healthy }
+    logging: *logging

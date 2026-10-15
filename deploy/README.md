@@ -167,3 +167,29 @@ unsteerable.
 What this measures is the round trip of the line, not the state of whoever is on it. The
 far end answers a ping in its network layer rather than its page, so a player whose phone
 is dropping frames still reads clean here.
+
+## Docker
+
+The server and the robots are also built as two images, `mpihlak/gosailing-server` and
+`mpihlak/gosailing-ai`, from the `Dockerfile` at the top of the repo. On the host they run
+under docker compose from `~/gosailing-docker`, beside the systemd units. The server
+listens on port 8081 there, so the live server on 8080 is not disturbed.
+
+```sh
+./deploy/deploy-docker.sh            # both
+./deploy/deploy-docker.sh server     # the server alone; the robots reconnect to it
+./deploy/deploy-docker.sh ai         # the robots alone
+```
+
+The script builds for `linux/amd64` on the Mac and pushes to Docker Hub, so it needs a
+`docker login` as `mpihlak` first. The host pulls the public images and needs no login.
+
+The robots reach the server over the compose network, not through the tunnel. Race logs
+go to `~/gosailing-docker/logs`. The containers' output goes to docker:
+
+```sh
+ssh martin@voyager 'cd ~/gosailing-docker && docker compose logs -f'
+```
+
+To run an older build, set `SERVER_TAG` or `AI_TAG` to its commit in
+`~/gosailing-docker/.env` and run `docker compose up -d`.

@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-server
+dist-ai
+coverage
+logs
+tmp
+.git
+AI_VARIETY.md
+todo.txt
