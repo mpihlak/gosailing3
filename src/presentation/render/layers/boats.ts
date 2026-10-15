@@ -59,10 +59,12 @@ export interface BoatView {
   readonly trails: TrailStore
   /** A style per boat. A boat without one is drawn as an anonymous competitor. */
   readonly styles: Readonly<Record<BoatId, BoatStyle>>
+  /** The race clock, which a flogging sail flaps by. */
+  readonly time: Seconds
 }
 
 export function drawBoats(ctx: CanvasRenderingContext2D, view: BoatView): void {
-  const { camera, boats, specs, trails, styles } = view
+  const { camera, boats, specs, trails, styles, time } = view
 
   // Trails first, all of them, so no boat's wake is drawn over another's hull.
   for (const boat of boats) {
@@ -70,7 +72,7 @@ export function drawBoats(ctx: CanvasRenderingContext2D, view: BoatView): void {
   }
   for (const boat of boats) {
     const spec = specs[boat.id]
-    if (spec) drawHull(ctx, camera, boat, spec, styles[boat.id] ?? ANONYMOUS)
+    if (spec) drawHull(ctx, camera, boat, spec, styles[boat.id] ?? ANONYMOUS, time)
   }
 }
 
@@ -100,6 +102,7 @@ function drawHull(
   boat: BoatState,
   spec: BoatSpec,
   style: BoatStyle,
+  time: Seconds,
 ): void {
   const screen = worldToScreen(camera, boat.position)
   const length = Math.max(10, metersToPixels(camera, spec.length))
@@ -124,7 +127,7 @@ function drawHull(
   ctx.strokeStyle = PALETTE.hullOutline
   ctx.stroke()
 
-  drawSail(ctx, boat, length)
+  drawSail(ctx, boat, length, time)
   ctx.restore()
 }
 
@@ -135,6 +138,10 @@ const BOOM_RUNNING: Degrees = 80
 const BOOM_LENGTH = 0.62
 /** Below this angle to the wind she is luffing, and there is no tack to show. */
 const LUFFING_WITHIN: Degrees = 12
+/** Closer to the wind than this the sail starts to flog, more the closer she gets. */
+const FLOGGING_WITHIN: Degrees = 30
+/** How many times a second a flogging sail flaps across. */
+const FLOG_HZ = 1.5
 
 /**
  * How far the boom is off the centreline, for drawing.
@@ -163,10 +170,27 @@ export function boomReach(twa: Degrees): number {
   return BOOM_LENGTH * Math.sin(toRadians(boomAngle(twa)))
 }
 
+/**
+ * How hard the sail is flogging, from nothing at `FLOGGING_WITHIN` of the wind to all
+ * of it head to wind. It is what shows a boat stalled partway through a tack, and so
+ * still keeping clear under rule 13, while her hull already points onto the new tack.
+ */
+export function flogging(twa: Degrees): number {
+  return clamp(1 - Math.abs(twa) / FLOGGING_WITHIN, 0, 1)
+}
+
 /** The mainsail, set on the leeward side. It shows which tack a boat is on at a glance. */
-function drawSail(ctx: CanvasRenderingContext2D, boat: BoatState, length: number): void {
+function drawSail(
+  ctx: CanvasRenderingContext2D,
+  boat: BoatState,
+  length: number,
+  time: Seconds,
+): void {
   const toLeeward = boat.twa >= 0 ? 1 : -1
-  const angle = toRadians(boomAngle(boat.twa))
+  const flog = flogging(boat.twa)
+  // Each boat flaps on her own beat, so a fleet head to wind does not flap in step.
+  const beat = Math.sin(2 * Math.PI * FLOG_HZ * time + boat.position.x + boat.position.y)
+  const angle = toRadians(boomAngle(boat.twa) + flog * 8 * beat)
   const mastY = -length / 5
   const boom = length * BOOM_LENGTH
 
@@ -174,8 +198,9 @@ function drawSail(ctx: CanvasRenderingContext2D, boat: BoatState, length: number
   const clewX = toLeeward * boom * Math.sin(angle)
   const clewY = mastY + boom * Math.cos(angle)
 
-  // The sail bellies out to leeward of the boom rather than lying along it.
-  const camber = boom * 0.22
+  // The sail bellies out to leeward of the boom rather than lying along it. Flogging, the
+  // belly swings from one side of the boom to the other.
+  const camber = boom * 0.22 * (1 - flog + flog * beat)
   const controlX = clewX / 2 + toLeeward * camber * Math.cos(angle)
   const controlY = (mastY + clewY) / 2 - camber * Math.sin(angle)
 

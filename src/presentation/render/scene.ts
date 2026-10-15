@@ -45,12 +45,7 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
 
   drawWater(canvas, camera)
   if (view.showShadows) drawShadows(canvas, camera, fleet, windDirection, view.displayTime)
-  drawWindField(
-    canvas,
-    camera,
-    (at) => windAt(ctx, world, at),
-    view.medianWindSpeed,
-  )
+  drawWindField(canvas, camera, (at) => windAt(ctx, world, at), view.medianWindSpeed)
   drawCourse(canvas, {
     course: ctx.course,
     camera,
@@ -60,7 +55,14 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
     started,
     ...(targetMark ? { targetMark } : {}),
   })
-  drawBoats(canvas, { camera, boats: world.boats, specs: ctx.specs, trails, styles: view.styles })
+  drawBoats(canvas, {
+    camera,
+    boats: world.boats,
+    specs: ctx.specs,
+    trails,
+    styles: view.styles,
+    time: world.time,
+  })
 
   // Screen furniture rather than something on the water, so it goes on last.
   const player = playerId ? world.boats.find((boat) => boat.id === playerId) : undefined

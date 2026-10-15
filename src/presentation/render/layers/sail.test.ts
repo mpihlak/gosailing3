@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { CRUISER_35_SPEC, hullRadius } from '@/domain/boat'
-import { boomAngle, boomReach } from './boats'
+import { boomAngle, boomReach, flogging } from './boats'
 
 describe('boomAngle', () => {
   it('shows a readable angle close-hauled, where a real main would be near flat', () => {
@@ -42,6 +42,18 @@ describe('boomAngle', () => {
   })
 })
 
+describe('flogging', () => {
+  it('leaves the sail still from thirty degrees off the wind', () => {
+    for (const twa of [30, 45, 90, 180, -30, -45]) expect(flogging(twa)).toBe(0)
+  })
+
+  it('flogs harder the closer she is to head to wind', () => {
+    expect(flogging(20)).toBeGreaterThan(flogging(25))
+    expect(flogging(5)).toBeGreaterThan(flogging(20))
+    expect(flogging(0)).toBe(1)
+    expect(flogging(-10)).toBeCloseTo(flogging(10))
+  })
+})
 
 describe('how far the rig reaches beside her', () => {
   const spec = CRUISER_35_SPEC
