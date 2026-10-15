@@ -1,57 +1,57 @@
 #!/usr/bin/env bash
 #
-# Builds the server and installs it on the host as a systemd user service.
+# Builds the server and robot images, pushes them to Docker Hub, and starts them on the
+# host with docker compose.
 #
-#   ./deploy/deploy.sh [user@host]
+#   ./deploy/deploy.sh [server|ai|all] [user@host]
 #
-# The whole server is one bundled file, so a deploy is: copy main.js, restart the
-# unit, check /health. There is nothing to install on the host and no node_modules.
+# Each image is tagged with the commit it was built from as well as latest, so an older
+# build can be run again with SERVER_TAG or AI_TAG in the host's .env. HOST_PORT there
+# moves the server off the 8080 that compose.yaml defaults to.
 set -euo pipefail
 
-HOST="${1:-${GOSAILING_HOST:-martin@voyager}}"
-DIR=gosailing
-PORT=8080
+WHAT="${1:-all}"
+HOST="${2:-${GOSAILING_HOST:-martin@voyager}}"
+DIR=gosailing-docker
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+case "$WHAT" in
+  server) SERVICES=(server) ;;
+  ai) SERVICES=(ai) ;;
+  all) SERVICES=(server ai) ;;
+  *) echo "usage: $0 [server|ai|all] [user@host]"; exit 1 ;;
+esac
+
 cd "$HERE"
+TAG=$(git rev-parse --short HEAD)
+git diff --quiet HEAD || TAG="$TAG-dirty"
 
-echo "==> building"
-npm run build:server
-BUNDLE=dist-server/main.js
-[ -f "$BUNDLE" ] || { echo "no $BUNDLE"; exit 1; }
-echo "    $BUNDLE, $(wc -c < "$BUNDLE" | tr -d ' ') bytes"
+for service in "${SERVICES[@]}"; do
+  echo "==> building and pushing mpihlak/gosailing-$service:$TAG"
+  docker buildx build --platform linux/amd64 --target "$service" \
+    -t "mpihlak/gosailing-$service:$TAG" -t "mpihlak/gosailing-$service:latest" \
+    --push .
+done
 
-# nvm leaves node off the PATH of a non-interactive shell, so the unit has to name it
-# outright. Resolving it per deploy rather than pinning a version keeps the unit working
-# across a node upgrade on the host.
-echo "==> locating node on $HOST"
-NODE=$(ssh "$HOST" 'command -v node || find "$HOME/.nvm/versions/node" -maxdepth 3 -type f -name node -perm -u+x 2>/dev/null | sort -V | tail -1')
-[ -n "$NODE" ] || { echo "no node found on $HOST"; exit 1; }
-echo "    $NODE ($(ssh "$HOST" "$NODE -v"))"
+echo "==> copying compose.yaml to $HOST"
+ssh "$HOST" "mkdir -p ~/$DIR/logs"
+scp -q deploy/compose.yaml "$HOST:$DIR/compose.yaml"
 
-echo "==> copying"
-ssh "$HOST" "mkdir -p ~/$DIR ~/.config/systemd/user"
-scp -q "$BUNDLE" "$HOST:$DIR/main.js.new"
-sed "s|@NODE@|$NODE|" deploy/gosailing.service | ssh "$HOST" "cat > ~/.config/systemd/user/gosailing.service"
-
-echo "==> restarting"
-ssh "$HOST" "
-  mv ~/$DIR/main.js.new ~/$DIR/main.js
-  systemctl --user daemon-reload
-  systemctl --user enable gosailing >/dev/null
-  systemctl --user restart gosailing
-"
+echo "==> starting ${SERVICES[*]}"
+ssh "$HOST" "cd ~/$DIR && docker compose pull -q ${SERVICES[*]} && docker compose up -d ${SERVICES[*]}"
 
 echo "==> checking health"
-for _ in $(seq 20); do
+PORT=$(ssh "$HOST" "cd ~/$DIR && docker compose port server 8080 | cut -d: -f2")
+for _ in $(seq 30); do
   if HEALTH=$(ssh "$HOST" "curl -fsS --max-time 2 http://127.0.0.1:$PORT/health" 2>/dev/null); then
     echo "    $HEALTH"
+    ssh "$HOST" "cd ~/$DIR && docker compose ps --format '    {{.Service}} {{.Image}} {{.Status}}'"
     echo "deployed"
     exit 0
   fi
-  sleep 0.5
+  sleep 1
 done
 
 echo "it did not answer /health:"
-ssh "$HOST" "systemctl --user status gosailing --no-pager --lines=20" || true
+ssh "$HOST" "cd ~/$DIR && docker compose ps && docker compose logs --tail 20" || true
 exit 1

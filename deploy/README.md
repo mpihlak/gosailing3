@@ -1,35 +1,45 @@
 # Deploying the regatta server
 
-The server builds to one bundled file with no dependencies to install, so a deploy is
-three steps: copy the file, restart the service, check `/health`. It runs as a systemd
-**user** service, which needs no root on the host.
+The server and the robot sailors are two Docker images, `mpihlak/gosailing-server` and
+`mpihlak/gosailing-ai`, built from the `Dockerfile` at the top of the repo. On the host
+they run under docker compose.
 
 ```sh
-./deploy/deploy.sh            # martin@voyager
-./deploy/deploy.sh user@host  # somewhere else
+./deploy/deploy.sh                    # both, on martin@voyager
+./deploy/deploy.sh server             # the server alone; the robots reconnect to it
+./deploy/deploy.sh ai                 # the robots alone
+./deploy/deploy.sh all user@host      # somewhere else
 ```
+
+The script builds both images for `linux/amd64` on the Mac and pushes them to Docker
+Hub, so it needs a `docker login` as `mpihlak` first. It then copies `compose.yaml` to
+the host, pulls, restarts the services it was given and checks `/health`. The images are
+public, so the host pulls them without a login.
+
+Each image is tagged with the commit it was built from as well as `latest`. A build from
+a tree with uncommitted changes gets `-dirty` after the commit. They are two images so
+that a new robot image does not make compose restart the server in the middle of a race.
 
 Deploys are manual. Nothing in CI pushes to the host.
 
 ## What lands on the host
 
-| Path                                       | What                                       |
-| ------------------------------------------ | ------------------------------------------ |
-| `~/gosailing/main.js`                      | the bundle, `ws` included                  |
-| `~/.config/systemd/user/gosailing.service` | the unit, written from `gosailing.service` |
+| Path                              | What                                     |
+| --------------------------------- | ---------------------------------------- |
+| `~/gosailing-docker/compose.yaml` | the services, copied from `compose.yaml` |
+| `~/gosailing-docker/.env`         | settings for compose, if any             |
+| `~/gosailing-docker/logs`         | the races, mounted into the server       |
 
-The script copies the bundle under a temporary name and moves it into place, so a failed
-transfer leaves the running version alone.
+`.env` can hold:
 
-`node` is installed through nvm and is absent from the PATH systemd sees, so the unit
-names the binary by absolute path. The script resolves that path on the host at deploy
-time and substitutes it for `@NODE@`, which keeps the unit correct across a node upgrade.
+| Setting      | What                                                   |
+| ------------ | ------------------------------------------------------ |
+| `SERVER_TAG` | the server image to run, a commit; `latest` by default |
+| `AI_TAG`     | the robots' image to run, the same way                 |
+| `HOST_PORT`  | the loopback port the server is published on; 8080     |
 
-Lingering must be on, or the service stops when the last login closes:
-
-```sh
-ssh martin@voyager 'loginctl enable-linger'
-```
+To run an older build, set its tag there and run `docker compose up -d`. The Docker
+daemon starts at boot and brings both services back; they restart if they die.
 
 ## Reaching it
 
@@ -64,45 +74,35 @@ that answers anywhere between 100 and 766 feels like it is arguing.
 
 ## Operating
 
-It is a systemd **user** unit, so every command takes `--user`. Without it systemd looks
-in the system units and reports that there is no such service.
+Run compose from `~/gosailing-docker`, where it finds the project:
 
 ```sh
-ssh martin@voyager 'systemctl --user status gosailing'
-ssh martin@voyager 'journalctl --user -u gosailing -f'
-ssh martin@voyager 'systemctl --user restart gosailing'
+ssh martin@voyager 'cd ~/gosailing-docker && docker compose ps'
+ssh martin@voyager 'cd ~/gosailing-docker && docker compose logs -f server'
+ssh martin@voyager 'cd ~/gosailing-docker && docker compose restart server'
 ```
+
+Docker keeps five files of 10 MB for each service's output and drops the oldest.
 
 ## The robots
 
-Two robot sailors run on the same host as their own service, so there is always a race
-on to join or watch. They connect through the tunnel at `wss://ws.gosailing.online`, the
-same way a player does, and race each other for as long as nobody else turns up.
+Two robot sailors run in their own container, so there is always a race on to join or
+watch. They reach the server over the compose network at `ws://server:8080`, not
+through the tunnel, and race each other for as long as nobody else turns up. The robots'
+container starts once the server answers `/health`.
+
+Each robot reconnects on her own when her connection drops: five seconds later, and
+twice as long after each attempt that fails, up to a minute. That covers a server
+restart and a server that is not up yet. A robot who gave up her seat to a person stays
+away.
 
 ```sh
-./deploy/deploy-ai.sh            # martin@voyager
-./deploy/deploy-ai.sh user@host  # somewhere else
-```
-
-| Path                                          | What                                          |
-| --------------------------------------------- | --------------------------------------------- |
-| `~/gosailing-ai/main.js`                      | the robots' bundle                            |
-| `~/.config/systemd/user/gosailing-ai.service` | the unit, written from `gosailing-ai.service` |
-
-The unit starts after `gosailing`. Each robot reconnects on her own when her connection
-drops: five seconds later, and twice as long after each attempt that fails, up to a
-minute. That covers a server restart, a tunnel outage, a boot where the tunnel is not up
-yet, and the single connections the tunnel drops every hour or two. A robot who gave up
-her seat to a person stays away.
-
-```sh
-ssh martin@voyager 'systemctl --user status gosailing-ai'
-ssh martin@voyager 'journalctl --user -u gosailing-ai -o cat -f'
+ssh martin@voyager 'cd ~/gosailing-docker && docker compose logs -f ai'
 ```
 
 ## The races on disk
 
-Every race is written to `~/gosailing/logs` as it is sailed, one file a race, named for
+Every race is written to `~/gosailing-docker/logs` as it is sailed, one file a race, named for
 when it began and the id it was given: `20261003T085901Z-3a6830f6.jsonl`. Beside them
 `races.jsonl` carries a line for each race that has ended, which is what a tool reads to
 find one without opening every file.
@@ -143,12 +143,11 @@ them down by about 3.8x if they ever need it.
 
 ## Reading the latency
 
-Each connection is pinged twice a second and the journal gets two kinds of line. `-o cat`
-drops the timestamp and hostname, which is what makes them readable; leave it off when you
-want to tie a bad stretch to a time of day.
+Each connection is pinged twice a second and the server's output gets two kinds of line.
+Add `-t` to `docker compose logs` to tie a bad stretch to a time of day.
 
 ```sh
-ssh martin@voyager 'journalctl --user -u gosailing -o cat | grep latency'
+ssh martin@voyager 'cd ~/gosailing-docker && docker compose logs --no-log-prefix server | grep latency'
 ```
 
 ```
@@ -167,29 +166,3 @@ unsteerable.
 What this measures is the round trip of the line, not the state of whoever is on it. The
 far end answers a ping in its network layer rather than its page, so a player whose phone
 is dropping frames still reads clean here.
-
-## Docker
-
-The server and the robots are also built as two images, `mpihlak/gosailing-server` and
-`mpihlak/gosailing-ai`, from the `Dockerfile` at the top of the repo. On the host they run
-under docker compose from `~/gosailing-docker`, beside the systemd units. The server
-listens on port 8081 there, so the live server on 8080 is not disturbed.
-
-```sh
-./deploy/deploy-docker.sh            # both
-./deploy/deploy-docker.sh server     # the server alone; the robots reconnect to it
-./deploy/deploy-docker.sh ai         # the robots alone
-```
-
-The script builds for `linux/amd64` on the Mac and pushes to Docker Hub, so it needs a
-`docker login` as `mpihlak` first. The host pulls the public images and needs no login.
-
-The robots reach the server over the compose network, not through the tunnel. Race logs
-go to `~/gosailing-docker/logs`. The containers' output goes to docker:
-
-```sh
-ssh martin@voyager 'cd ~/gosailing-docker && docker compose logs -f'
-```
-
-To run an older build, set `SERVER_TAG` or `AI_TAG` to its commit in
-`~/gosailing-docker/.env` and run `docker compose up -d`.
