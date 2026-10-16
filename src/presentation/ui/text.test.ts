@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import type { Standing } from '@/sim'
 import { StandingsBoard } from './standings'
-import { cssColor, escapeHtml } from './text'
+import { cssColor, escapeHtml, penaltyCause } from './text'
 
 describe('escapeHtml', () => {
   it('takes the teeth out of the characters that make markup', () => {
@@ -77,5 +77,20 @@ describe('a board built from a hostile server', () => {
     expect(root.querySelector('img')).toBeNull()
     expect(root.querySelectorAll('.crew')).toHaveLength(1)
     expect(root.querySelector('.speed')?.textContent).toBe('6.0')
+  })
+})
+
+describe('why a boat was penalised', () => {
+  it('says which boat she was under the rule she broke', () => {
+    expect(penaltyCause(13)).toBe('rule 13, still tacking')
+    expect(penaltyCause(11)).toBe('rule 11, windward')
+  })
+
+  it('calls a penalty without a rule a mark touched', () => {
+    expect(penaltyCause(undefined)).toBe('touched a mark')
+  })
+
+  it('names a rule it does not know without inventing a reason', () => {
+    expect(penaltyCause(99)).toBe('rule 99')
   })
 })

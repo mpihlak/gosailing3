@@ -24,6 +24,7 @@ import {
   escapeHtml,
   Hud,
   OCS,
+  penaltyCause,
   StandingsBoard,
   targetVmgRatio,
   type CrewReading,
@@ -734,10 +735,9 @@ function announce(event: TimedEvent): void {
     case 'markRounded':
       return hud.showBanner('Mark rounded — head for the line', 'good')
     case 'penalised': {
-      const cause = event.rule === undefined ? 'touched a mark' : `rule ${event.rule}`
       // Named rather than addressed, because the same line reports a rival's penalty.
       return hud.showBanner(
-        `Penalty to ${nameOf(event.boatId)} — ${cause}`,
+        `Penalty to ${nameOf(event.boatId)} — ${penaltyCause(event.rule)}`,
         mine ? 'warn' : 'info',
         mine ? 3600 : 3000,
       )
