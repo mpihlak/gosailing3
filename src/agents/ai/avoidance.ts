@@ -2,12 +2,14 @@ import {
   add,
   angleDelta,
   bearingToVector,
+  closestBetweenSegments,
   distance,
   dot,
   length,
   normalizeBearing,
   scale,
   sub,
+  type Vec2,
 } from '@/foundation/geom'
 import {
   clamp,
@@ -17,7 +19,7 @@ import {
   type Meters,
   type Seconds,
 } from '@/foundation/units'
-import type { BoatSpec, BoatState } from '@/domain/boat'
+import { hullCentreline, hullRadius, type BoatSpec, type BoatState } from '@/domain/boat'
 import type { WindSample } from '@/domain/wind'
 import { encounter, type Contender, type RightOfWayRule } from '@/domain/rules'
 import { specFor, type SimContext, type WorldState } from '@/sim'
@@ -32,17 +34,25 @@ const LOOKAHEAD: Seconds = 8
 /** How close, in her own lengths, a boat may come before it is a meeting to avoid. */
 const SEPARATION = 2
 /**
+ * The room, in her own lengths and hull to hull, she keeps from a boat she is clear
+ * astern of. Behind a boat she can luff or bear away past either side of her. Asked for
+ * two lengths between the boats' middles, she sat behind a slow boat to the gun.
+ */
+const ASTERN_ROOM = 0.5
+/** How often, in seconds, the look-ahead checks the gap between two hulls. */
+const STEP: Seconds = 0.25
+/**
  * The turns tried away from the course she wants, smallest first. A duck behind a boat
  * crossing ahead needs a few degrees, not a run square away from her.
  */
 const TURNS: readonly Degrees[] = [5, 10, 15, 20, 30]
 /**
- * Larger turns, for when none of the small ones keeps her even a length away: about where
- * the hulls would touch, and a penalty costs more than a hard turn.
+ * Larger turns, for when none of the small ones keeps her even half the room she wants:
+ * about where the hulls would touch, and a penalty costs more than a hard turn.
  */
 const HARD_TURNS: readonly Degrees[] = [45, 60]
-/** The room, in her own lengths, short of which she makes a hard turn rather than a small one. */
-const TOUCHING = 1
+/** The share of the room she wants short of which she makes a hard turn rather than a small one. */
+const TOUCHING = 0.5
 /**
  * The angles to the wind she may be turned to: short of head to wind and of dead
  * downwind, so that keeping clear never tacks or gybes her and changes who has right of
@@ -78,6 +88,9 @@ export interface GiveWay {
  * own speed on a new course is taken halfway to what the polar gives there: luffed close
  * to the wind she slows, and a forecast that kept her speed had her luff to head to wind
  * to cross ahead of a boat she should have ducked.
+ *
+ * The room is two lengths between the boats' middles, except from a boat she is clear
+ * astern of, where it is `ASTERN_ROOM` between the hulls.
  *
  * Of the courses she could turn to, she takes the smallest turn that keeps her clear of
  * everyone, turning first the way the rule makes cheapest: under rule 10 upwind she bears
@@ -124,14 +137,17 @@ export function giveWay(
   const me = contender(boat)
   const verdicts = near.map((other) => ({ other, verdict: encounter(me, contender(other)) }))
   const giving = verdicts.filter(({ verdict }) => verdict.keepClear === boat.id)
+  const astern = new Set(
+    giving.filter(({ verdict }) => verdict.rule === 12).map(({ other }) => other.id),
+  )
+  const meeting = (heading: Degrees, others: readonly BoatState[]) =>
+    closest(ctx, boat, spec, heading, speedOn(heading), others, astern, room)
 
-  const pressing = closest(
-    boat,
+  const pressing = meeting(
     bearing,
-    speedOn(bearing),
     giving.map(({ other }) => other),
   )
-  if (!pressing || pressing.gap >= limit) return undefined
+  if (!pressing || pressing.share >= margin) return undefined
   const rule = giving.find(({ other }) => other === pressing.other)!.verdict.rule
 
   const luffedBy =
@@ -164,19 +180,18 @@ export function giveWay(
       .map((turn) => normalizeBearing(bearing + turn))
       .filter(sailable)
 
-  let best = { bearing, gap: pressing.gap }
+  let best = { bearing, share: pressing.share }
   const tryAll = (candidates: readonly Degrees[]) => {
     for (const candidate of candidates) {
-      const gap =
-        closest(boat, candidate, speedOn(candidate), near)?.gap ?? Number.POSITIVE_INFINITY
-      if (gap >= room) return candidate
-      if (gap > best.gap) best = { bearing: candidate, gap }
+      const share = meeting(candidate, near)?.share ?? Number.POSITIVE_INFINITY
+      if (share >= 1) return candidate
+      if (share > best.share) best = { bearing: candidate, share }
     }
     return undefined
   }
   const small = tryAll(headings(TURNS))
   if (small !== undefined) return { bearing: small, rule }
-  if (best.gap >= TOUCHING * spec.length) return { bearing: best.bearing, rule }
+  if (best.share >= TOUCHING) return { bearing: best.bearing, rule }
   const hard = tryAll(headings(HARD_TURNS))
   return { bearing: hard ?? best.bearing, rule }
 }
@@ -195,27 +210,62 @@ function tackAway(
 }
 
 /**
- * The nearest any of `others` comes to her over the look-ahead if she sails `heading`,
- * counting only those she is closing on. A boat alongside and drawing away is no meeting,
- * however close she is now.
+ * The boat among `others` who comes nearest her over the look-ahead if she sails
+ * `heading`, and what share of the room she wants that leaves, counting only those she is
+ * closing on. A boat alongside and drawing away is no meeting, however close she is now.
  */
 function closest(
+  ctx: SimContext,
   boat: BoatState,
+  spec: BoatSpec,
   heading: Degrees,
   speed: Knots,
   others: readonly BoatState[],
-): { readonly other: BoatState; readonly gap: Meters } | undefined {
+  astern: ReadonlySet<string>,
+  room: Meters,
+): { readonly other: BoatState; readonly share: number } | undefined {
   const mine = scale(bearingToVector(heading), knotsToMps(speed))
-  let found: { other: BoatState; gap: Meters } | undefined
+  let found: { other: BoatState; share: number } | undefined
   for (const other of others) {
-    const apart = sub(other.position, boat.position)
-    const closing = sub(scale(bearingToVector(other.heading), knotsToMps(other.speed)), mine)
-    const speed = dot(closing, closing)
-    // The moment they are nearest, on straight courses, and how near that is.
-    const when = speed > 0 ? clamp(-dot(apart, closing) / speed, 0, LOOKAHEAD) : 0
-    if (when === 0) continue
-    const gap = length(add(apart, scale(closing, when)))
-    if (!found || gap < found.gap) found = { other, gap }
+    const share = astern.has(other.id)
+      ? hullGap(boat, spec, heading, mine, other, specFor(ctx, other.id)) /
+        (ASTERN_ROOM * spec.length)
+      : middlesApart(boat, mine, other) / room
+    if (!found || share < found.share) found = { other, share }
   }
   return found
+}
+
+/** The nearest the boats' middles come, on straight courses. Infinite if they are not closing. */
+function middlesApart(boat: BoatState, mine: Vec2, other: BoatState): Meters {
+  const apart = sub(other.position, boat.position)
+  const closing = sub(scale(bearingToVector(other.heading), knotsToMps(other.speed)), mine)
+  const speed = dot(closing, closing)
+  const when = speed > 0 ? clamp(-dot(apart, closing) / speed, 0, LOOKAHEAD) : 0
+  return when === 0 ? Number.POSITIVE_INFINITY : length(add(apart, scale(closing, when)))
+}
+
+/**
+ * The nearest the two hulls come, edge to edge, with her on `heading` and the other boat
+ * holding her course. Infinite if they are never closer than they are now.
+ */
+function hullGap(
+  boat: BoatState,
+  spec: BoatSpec,
+  heading: Degrees,
+  mine: Vec2,
+  other: BoatState,
+  otherSpec: BoatSpec,
+): Meters {
+  const theirs = scale(bearingToVector(other.heading), knotsToMps(other.speed))
+  const radii = hullRadius(spec) + hullRadius(otherSpec)
+  const gapAt = (t: Seconds) =>
+    closestBetweenSegments(
+      hullCentreline({ ...boat, heading, position: add(boat.position, scale(mine, t)) }, spec),
+      hullCentreline({ ...other, position: add(other.position, scale(theirs, t)) }, otherSpec),
+    ).distance - radii
+  const now = gapAt(0)
+  let nearest = Number.POSITIVE_INFINITY
+  for (let t = STEP; t <= LOOKAHEAD; t += STEP) nearest = Math.min(nearest, gapAt(t))
+  return nearest < now ? Math.max(0, nearest) : Number.POSITIVE_INFINITY
 }

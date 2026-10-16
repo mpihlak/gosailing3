@@ -80,6 +80,21 @@ describe('keeping clear', () => {
     expect(away!.bearing).toBeLessThan(75)
   })
 
+  it('passes close by a boat she is clear astern of', () => {
+    // Both on port, a slow boat ahead and a little to leeward. Holding her course she
+    // passes ten metres beside her, more than half a length hull to hull.
+    const sim = racing([
+      { id: 'ahead', position: vec(20, 206), heading: 45 },
+      { id: 'astern', position: vec(0, 200), heading: 45 },
+    ])
+    const world = {
+      ...sim.world,
+      boats: sim.world.boats.map((boat) => ({ ...boat, speed: boat.id === 'ahead' ? 2 : 6 })),
+    }
+    const boat = world.boats.find((one) => one.id === 'astern')!
+    expect(giveWay(sim.ctx, world, boat, sim.ctx.specs.astern!, STEADY, 45)).toBeUndefined()
+  })
+
   it('does nothing about a boat that is not coming near', () => {
     const sim = racing([
       { id: 'one', position: vec(-200, 200), heading: 45 },
