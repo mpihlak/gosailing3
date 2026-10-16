@@ -145,26 +145,14 @@ describe('losing time she does not need', () => {
     expect(report.started).toBe(true)
     expect(report.calledOverEarly).toBe(false)
   })
-})
 
-/**
- * Starts she makes badly but does not throw away. In each of these she crosses before the
- * gun, is called over early, and goes back for a late start rather than sailing on and
- * never starting at all. Recovering is not the same as starting well, so each still has
- * the fix it is waiting for.
- */
-describe('when the start goes wrong', () => {
-  it('recovers from a countdown too short to reach out in', () => {
-    // With a minute there is no room for the reach out, so the whole of the spare time
-    // goes into bearing away — and bearing away runs her up the line rather than away
-    // from it. She meets the line before she meets the gun.
-    // TODO: a timed run instead, out on a reciprocal for half the spare and back, so she
-    // starts on the gun rather than recovering from being over it.
+  it('runs away from the line in a countdown too short to reach out in', () => {
+    // With a minute there is no room for the reach out, and bearing away runs her along
+    // the line rather than away from it: she used to meet the line before the gun.
     const report = start({ seed: 'short', countdown: 60 })
-    expect(report.calledOverEarly).toBe(true)
-    expect(report.started).toBe(true)
+    expect(report.calledOverEarly).toBe(false)
+    expect(report.startedAt).toBeLessThan(10)
   })
-
 })
 
 /**

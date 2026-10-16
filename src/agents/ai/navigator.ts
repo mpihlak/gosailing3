@@ -15,7 +15,7 @@ import {
   type Vec2,
 } from '@/foundation/geom'
 import { clamp, knotsToMps, type Degrees, type Meters, type Seconds } from '@/foundation/units'
-import { tackOf, type BoatSpec, type BoatState } from '@/domain/boat'
+import { hullCentreline, hullRadius, tackOf, type BoatSpec, type BoatState } from '@/domain/boat'
 import {
   lineEndBodies,
   pastMark,
@@ -139,11 +139,20 @@ export function planCourse(
 
   /*
    * Over the line at the gun, and nothing else matters until she has been behind it
-   * again: she cannot start, so she cannot round a mark or finish either. Here rather
-   * than in the start strategy because every strategy needs it and none of them differ
-   * about it, which is the same reason the penalty turn sits above.
+   * again: she cannot start, so she cannot round a mark or finish either. Before the gun
+   * the same holds for a boat pushed over it: the start strategies time a run at the line
+   * from below it, and from above they ran her along the wrong side until the gun. After
+   * the gun it holds past an end of the line, where going round the mark is no start and
+   * leaves her above the line's extension without being over early. Here
+   * rather than in the start strategy because every strategy needs it and none of them
+   * differ about it, which is the same reason the penalty turn sits above.
    */
-  if (stage.kind === 'start' && progress.status === 'overEarly') {
+  const over =
+    stage.kind === 'start' &&
+    (progress.status === 'overEarly' ||
+      (!hullBehind(stage.line, boat, spec) &&
+        (raceTime(ctx, world) < 0 || pastAnEnd(stage.line, boat.position))))
+  if (stage.kind === 'start' && over) {
     const back = returnPoint(stage.line, boat.position, spec)
     return { bearing: vectorToBearing(sub(back, boat.position)), reason: 'returning' }
   }
@@ -231,12 +240,39 @@ function insetLine(line: RaceLine, spec: BoatSpec): Segment {
  * the ends, because square across the line at the end is square into the boat or the buoy
  * that marks it. Sent there she leans on the committee boat and stops dead.
  *
+ * Past an end of the line she goes back round the outside of its mark instead, to a point
+ * a length and a half outside it: the way back to the line from there crosses the mark.
+ *
  * The course side is upwind, so the way back is a bear away and a run: no tack to make
  * and no layline to judge.
  */
+/** Whether all of her hull is on the pre-start side of the line, the way the race judges it. */
+function hullBehind(line: RaceLine, boat: BoatState, spec: BoatSpec): boolean {
+  const hull = hullCentreline(boat, spec)
+  const clear = -hullRadius(spec)
+  return sideOfLine(line, hull.from) < clear && sideOfLine(line, hull.to) < clear
+}
+
+/** How far along the line from its `from` end a point lies, and whether that is past an end. */
+function alongLine(line: RaceLine, at: Vec2): { readonly along: Vec2; readonly reach: Meters } {
+  const along = normalize(sub(line.to, line.from))
+  return { along, reach: dot(sub(at, line.from), along) }
+}
+
+function pastAnEnd(line: RaceLine, at: Vec2): boolean {
+  const { reach } = alongLine(line, at)
+  return reach < 0 || reach > distance(line.from, line.to)
+}
+
 function returnPoint(line: RaceLine, at: Vec2, spec: BoatSpec): Vec2 {
+  const { along, reach } = alongLine(line, at)
+  const below = scale(line.normal, -spec.length)
+  if (reach < 0) return add(add(line.from, scale(along, -1.5 * spec.length)), below)
+  if (reach > distance(line.from, line.to)) {
+    return add(add(line.to, scale(along, 1.5 * spec.length)), below)
+  }
   const onLine = closestPointOnSegment(insetLine(line, spec), at)
-  return add(onLine, scale(line.normal, -spec.length))
+  return add(onLine, below)
 }
 
 function planMark(
@@ -310,7 +346,8 @@ function planFor(
         : null
 
   // Close enough to lay it: point at it and stop thinking.
-  if (sailingAngle === null) return { bearing: direct, reason: reason === 'holding' ? reason : 'fetching' }
+  if (sailingAngle === null)
+    return { bearing: direct, reason: reason === 'holding' ? reason : 'fetching' }
 
   // Hold the current tack until the boat strays outside the corridor, then take the one
   // that works back toward the direct line. Port tack carries you east of it, starboard
@@ -338,7 +375,11 @@ function crossTrack(position: Vec2, destination: Vec2, direct: Degrees): Meters 
   return offset.x * along.y - offset.y * along.x
 }
 
-export function stageOf(ctx: SimContext, world: WorldState, boatId: string): CourseStage | undefined {
+export function stageOf(
+  ctx: SimContext,
+  world: WorldState,
+  boatId: string,
+): CourseStage | undefined {
   const progress = world.race.progress[boatId]
   return progress ? ctx.course.stages[progress.stageIndex] : undefined
 }
@@ -375,9 +416,7 @@ function turnCircle(
 
 /** Nearest approach to a fixed body, which may be a vessel lying along a line. */
 function gapTo(centre: Vec2, body: CourseBody): Meters {
-  const at = body.centreline
-    ? closestPointOnSegment(body.centreline, centre)
-    : body.position
+  const at = body.centreline ? closestPointOnSegment(body.centreline, centre) : body.position
   return distance(centre, at) - body.radius
 }
 

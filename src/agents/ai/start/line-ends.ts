@@ -70,8 +70,6 @@ const DEFAULTS = {
  * TODO: nor of being over early despite all this; she needs to bear off, return and
  * start again.
  * TODO: a big shift can leave the pin unlayable on port, and she will sail at it anyway.
- * TODO: bearing away spends time by running up the line, so a countdown too short to
- * reach out in leaves her nowhere to put it. That case wants a timed run instead.
  */
 export function pinEndPortStart(options: LineEndOptions = {}): StartStrategy {
   return endStart(PIN_ON_PORT, options)
@@ -93,6 +91,13 @@ function endStart(side: Handedness, options: LineEndOptions): StartStrategy {
     ...DEFAULTS,
     ...options,
   }
+
+  /**
+   * The time to the gun when she began running away from the line, while she is. Kept
+   * between plans so that she commits to it: decided afresh each tick, sailing away made
+   * her late enough to turn back, and turning back made her early again.
+   */
+  let dipping: Seconds | undefined
 
   return {
     name: side.name,
@@ -139,6 +144,30 @@ function endStart(side: Handedness, options: LineEndOptions): StartStrategy {
           burnToClearEnd(context, closeHauled, clearance * spec.length, maxBurn, side),
         ),
       )
+
+      /*
+       * So early that even the furthest she bears away crosses before the gun: she runs
+       * away from the line, down and towards its middle, until coming back close-hauled
+       * would land on the gun. Bearing away only runs her along the line, and from just
+       * below it that carried her over. Run straight down, she came back outside the pin.
+       */
+      const furthest = normalizeBearing(closeHauled + side.hand * maxBurn)
+      const back = timeToCross(context, closeHauled) + turnAllowance >= timeToStart
+      // A clock that went up is a new countdown.
+      if (dipping !== undefined && (gunFired || back || timeToStart > dipping)) {
+        dipping = undefined
+      }
+      if (dipping === undefined && !gunFired && !back) {
+        if (timeToCross(context, furthest) < timeToStart) dipping = timeToStart
+      }
+      if (dipping !== undefined) {
+        return { bearing: awayFromLine(context, side, 1), phase: 'burning' }
+      }
+      // Too early with no time left to run away and come back: along the line, which
+      // never crosses it, rather than bearing away, which still closes it.
+      if (!gunFired && timeToCross(context, furthest) < timeToStart) {
+        return { bearing: awayFromLine(context, side, 0), phase: 'burning' }
+      }
 
       // Past the gun there is nothing left to time: she is simply sailing at the line as
       // fast as she can.
@@ -192,6 +221,13 @@ function burnToDelay(
     else high = middle
   }
   return high
+}
+
+/** Along the line towards its middle from her end of it, and `down` as far again away from it. */
+function awayFromLine(context: StartContext, side: Handedness, down: number): Degrees {
+  const { from, to } = ends(context.line, side)
+  const inwards = normalize(sub(to, from))
+  return vectorToBearing(add(scale(context.line.normal, -down), inwards))
 }
 
 /** Where on the line she means to cross: in from her end of it, clear of the mark. */
