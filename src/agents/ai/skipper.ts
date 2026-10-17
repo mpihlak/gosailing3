@@ -23,6 +23,8 @@ const RELEASE = 1.5
  * it she goes back to her own plans once tacking back is clear.
  */
 const TACKED_AWAY_FOR: Seconds = 6
+/** The longest she holds to a tack she has begun before it counts as given up. */
+const TACK_COMMITTED_FOR: Seconds = 5
 
 export interface SkipperOptions {
   /** How she goes about starting. Different boats can be given different ideas. */
@@ -61,6 +63,8 @@ export class Skipper implements InputSource {
   private keepingClear: { readonly bearing: Degrees; readonly since: Seconds } | undefined
   /** The tack she went onto to keep clear, as the side the wind is on, and when. */
   private tackedAway: { readonly side: number; readonly since: Seconds } | undefined
+  /** A tack she has begun, as the side the wind was on, and when she began it. */
+  private tackBegun: { readonly side: number; readonly since: Seconds } | undefined
   private readonly rng: Rng
   /**
    * The gybes she means to make on the run to the finish, drawn when she starts it, and
@@ -107,12 +111,30 @@ export class Skipper implements InputSource {
      * close-hauled on the tack she has, and asks again next tick. A penalty turn has
      * already asked for its own room. A start is left to its strategy: it times the run
      * at the line to the second, and a tack held back there put a boat into the pin.
+     *
+     * A tack is asked about once, when she begins it. Asked again on the way round, she
+     * slowed in the turn, the boat behind her came closer in the forecast, and she turned
+     * back halfway, having lost the tack and her speed both.
      */
+    const side = Math.sign(boat.twa || 1)
+    const begun = this.tackBegun
+    if (
+      begun &&
+      (begun.side !== side ||
+        world.time < begun.since ||
+        world.time - begun.since > TACK_COMMITTED_FOR)
+    ) {
+      this.tackBegun = undefined
+    }
+    const tacking = wouldTack(boat, plan.bearing, wind.direction)
     const blocked =
       !plan.spin &&
       plan.reason !== 'starting' &&
-      wouldTack(boat, plan.bearing, wind.direction) &&
+      tacking &&
+      this.tackBegun === undefined &&
       !tackIsClear(ctx, world, boat, spec, wind, plan.bearing)
+    if (tacking && !blocked && !plan.spin) this.tackBegun ??= { side, since: world.time }
+    if (!tacking) this.tackBegun = undefined
     const wanted = blocked
       ? normalizeBearing(
           wind.direction + Math.sign(boat.twa || 1) * spec.polar.beatAngle(wind.speed),

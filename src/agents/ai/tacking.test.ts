@@ -45,3 +45,19 @@ describe('two boats side by side', () => {
     expect(clearToTack(both, leeward, CRUISER_35_SPEC, 315)).toBe(false)
   })
 })
+
+describe('tacking on top of a boat', () => {
+  it('tacks ahead of a boat that will be clear astern of her', () => {
+    // On port, with a starboard boat thirty metres behind her on the course she tacks to.
+    const me = boat('me', vec(0, 0), 45)
+    const astern = boat('them', vec(21, -21), 315)
+    expect(clearToTack(world([me, astern]), me, CRUISER_35_SPEC, 315)).toBe(true)
+  })
+
+  it('does not tack onto a boat that will be overlapped to leeward of her', () => {
+    // A little behind her middle and close to leeward of the course she tacks to.
+    const me = boat('me', vec(0, 0), 45)
+    const leeward = boat('them', vec(-2, -9), 315)
+    expect(clearToTack(world([me, leeward]), me, CRUISER_35_SPEC, 315)).toBe(false)
+  })
+})

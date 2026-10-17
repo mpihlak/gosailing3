@@ -1,4 +1,4 @@
-import { add, angleDelta, bearingToVector, distance, scale } from '@/foundation/geom'
+import { add, angleDelta, bearingToVector, distance, dot, scale, sub } from '@/foundation/geom'
 import { knotsToMps, type Degrees, type Seconds } from '@/foundation/units'
 import type { BoatSpec, BoatState } from '@/domain/boat'
 import type { WindSample } from '@/domain/wind'
@@ -16,6 +16,12 @@ const STEP: Seconds = 0.25
 const SEPARATION = 2
 /** She loses way going through the wind, and covers this share of her speed meanwhile. */
 const SPEED_WHILE_TACKING = 0.6
+/**
+ * How close, in her own lengths between the middles, a boat that will be clear astern of
+ * her on the new tack may come. Rule 12 has that boat keep clear once she is round, so
+ * less room will do than from a boat she would tack in front of or beside.
+ */
+const ASTERN_SEPARATION = 1.5
 
 /**
  * Whether the bearing she wants takes her through head to wind. Both sides of the wind
@@ -42,12 +48,23 @@ export function clearToTack(
   spec: BoatSpec,
   heading: Degrees,
 ): boolean {
-  const mine = scale(bearingToVector(heading), knotsToMps(boat.speed) * SPEED_WHILE_TACKING)
-  const limit = SEPARATION * spec.length
+  const ahead = bearingToVector(heading)
+  const mine = scale(ahead, knotsToMps(boat.speed) * SPEED_WHILE_TACKING)
+  // The tack she will be on: the wind on the other side of her.
+  const newTack = -Math.sign(boat.twa || 1)
   for (const other of world.boats) {
     if (other.id === boat.id) continue
     const theirs = scale(bearingToVector(other.heading), knotsToMps(other.speed))
     const now = distance(boat.position, other.position)
+    // A length or more behind her on the tack she is going onto, the other boat will be
+    // clear astern once she is round. Kept from tacking on top of her, she turned back
+    // from a tack thirty metres ahead of a boat and lost the layline. Still the whole
+    // look-ahead: checked only for the tack itself, she tacked in front of boats that
+    // rolled her to leeward while she was slow, and fouls after the gun rose a sixth.
+    const astern =
+      Math.sign(other.twa || 1) === newTack &&
+      dot(sub(other.position, boat.position), ahead) < -spec.length
+    const limit = (astern ? ASTERN_SEPARATION : SEPARATION) * spec.length
     for (let t = STEP; t <= LOOKAHEAD; t += STEP) {
       const here = add(boat.position, scale(mine, t))
       const there = add(other.position, scale(theirs, t))
