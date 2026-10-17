@@ -36,6 +36,12 @@ import type { StartPhase, StartStrategy } from './start'
  */
 const ROUNDING_OFFSET: Meters = 24
 /**
+ * How far beside the mark, in her own lengths, she lays it from. One length touched it
+ * in five races of eight: on the layline the mark is to leeward, and her leeway and the
+ * turn round it take some of the room.
+ */
+const PASSING_BESIDE = 2
+/**
  * How far off the direct line the boat may stray before it tacks back is a fraction of
  * the distance still to run, which each skipper chooses for herself. A cone rather than a
  * fixed width: long tacks early, short ones near the mark, which is how the leg is
@@ -303,18 +309,80 @@ function planMark(
   // target she has already reached and waits for a rounding that cannot happen.
   const mustComeAgain = !passedMark && (alreadyPast || !onApproachSide)
 
+  /*
+   * Up past it on the correct side, `PASSING_BESIDE` off it and a length beyond:
+   * over the line through the mark that the rounding is judged by. Aimed at the rounding
+   * point instead, 24 m beside and 24 m beyond, she sailed the layline to that and
+   * overstood the mark's own by about 40 m.
+   */
   const target = !passedMark
     ? mustComeAgain
       ? offMark(ROUNDING_OFFSET * 2, -ROUNDING_OFFSET * 3) // back below the mark, correct side
-      : offMark(ROUNDING_OFFSET, ROUNDING_OFFSET) // up past it, correct side
+      : offMark(spec.length * PASSING_BESIDE, spec.length)
     : onApproachSide
       ? offMark(-ROUNDING_OFFSET, ROUNDING_OFFSET * 1.3) // cross over, well clear to windward
       : offMark(-ROUNDING_OFFSET, -ROUNDING_OFFSET * 4) // away onto the next leg
 
-  const plan = planFor(boat, spec, wind, target, 'beating', personality)
+  const planned = planFor(boat, spec, wind, target, 'beating', personality)
+  const plan = passedMark || mustComeAgain ? planned : layTheMark(boat, spec, wind, stage, planned)
   return distance(boat.position, mark.position) < ROUNDING_OFFSET * 6
     ? { ...plan, reason: 'rounding' }
     : plan
+}
+
+/** Closing on the mark, she works out whether a tack lays it once the beat is nearly done. */
+const LAYING_WITHIN: Meters = ROUNDING_OFFSET * 4
+
+/**
+ * Beating up to the mark, the tack that sails at it lays it only if it carries her past
+ * the correct side with room: less than a length and she takes the other tack, and on
+ * the other tack she holds on until the tack at the mark would pass `PASSING_BESIDE`
+ * off. Left to the corridor, she held on, sailed at the mark and tacked beside it. With
+ * one figure for both, every shift near it had her tacking back and forth.
+ */
+function layTheMark(
+  boat: BoatState,
+  spec: BoatSpec,
+  wind: WindSample,
+  stage: Extract<CourseStage, { kind: 'mark' }>,
+  planned: NavigationPlan,
+): NavigationPlan {
+  const { mark, approach } = stage
+  if (planned.reason !== 'beating' && planned.reason !== 'fetching') return planned
+  if (distance(boat.position, mark.position) > LAYING_WITHIN) return planned
+  const clearingSide = approach + (mark.rounding === 'port' ? 90 : -90)
+  const beat = spec.polar.beatAngle(wind.speed)
+  const closeHauled = (side: number) => normalizeBearing(wind.direction + side * beat)
+  const beside = (side: number) =>
+    passesBeside(mark.position, approach, clearingSide, boat.position, closeHauled(side))
+  // The tack that sails at the mark is the one that crosses the line nearer to it.
+  const atTheMark = beside(1) < beside(-1) ? 1 : -1
+  const onIt = Math.sign(boat.twa || 1) === atTheMark
+  const wanted = onIt ? spec.length : spec.length * PASSING_BESIDE
+  return beside(atTheMark) < wanted
+    ? { ...planned, bearing: closeHauled(-atTheMark), reason: 'beating' }
+    : planned
+}
+
+/**
+ * How far to the clearing side of the mark she crosses the line through it, square to
+ * the leg, sailing `bearing` from where she is. Negative is the wrong side. Infinite if
+ * that course never reaches the line.
+ */
+function passesBeside(
+  mark: Vec2,
+  approach: Degrees,
+  clearingSide: Degrees,
+  at: Vec2,
+  bearing: Degrees,
+): Meters {
+  const along = bearingToVector(approach)
+  const heading = bearingToVector(bearing)
+  const closing = dot(heading, along)
+  const short = -dot(sub(at, mark), along)
+  if (closing <= 0.01 || short <= 0) return Number.POSITIVE_INFINITY
+  const crossing = add(at, scale(heading, short / closing))
+  return dot(sub(crossing, mark), bearingToVector(clearingSide))
 }
 
 /**

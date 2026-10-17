@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { vec } from '@/foundation/geom'
+import { angleDelta, vec } from '@/foundation/geom'
 import { createSimulation, type WorldState } from '@/sim'
 import { pinEndPortStart } from './start'
 import { planCourse } from './navigator'
@@ -106,5 +106,67 @@ describe('when a turn is paid off', () => {
       undefined,
     )
     expect(made.reason).toBe('penalty')
+  })
+})
+
+describe('laying the windward mark', () => {
+  // A steady breeze, so the beat angle and the mark's line do not move under her.
+  const course = createSimulation({
+    name: 'laying',
+    seed: 'lay',
+    boats: [{ id: 'ai', name: 'Ann', controller: 'ai', position: vec(0, 0), heading: 0 }],
+    course: { legLength: 450, lineLength: 260, startCenter: vec(0, 0) },
+    wind: {
+      direction: 0,
+      speed: 12,
+      shiftAmplitude: 0,
+      startBias: 0,
+      gustiness: 0,
+      gradientStrength: 0,
+    },
+    config: { startSequence: 0 },
+    duration: 2400,
+  })
+  const mark = course.ctx.course.marks[0]!.position
+
+  /** Her plan close-hauled on starboard, beating up to the mark, from `x` and `y` off it. */
+  const beatingFrom = (x: number, y: number) => {
+    const world = course.world
+    const progress = world.race.progress.ai!
+    const boat = {
+      ...world.boats[0]!,
+      position: vec(mark.x + x, mark.y + y),
+      heading: 323,
+      twa: -37,
+      speed: 6,
+    }
+    const racing: WorldState = {
+      ...world,
+      boats: [boat],
+      race: {
+        ...world.race,
+        phase: 'racing',
+        progress: { ai: { ...progress, status: 'racing', stageIndex: 1, clearedPreStart: true } },
+      },
+    }
+    const wind = course.ctx.wind.sample(boat.position, racing.time)
+    return planCourse(
+      course.ctx,
+      racing,
+      boat,
+      course.ctx.specs.ai!,
+      wind,
+      pinEndPortStart(),
+      undefined,
+    )
+  }
+
+  it('tacks away from a starboard course that sails at the mark', () => {
+    // Below and to the right of it, close-hauled straight at it: no room to pass.
+    expect(Math.abs(angleDelta(37, beatingFrom(30, -40).bearing))).toBeLessThan(5)
+  })
+
+  it('holds a starboard course that passes the mark with room', () => {
+    expect(Math.abs(angleDelta(323, beatingFrom(60, -40).bearing))).toBeLessThan(5)
   })
 })
