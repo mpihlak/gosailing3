@@ -1,7 +1,9 @@
 import { add, angleDelta, bearingToVector, distance, scale } from '@/foundation/geom'
 import { knotsToMps, type Degrees, type Seconds } from '@/foundation/units'
 import type { BoatSpec, BoatState } from '@/domain/boat'
-import type { WorldState } from '@/sim'
+import type { WindSample } from '@/domain/wind'
+import type { SimContext, WorldState } from '@/sim'
+import { obstacleShare } from './obstacles'
 
 /**
  * How far ahead a tack is looked at: round, and back up to speed on the new course. Rule
@@ -54,4 +56,18 @@ export function clearToTack(
     }
   }
   return true
+}
+
+/** Whether a tack onto `heading` is clear of the other boats, the committee boat and obstacles. */
+export function tackIsClear(
+  ctx: SimContext,
+  world: WorldState,
+  boat: BoatState,
+  spec: BoatSpec,
+  wind: WindSample,
+  heading: Degrees,
+): boolean {
+  return (
+    clearToTack(world, boat, spec, heading) && obstacleShare(ctx, boat, spec, wind, heading) >= 1
+  )
 }

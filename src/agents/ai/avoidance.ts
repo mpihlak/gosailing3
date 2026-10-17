@@ -23,7 +23,8 @@ import { hullCentreline, hullRadius, type BoatSpec, type BoatState } from '@/dom
 import type { WindSample } from '@/domain/wind'
 import { encounter, type Contender, type RightOfWayRule } from '@/domain/rules'
 import { specFor, type SimContext, type WorldState } from '@/sim'
-import { clearToTack } from './tacking'
+import { obstacleShare } from './obstacles'
+import { tackIsClear } from './tacking'
 
 /**
  * How far ahead a meeting is looked for. Far enough to turn away in time — she comes
@@ -154,7 +155,7 @@ export function giveWay(
     rule === 11 &&
     world.race.progress[boat.id]?.status === 'prestart' &&
     distance(pressing.other.position, boat.position) < LUFFED_WITHIN * spec.length
-  const away = luffedBy ? tackAway(world, boat, spec, wind) : undefined
+  const away = luffedBy ? tackAway(ctx, world, boat, spec, wind) : undefined
   if (away !== undefined) return { bearing: away, rule }
 
   // Turning towards the wind is a luff. Her heading is the wind's direction plus her
@@ -183,7 +184,12 @@ export function giveWay(
   let best = { bearing, share: pressing.share }
   const tryAll = (candidates: readonly Degrees[]) => {
     for (const candidate of candidates) {
-      const share = meeting(candidate, near)?.share ?? Number.POSITIVE_INFINITY
+      // Room from the committee boat counts as room from a boat: luffed into it, the luff
+      // that keeps her clear of the boat to leeward is no way out.
+      const share = Math.min(
+        meeting(candidate, near)?.share ?? Number.POSITIVE_INFINITY,
+        obstacleShare(ctx, boat, spec, wind, candidate),
+      )
       if (share >= 1) return candidate
       if (share > best.share) best = { bearing: candidate, share }
     }
@@ -198,6 +204,7 @@ export function giveWay(
 
 /** Close-hauled on the other tack, when she has been luffed past `LUFFED_PAST` and it is clear. */
 function tackAway(
+  ctx: SimContext,
   world: WorldState,
   boat: BoatState,
   spec: BoatSpec,
@@ -206,7 +213,7 @@ function tackAway(
   const beat = spec.polar.beatAngle(wind.speed)
   if (Math.abs(boat.twa) > beat - LUFFED_PAST) return undefined
   const heading = normalizeBearing(wind.direction - Math.sign(boat.twa || 1) * beat)
-  return clearToTack(world, boat, spec, heading) ? heading : undefined
+  return tackIsClear(ctx, world, boat, spec, wind, heading) ? heading : undefined
 }
 
 /**

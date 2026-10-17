@@ -10,7 +10,8 @@ import { GybePlan } from './gybing'
 import { rudderToHold } from './helm'
 import { planCourse, type NavigationPlan, type Spin } from './navigator'
 import { PLAIN, type Personality } from './personality'
-import { clearToTack, wouldTack } from './tacking'
+import { clearOfObstacles } from './obstacles'
+import { tackIsClear, wouldTack } from './tacking'
 import { pinEndPortStart, type StartPhase, type StartStrategy } from './start'
 
 /** How often, in simulated seconds, she looks again at a boat she is keeping clear of. */
@@ -111,14 +112,14 @@ export class Skipper implements InputSource {
       !plan.spin &&
       plan.reason !== 'starting' &&
       wouldTack(boat, plan.bearing, wind.direction) &&
-      !clearToTack(world, boat, spec, plan.bearing)
+      !tackIsClear(ctx, world, boat, spec, wind, plan.bearing)
     const wanted = blocked
       ? normalizeBearing(
           wind.direction + Math.sign(boat.twa || 1) * spec.polar.beatAngle(wind.speed),
         )
       : plan.bearing
     const course =
-      this.holdTackAway(world, boat, spec, wind, plan) ??
+      this.holdTackAway(ctx, world, boat, spec, wind, plan) ??
       this.gybeOnSchedule(ctx, world, boat, spec, wind, plan, wanted)
 
     /*
@@ -131,7 +132,13 @@ export class Skipper implements InputSource {
       !plan.spin &&
       world.race.progress[boatId]?.tacking !== true &&
       !wouldTack(boat, course, wind.direction)
-    const bearing = free ? this.keepClear(ctx, world, boat, spec, wind, course) : course
+    const kept = free ? this.keepClear(ctx, world, boat, spec, wind, course) : course
+    // And clear of the committee boat, which keeping clear only weighs when there is a
+    // boat about.
+    const bearing =
+      plan.spin || wouldTack(boat, kept, wind.direction)
+        ? kept
+        : clearOfObstacles(ctx, boat, spec, wind, kept)
     if (!free) this.keepingClear = undefined
     if (bearing !== course && wouldTack(boat, bearing, wind.direction)) {
       this.tackedAway = { side: -Math.sign(boat.twa || 1), since: world.time }
@@ -174,6 +181,7 @@ export class Skipper implements InputSource {
 
   /** Close-hauled on the tack she went onto to keep clear, while she is holding it. */
   private holdTackAway(
+    ctx: SimContext,
     world: WorldState,
     boat: BoatState,
     spec: BoatSpec,
@@ -188,7 +196,7 @@ export class Skipper implements InputSource {
       world.time < held.since ||
       (world.time - held.since > TACKED_AWAY_FOR &&
         (!wouldTack(boat, plan.bearing, wind.direction) ||
-          clearToTack(world, boat, spec, plan.bearing)))
+          tackIsClear(ctx, world, boat, spec, wind, plan.bearing)))
     if (done) {
       this.tackedAway = undefined
       return undefined
@@ -250,7 +258,7 @@ export class Skipper implements InputSource {
     if (Math.sign(twa || 1) !== side) return wanted
     const across = normalizeBearing(wind.direction - twa)
     // The same look at the traffic as before a tack. If it is not clear, she waits.
-    if (!clearToTack(world, boat, spec, across)) return wanted
+    if (!tackIsClear(ctx, world, boat, spec, wind, across)) return wanted
     this.gybingFrom = side
     return across
   }
