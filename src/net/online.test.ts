@@ -62,7 +62,16 @@ beforeEach(() => {
 })
 
 const boatsAt = (x: number) => [
-  { id: 'c1', position: vec(x, 0), heading: 40, speed: 6, turnRate: 0, twa: 40, course: 40, leeway: 0 },
+  {
+    id: 'c1',
+    position: vec(x, 0),
+    heading: 40,
+    speed: 6,
+    turnRate: 0,
+    twa: 40,
+    course: 40,
+    leeway: 0,
+  },
 ]
 
 describe('joining', () => {
@@ -213,7 +222,9 @@ describe('drawing what the server says', () => {
       time: 1,
       boats: boatsAt(0),
       events: [],
-      race: { c1: { status: 'racing', stageIndex: 1, penalties: 2, passedMark: true } },
+      race: {
+        c1: { status: 'racing', stageIndex: 1, penalties: 2, passedMark: true, tacking: true },
+      },
     })
     clock = 50
     socket.say({ kind: 'snapshot', time: 1.05, boats: boatsAt(1), events: [] })
@@ -224,6 +235,8 @@ describe('drawing what the server says', () => {
       penalties: 2,
       // Without this a boat steering by the wire would never finish rounding a mark.
       passedMark: true,
+      // And without this one a robot keeps clear of a boat that is tacking.
+      tacking: true,
     })
   })
 

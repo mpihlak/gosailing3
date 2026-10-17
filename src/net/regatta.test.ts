@@ -113,6 +113,22 @@ describe('a race in progress', () => {
     if (snapshot.kind === 'snapshot') expect(snapshot.boats).toHaveLength(2)
   })
 
+  it('says which boats are tacking, and stops saying it when they are through', () => {
+    const race = regatta()
+    race.addRobot('Rob')
+    race.addRobot('Bot')
+    // The countdown and half a minute of the race: the start strategies tack in both.
+    const reports = sail(race, 45).flatMap((one) =>
+      one.message.kind === 'snapshot' && one.message.race ? [one.message.race] : [],
+    )
+    const tacking = reports.findIndex((report) =>
+      Object.values(report).some((boat) => boat.tacking),
+    )
+    expect(tacking).toBeGreaterThanOrEqual(0)
+    const after = reports.slice(tacking + 1)
+    expect(after.some((report) => Object.values(report).every((boat) => !boat.tacking))).toBe(true)
+  })
+
   it('puts a latecomer in the lobby, and shows her the race', () => {
     const race = started()
     pastTheGun(race, ['a', 'b'])

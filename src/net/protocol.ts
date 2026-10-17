@@ -119,6 +119,12 @@ export interface BoatReport {
    * at a mark she had already rounded.
    */
   readonly passedMark: boolean
+  /**
+   * Set while she is tacking, from head to wind until she is close-hauled, when rule 13
+   * has her keep clear of everyone. Sent because a robot that cannot see it took a boat
+   * in the middle of a tack for one with right of way, and kept clear of her.
+   */
+  readonly tacking?: true
   readonly place?: number
   /** Her elapsed time, in simulated seconds, once she is home. */
   readonly finishTime?: Seconds
