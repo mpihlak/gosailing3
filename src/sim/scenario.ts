@@ -7,6 +7,7 @@ import {
   vectorToBearing,
   type Vec2,
 } from '@/foundation/geom'
+import { createRng } from '@/foundation/rng'
 import type { Degrees, Knots, Seconds } from '@/foundation/units'
 import { CRUISER_35_SPEC, spawnBoat, type BoatId, type BoatSpec, type BoatState } from '@/domain/boat'
 import { windwardLeeward, lineMidpoint, type Course, type WindwardLeewardOptions } from '@/domain/course'
@@ -79,7 +80,7 @@ export function createSimulation(spec: ScenarioSpec): Simulation {
   const controllers: Record<BoatId, ControllerKind> = {}
   const boats: BoatState[] = []
 
-  const berths = startingBerths(course, spec.boats.length)
+  const berths = startingBerths(course, spec.boats.length, spec.seed)
 
   spec.boats.forEach((setup, index) => {
     const boatSpec = setup.spec ?? CRUISER_35_SPEC
@@ -139,7 +140,14 @@ const RANK_SPACING = 15
 const SPREAD_PER_BOAT = 0.18
 const WIDEST_SPREAD = 0.7
 
-function startingBerths(course: Course, count: number): Berth[] {
+/**
+ * The berths, moved round by a number drawn from the race's seed. In the order the
+ * sailors joined, a sailor started each race from the same berth on the same tack.
+ * Moved round rather than shuffled, neighbours stay neighbours: the robots alternate
+ * their ends of the line in that order, and shuffled, a pin starter set off from the
+ * committee boat across the whole fleet.
+ */
+function startingBerths(course: Course, count: number, seed: number | string): Berth[] {
   const startStage = course.stages.find((stage) => stage.kind === 'start')
   if (startStage?.kind !== 'start') return []
   const { line } = startStage
@@ -147,7 +155,10 @@ function startingBerths(course: Course, count: number): Berth[] {
   const alongLine = vectorToBearing(sub(line.to, line.from))
   const midpoint = lineMidpoint(line)
 
-  return Array.from({ length: count }, (_, index) => {
+  const shift = count > 0 ? createRng(seed).split('berths').int(count) : 0
+  const order = Array.from({ length: count }, (_, index) => (index + shift) % count)
+
+  return order.map((index) => {
     // Spread about the middle of the line, leaving the ends free.
     const band = Math.min(WIDEST_SPREAD, SPREAD_PER_BOAT * (count - 1))
     const spread = count === 1 ? 0.5 : 0.5 - band / 2 + (index / (count - 1)) * band
