@@ -227,3 +227,11 @@ describe('the wind a game is sailed in', () => {
     expect(new Set(winds.map((wind) => wind.startBias)).size).toBeGreaterThan(1)
   })
 })
+
+describe('the wind of a standalone game', () => {
+  it('has shifts for the player to set going, from the same start bias', () => {
+    const wind = createSimulation(duel('r1')).wind
+    expect(wind.schedule[0]?.angle).toBe(wind.startBias)
+    expect(new Set(wind.schedule.map((keyframe) => keyframe.angle)).size).toBeGreaterThan(1)
+  })
+})

@@ -1,6 +1,7 @@
 import { vec } from '@/foundation/geom'
 import type { BoatId, BoatState } from '@/domain/boat'
 import type { Mark } from '@/domain/course'
+import { FreezableWind } from '@/domain/wind'
 import {
   type InputSource,
   type WorldState,
@@ -77,7 +78,8 @@ const CONTROLS = BY_TOUCH
      keeps turning, let go and it centres.
      <br />Tap the water to stop and carry on. Tap this card to start.`
   : `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start and pause · <b>R</b> new race
-     <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>H</b> or <b>?</b> these keys
+     <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>F</b> wind shifts
+     <br /><b>H</b> or <b>?</b> these keys
      <br />Hold <b>Shift</b> to watch the race run on`
 
 /** The same list, less what a race on a server has no answer for. */
@@ -98,6 +100,8 @@ const OPPONENT_STYLES: BoatStyle[] = [
 ]
 
 let simulation: Simulation
+/** The standalone race's wind, whose shifts the player can freeze and set going. */
+let shifts: FreezableWind | undefined
 let runner: SimulationRunner
 let camera: Camera
 let trails = new TrailStore()
@@ -286,7 +290,10 @@ function showLobby(): void {
 }
 
 function start(seed: string, immediate = false): void {
-  simulation = createSimulation(duel(seed))
+  const made = createSimulation(duel(seed))
+  // Frozen to begin with: the start bias holds until the player sets the shifts going.
+  shifts = new FreezableWind(made.wind, made.world.time)
+  simulation = { ...made, ctx: { ...made.ctx, wind: shifts } }
   runner = new SimulationRunner(simulation.ctx, simulation.world)
   trails = new TrailStore()
   sources = helmsFor(simulation)
@@ -369,6 +376,16 @@ function handleCommand(command: HelmCommand): void {
   if (command === 'toggleShadows') {
     showShadows = !showShadows
     hud.showBanner(`Wind shadows ${showShadows ? 'on' : 'off'}`, 'info', 1400)
+  }
+  if (command === 'toggleShifts') {
+    if (online || !shifts) {
+      hud.showBanner('The server sets the wind in a network race', 'info', 2200)
+      return
+    }
+    const now = runner.world.time
+    if (shifts.frozen) shifts.unfreeze(now)
+    else shifts.freeze(now)
+    hud.showBanner(`Wind shifts ${shifts.frozen ? 'frozen' : 'on'}`, 'info', 1400)
   }
   if (command === 'toggleLaylines') {
     showLaylines = !showLaylines

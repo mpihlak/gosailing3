@@ -51,6 +51,11 @@ const WIND = {
   speed: WIND_SPEED,
   biasUntil: RACE_DURATION * GAME_PACE,
 }
+/**
+ * The wind of a standalone game: the same bias to start with, then shifts. The game
+ * starts it with the shifts frozen, and the player can set them going.
+ */
+const SHIFTING_WIND = { direction: WIND_DIRECTION, speed: WIND_SPEED, biasUntil: 0 }
 
 /**
  * The race the game opens with: the player and one opponent, one lap.
@@ -86,7 +91,7 @@ export function duel(seed: number | string): ScenarioSpec {
       },
     ],
     course: { legLength: LEG_LENGTH, lineLength: LINE_LENGTH, startCenter: START_CENTER },
-    wind: WIND,
+    wind: SHIFTING_WIND,
     config: { startSequence: COUNTDOWN * GAME_PACE },
     duration: RACE_DURATION * GAME_PACE,
   }

@@ -8,6 +8,7 @@ export type HelmCommand =
   | 'restart'
   | 'help'
   | 'toggleShadows'
+  | 'toggleShifts'
   | 'toggleLaylines'
 
 export interface HelmOptions {
@@ -127,6 +128,7 @@ function commandFor(key: string): HelmCommand | null {
   if (key === 'r' || key === 'R') return 'restart'
   if (key === 'h' || key === 'H' || key === '?') return 'help'
   if (key === 'w' || key === 'W') return 'toggleShadows'
+  if (key === 'f' || key === 'F') return 'toggleShifts'
   if (key === 'l' || key === 'L') return 'toggleLaylines'
   return null
 }
