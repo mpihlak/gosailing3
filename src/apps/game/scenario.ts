@@ -41,6 +41,16 @@ const LINE_LENGTH: Meters = 260
 /** How far to leeward of the line the fleet waits. */
 const BERTH_TO_LEEWARD: Meters = 70
 const RACE_DURATION: Seconds = 1200
+/**
+ * The wind a game is sailed in. Each race draws a bias to one end of the line from its
+ * seed, and holds it to the end: no shifts while the race is on, so the favoured end and
+ * the favoured tack are what they were at the start.
+ */
+const WIND = {
+  direction: WIND_DIRECTION,
+  speed: WIND_SPEED,
+  biasUntil: RACE_DURATION * GAME_PACE,
+}
 
 /**
  * The race the game opens with: the player and one opponent, one lap.
@@ -76,7 +86,7 @@ export function duel(seed: number | string): ScenarioSpec {
       },
     ],
     course: { legLength: LEG_LENGTH, lineLength: LINE_LENGTH, startCenter: START_CENTER },
-    wind: { direction: WIND_DIRECTION, speed: WIND_SPEED },
+    wind: WIND,
     config: { startSequence: COUNTDOWN * GAME_PACE },
     duration: RACE_DURATION * GAME_PACE,
   }
@@ -96,7 +106,7 @@ export function regattaRace(
     seed,
     boats: sailors.map(({ id, name }) => ({ id, name, controller: 'human' as const })),
     course: { legLength: LEG_LENGTH, lineLength: LINE_LENGTH, startCenter: START_CENTER },
-    wind: { direction: WIND_DIRECTION, speed: WIND_SPEED },
+    wind: WIND,
     config: { startSequence: COUNTDOWN * GAME_PACE },
     duration: RACE_DURATION * GAME_PACE,
   }

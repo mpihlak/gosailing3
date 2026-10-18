@@ -200,3 +200,30 @@ describe('where a regatta fleet waits for the gun', () => {
     expect(closestPair(fleet(10))).toBeGreaterThan(CRUISER_35_SPEC.length * 2)
   })
 })
+
+const windSailors = [
+  { id: 'a', name: 'Ann' },
+  { id: 'b', name: 'Bob' },
+]
+
+describe('the wind a game is sailed in', () => {
+  const winds = ['r1', 'r2', 'r3', 'r4', 'r5'].map(
+    (seed) => createSimulation(regattaRace(seed, windSailors)).wind,
+  )
+
+  it('holds the bias it starts with for the whole race', () => {
+    for (const wind of winds) {
+      expect(new Set(wind.schedule.map((keyframe) => keyframe.angle))).toEqual(
+        new Set([wind.startBias]),
+      )
+    }
+  })
+
+  it('favours one end of the line or the other, by a different amount each race', () => {
+    for (const wind of winds) {
+      expect(Math.abs(wind.startBias)).toBeGreaterThanOrEqual(5)
+      expect(Math.abs(wind.startBias)).toBeLessThanOrEqual(15)
+    }
+    expect(new Set(winds.map((wind) => wind.startBias)).size).toBeGreaterThan(1)
+  })
+})
