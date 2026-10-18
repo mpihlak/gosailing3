@@ -1,11 +1,20 @@
+import { add, bearingToVector, dot, scale, type Vec2 } from '@/foundation/geom'
+import type { Degrees } from '@/foundation/units'
 import { visibleBounds, worldToScreen, type Camera } from '@/presentation/view/camera'
 import { PALETTE } from '../palette'
 
 /**
  * Open water and a grid of hundred-meter squares. Without the grid there is nothing to
  * judge motion against, and the boat looks becalmed even at hull speed.
+ *
+ * The grid is turned to the wind, a ladder: its rungs lie square to the wind and its
+ * rails along it, so climbing a rung is distance made to windward.
  */
-export function drawWater(ctx: CanvasRenderingContext2D, camera: Camera): void {
+export function drawWater(
+  ctx: CanvasRenderingContext2D,
+  camera: Camera,
+  windDirection: Degrees,
+): void {
   const { width, height } = camera.viewport
 
   const gradient = ctx.createLinearGradient(0, 0, 0, height)
@@ -15,18 +24,38 @@ export function drawWater(ctx: CanvasRenderingContext2D, camera: Camera): void {
   ctx.fillRect(0, 0, width, height)
 
   const spacing = gridSpacing(camera.pixelsPerMeter)
+  // Up the ladder is into the wind; across it is square to that.
+  const up = bearingToVector(windDirection)
+  const across = bearingToVector(windDirection + 90)
   const view = visibleBounds(camera)
+  const corners: Vec2[] = [
+    view.min,
+    view.max,
+    { x: view.min.x, y: view.max.y },
+    { x: view.max.x, y: view.min.y },
+  ]
+  const span = (axis: Vec2) => {
+    const along = corners.map((corner) => dot(corner, axis))
+    return { from: Math.min(...along), to: Math.max(...along) }
+  }
+  const rise = span(up)
+  const reach = span(across)
+  const at = (a: number, b: number) => worldToScreen(camera, add(scale(up, a), scale(across, b)))
   ctx.lineWidth = 1
 
-  for (let x = Math.ceil(view.min.x / spacing) * spacing; x <= view.max.x; x += spacing) {
-    ctx.strokeStyle = x % (spacing * 5) === 0 ? PALETTE.gridMajor : PALETTE.grid
-    const screen = worldToScreen(camera, { x, y: 0 })
-    line(ctx, screen.x, 0, screen.x, height)
+  // The rungs: square to the wind.
+  for (let a = Math.ceil(rise.from / spacing) * spacing; a <= rise.to; a += spacing) {
+    ctx.strokeStyle = a % (spacing * 5) === 0 ? PALETTE.gridMajor : PALETTE.grid
+    const from = at(a, reach.from)
+    const to = at(a, reach.to)
+    line(ctx, from.x, from.y, to.x, to.y)
   }
-  for (let y = Math.ceil(view.min.y / spacing) * spacing; y <= view.max.y; y += spacing) {
-    ctx.strokeStyle = y % (spacing * 5) === 0 ? PALETTE.gridMajor : PALETTE.grid
-    const screen = worldToScreen(camera, { x: 0, y })
-    line(ctx, 0, screen.y, width, screen.y)
+  // The rails: along it.
+  for (let b = Math.ceil(reach.from / spacing) * spacing; b <= reach.to; b += spacing) {
+    ctx.strokeStyle = b % (spacing * 5) === 0 ? PALETTE.gridMajor : PALETTE.grid
+    const from = at(rise.from, b)
+    const to = at(rise.to, b)
+    line(ctx, from.x, from.y, to.x, to.y)
   }
 }
 

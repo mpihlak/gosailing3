@@ -43,7 +43,7 @@ export function drawScene(canvas: CanvasRenderingContext2D, view: SceneView): vo
   const windDirection = ctx.wind.sample(camera.center, world.time).direction
   const fleet = shadowersIn(ctx, world)
 
-  drawWater(canvas, camera)
+  drawWater(canvas, camera, windDirection)
   if (view.showShadows) drawShadows(canvas, camera, fleet, windDirection, view.displayTime)
   drawWindField(canvas, camera, (at) => windAt(ctx, world, at), view.medianWindSpeed)
   drawCourse(canvas, {
