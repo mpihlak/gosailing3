@@ -99,3 +99,18 @@ describe('watching the race run on', () => {
     expect(document.querySelector('#overlay')?.textContent).toContain('Shift')
   })
 })
+
+describe('the wind shifts', () => {
+  it('stay on in the next race once the player sets them going', () => {
+    press('f')
+    nextFrame()
+    expect(bannerText()).toBe('Wind shifts on')
+
+    // A new race, still with the shifts on: pressing again freezes them.
+    press('r')
+    nextFrame()
+    press('f')
+    nextFrame()
+    expect(bannerText()).toBe('Wind shifts frozen')
+  })
+})

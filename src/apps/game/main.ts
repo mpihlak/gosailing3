@@ -102,6 +102,12 @@ const OPPONENT_STYLES: BoatStyle[] = [
 let simulation: Simulation
 /** The standalone race's wind, whose shifts the player can freeze and set going. */
 let shifts: FreezableWind | undefined
+/**
+ * Whether the player has the shifts going. Kept from one race to the next, and in the
+ * browser, until she freezes them again.
+ */
+const SHIFTS_ON = 'gosailing.shifts'
+let shiftsOn = rememberedShifts()
 let runner: SimulationRunner
 let camera: Camera
 let trails = new TrailStore()
@@ -291,8 +297,8 @@ function showLobby(): void {
 
 function start(seed: string, immediate = false): void {
   const made = createSimulation(duel(seed))
-  // Frozen to begin with: the start bias holds until the player sets the shifts going.
-  shifts = new FreezableWind(made.wind, made.world.time)
+  // As the player last left them. Frozen, the start bias holds.
+  shifts = new FreezableWind(made.wind, shiftsOn ? undefined : made.world.time)
   simulation = { ...made, ctx: { ...made.ctx, wind: shifts } }
   runner = new SimulationRunner(simulation.ctx, simulation.world)
   trails = new TrailStore()
@@ -385,6 +391,8 @@ function handleCommand(command: HelmCommand): void {
     const now = runner.world.time
     if (shifts.frozen) shifts.unfreeze(now)
     else shifts.freeze(now)
+    shiftsOn = !shifts.frozen
+    rememberShifts(shiftsOn)
     hud.showBanner(`Wind shifts ${shifts.frozen ? 'frozen' : 'on'}`, 'info', 1400)
   }
   if (command === 'toggleLaylines') {
@@ -861,4 +869,21 @@ function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector)
   if (!element) throw new Error(`the page is missing ${selector}`)
   return element
+}
+
+/** Storage can be refused, in a private window for one. Then the shifts start frozen. */
+function rememberedShifts(): boolean {
+  try {
+    return localStorage.getItem(SHIFTS_ON) === 'on'
+  } catch {
+    return false
+  }
+}
+
+function rememberShifts(on: boolean): void {
+  try {
+    localStorage.setItem(SHIFTS_ON, on ? 'on' : 'off')
+  } catch {
+    // As above.
+  }
 }
