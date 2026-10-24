@@ -42,18 +42,8 @@ const LINE_LENGTH: Meters = 260
 const BERTH_TO_LEEWARD: Meters = 70
 const RACE_DURATION: Seconds = 1200
 /**
- * The wind a game is sailed in. Each race draws a bias to one end of the line from its
- * seed, and holds it to the end: no shifts while the race is on, so the favoured end and
- * the favoured tack are what they were at the start.
- */
-const WIND = {
-  direction: WIND_DIRECTION,
-  speed: WIND_SPEED,
-  biasUntil: RACE_DURATION * GAME_PACE,
-}
-/**
- * The wind of a standalone game: the same bias to start with, then shifts. The game
- * starts it with the shifts frozen, and the player can set them going.
+ * The wind of a standalone game: the race's bias to one end of the line, then shifts from
+ * the start. The game holds the shifts frozen until the player sets them going.
  */
 const SHIFTING_WIND = { direction: WIND_DIRECTION, speed: WIND_SPEED, biasUntil: 0 }
 
@@ -111,7 +101,7 @@ export function regattaRace(
     seed,
     boats: sailors.map(({ id, name }) => ({ id, name, controller: 'human' as const })),
     course: { legLength: LEG_LENGTH, lineLength: LINE_LENGTH, startCenter: START_CENTER },
-    wind: WIND,
+    wind: { direction: WIND_DIRECTION, speed: WIND_SPEED },
     config: { startSequence: COUNTDOWN * GAME_PACE },
     duration: RACE_DURATION * GAME_PACE,
   }

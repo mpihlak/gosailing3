@@ -211,11 +211,10 @@ describe('the wind a game is sailed in', () => {
     (seed) => createSimulation(regattaRace(seed, windSailors)).wind,
   )
 
-  it('holds the bias it starts with for the whole race', () => {
+  it('starts with a bias to one end of the line, and shifts after it', () => {
     for (const wind of winds) {
-      expect(new Set(wind.schedule.map((keyframe) => keyframe.angle))).toEqual(
-        new Set([wind.startBias]),
-      )
+      expect(wind.schedule[0]?.angle).toBe(wind.startBias)
+      expect(new Set(wind.schedule.map((keyframe) => keyframe.angle)).size).toBeGreaterThan(1)
     }
   })
 
