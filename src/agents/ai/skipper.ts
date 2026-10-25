@@ -10,6 +10,7 @@ import { GybePlan } from './gybing'
 import { rudderToHold } from './helm'
 import { planCourse, type NavigationPlan, type Spin } from './navigator'
 import { PLAIN, type Personality } from './personality'
+import { HeaderWatch } from './headers'
 import { clearOfObstacles } from './obstacles'
 import { tackIsClear, wouldTack } from './tacking'
 import { pinEndPortStart, type StartPhase, type StartStrategy } from './start'
@@ -63,6 +64,7 @@ export class Skipper implements InputSource {
   private keepingClear: { readonly bearing: Degrees; readonly since: Seconds } | undefined
   /** The tack she went onto to keep clear, as the side the wind is on, and when. */
   private tackedAway: { readonly side: number; readonly since: Seconds } | undefined
+  private readonly headers = new HeaderWatch()
   /** A tack she has begun, as the side the wind was on, and when she began it. */
   private tackBegun: { readonly side: number; readonly since: Seconds } | undefined
   private readonly rng: Rng
@@ -93,7 +95,7 @@ export class Skipper implements InputSource {
     const owed = world.race.progress[boatId]?.penalties ?? 0
     if (owed === 0 || this.spin?.owed !== owed) this.spin = undefined
 
-    const plan = planCourse(
+    const planned = planCourse(
       ctx,
       world,
       boat,
@@ -103,7 +105,11 @@ export class Skipper implements InputSource {
       this.spin?.way,
       this.personality,
     )
-    if (plan.spin) this.spin = { way: plan.spin, owed }
+    if (planned.spin) this.spin = { way: planned.spin, owed }
+    // Headed on the beat, the other tack is the lifted one. Whether it is clear to take
+    // is asked below, as of any tack.
+    const lifted = this.headers.tackFor(world.time, boat, spec, wind, planned)
+    const plan = lifted === undefined ? planned : { ...planned, bearing: lifted }
 
     /*
      * A tack into somebody is hers to answer for: from head to wind until she is
