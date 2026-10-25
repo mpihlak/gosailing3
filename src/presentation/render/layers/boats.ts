@@ -13,9 +13,13 @@ export class TrailStore {
   private readonly trails = new Map<BoatId, Vec2[]>()
   private lastSample: Seconds = -Infinity
 
+  /**
+   * A point every 1.2 simulated seconds, drawn as a dot, and 36 seconds of them. Closer
+   * together the dots ran into a line.
+   */
   constructor(
-    private readonly interval: Seconds = 0.4,
-    private readonly maxPoints = 90,
+    private readonly interval: Seconds = 1.2,
+    private readonly maxPoints = 30,
   ) {}
 
   record(boats: readonly BoatState[], time: Seconds): void {
@@ -76,6 +80,15 @@ export function drawBoats(ctx: CanvasRenderingContext2D, view: BoatView): void {
   }
 }
 
+/** A trail dot's radius, as a share of the trail's width. */
+const TRAIL_DOT = 0.7
+/** How strong the newest dot is, the older ones fading from there. */
+const TRAIL_STRENGTH = 0.6
+
+/**
+ * The wake as faint dots where she has been, fading to nothing at the oldest, so it reads as
+ * the way she came and how recently without a line to clutter the water.
+ */
 function drawTrail(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
@@ -84,15 +97,15 @@ function drawTrail(
 ): void {
   if (trail.length < 2) return
   ctx.save()
-  ctx.strokeStyle = style.trail
-  ctx.lineWidth = style.trailWidth
-  ctx.beginPath()
+  ctx.fillStyle = style.trail
+  // Oldest first, so the newest is the last and the strongest.
   trail.forEach((point, index) => {
     const screen = worldToScreen(camera, point)
-    if (index === 0) ctx.moveTo(screen.x, screen.y)
-    else ctx.lineTo(screen.x, screen.y)
+    ctx.globalAlpha = (TRAIL_STRENGTH * (index + 1)) / trail.length
+    ctx.beginPath()
+    ctx.arc(screen.x, screen.y, style.trailWidth * TRAIL_DOT, 0, Math.PI * 2)
+    ctx.fill()
   })
-  ctx.stroke()
   ctx.restore()
 }
 
