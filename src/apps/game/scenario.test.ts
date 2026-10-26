@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { angleDelta, distance } from '@/foundation/geom'
-import { CRUISER_35_SPEC, hullCentreline, hullRadius, tackOf, type BoatState } from '@/domain/boat'
+import { distance } from '@/foundation/geom'
+import { CRUISER_35_SPEC, hullCentreline, hullRadius, type BoatState } from '@/domain/boat'
 import { detectContacts } from '@/domain/collision'
-import { pointAt } from '@/domain/course'
 import { Skipper } from '@/agents/ai'
 import { createSimulation, runHeadless, timeToStart } from '@/sim'
-import { COUNTDOWN, duel, GAME_PACE, OPPONENT_ID, PLAYER_ID, regattaRace } from './scenario'
+import {
+  COUNTDOWN,
+  FLEET_COLORS,
+  GAME_PACE,
+  PLAYER_ID,
+  regattaRace,
+  ROBOTS,
+  standaloneRace,
+} from './scenario'
 
 /**
  * The game runs its simulation faster than real time and divides every clock back down,
@@ -13,7 +20,7 @@ import { COUNTDOWN, duel, GAME_PACE, OPPONENT_ID, PLAYER_ID, regattaRace } from 
  * the countdown they wait through, and the race they sail.
  */
 describe('the clocks the player reads', () => {
-  const sim = createSimulation(duel('clock-check'))
+  const sim = createSimulation(standaloneRace('clock-check'))
 
   it('counts the countdown down in the player\'s seconds', () => {
     // The relationship, not the number: the countdown is tuning, and moves.
@@ -37,38 +44,18 @@ describe('the clocks the player reads', () => {
 })
 
 describe('the starting arrangement', () => {
-  const sim = createSimulation(duel('berths'))
-  const spec = CRUISER_35_SPEC
-  const player = sim.world.boats.find((boat) => boat.id === PLAYER_ID)!
-  const opponent = sim.world.boats.find((boat) => boat.id === OPPONENT_ID)!
+  const sim = createSimulation(standaloneRace('berths'))
 
-  /** The very back of the boat, which is what the two have between them. */
-  const sternOf = (boat: typeof player) =>
-    pointAt(boat.position, boat.heading + 180, spec.length / 2)
-
-  it('puts the two of them on the same latitude', () => {
-    expect(opponent.position.y).toBeCloseTo(player.position.y)
+  it('puts the player and the robots in the race', () => {
+    expect(sim.world.boats).toHaveLength(1 + ROBOTS)
+    expect(sim.controllers[PLAYER_ID]).toBe('human')
+    const robots = Object.values(sim.controllers).filter((controller) => controller === 'ai')
+    expect(robots).toHaveLength(ROBOTS)
   })
 
-  it('lays them stern to stern with a boat length of water between', () => {
-    expect(distance(sternOf(player), sternOf(opponent))).toBeCloseTo(spec.length)
-  })
-
-  it('points them opposite ways along the line', () => {
-    expect(Math.abs(angleDelta(player.heading, opponent.heading))).toBeCloseTo(180)
-    expect(player.heading).toBeCloseTo(90) // east, toward the committee boat
-    expect(opponent.heading).toBeCloseTo(270) // west, toward the pin
-  })
-
-  it('has the player on port tack and the opponent on starboard', () => {
-    expect(tackOf(player.twa)).toBe('port')
-    expect(tackOf(opponent.twa)).toBe('starboard')
-  })
-
-  it('leaves the pair a little west of the middle of the line', () => {
-    const between = (player.position.x + opponent.position.x) / 2
-    expect(between).toBeLessThan(0)
-    expect(Math.abs(between)).toBeLessThan(spec.length * 2)
+  it('names every boat for the color she is drawn in', () => {
+    const names = sim.world.boats.map((boat) => sim.names[boat.id])
+    expect(names).toEqual(FLEET_COLORS.slice(0, 1 + ROBOTS).map((color) => color.name))
   })
 
   it('starts them clear of each other', () => {
@@ -76,22 +63,22 @@ describe('the starting arrangement', () => {
     expect(events.filter((event) => event.kind === 'contact')).toHaveLength(0)
   })
 
-  it('sails the opponent away to the west, given no helm', () => {
-    const { world } = runHeadless(sim.ctx, sim.world, {}, { maxTicks: 60 * 60 })
-    const sailed = world.boats.find((boat) => boat.id === OPPONENT_ID)!
-    expect(sailed.position.x).toBeLessThan(opponent.position.x - 50)
-    expect(tackOf(sailed.twa)).toBe('starboard')
-  })
-
-  it('counts her as a competitor', () => {
-    expect(sim.world.race.progress[OPPONENT_ID]).toBeDefined()
-    expect(sim.world.race.progress[OPPONENT_ID]?.status).toBe('prestart')
+  it('counts every one of them as a competitor', () => {
+    for (const boat of sim.world.boats) {
+      expect(sim.world.race.progress[boat.id]?.status).toBe('prestart')
+    }
   })
 })
 
 describe('the race finishing', () => {
+  /** The race with the first two of its fleet, which is all that finishing needs. */
+  const pair = (seed: string) => {
+    const race = standaloneRace(seed)
+    return { ...race, boats: race.boats.slice(0, 2) }
+  }
+
   function sailItOut(seed: string) {
-    const sim = createSimulation(duel(seed))
+    const sim = createSimulation(pair(seed))
     const helms = Object.fromEntries(sim.world.boats.map((boat) => [boat.id, new Skipper()]))
     const { world } = runHeadless(sim.ctx, sim.world, helms, {
       maxTicks: 60 * 60 * 60,
@@ -137,7 +124,7 @@ describe('the race finishing', () => {
 
   it('does not call the race complete while one of them is still out there', () => {
     // The player alone finishing is not the end of it: the results wait for the fleet.
-    const sim = createSimulation(duel('alpha'))
+    const sim = createSimulation(pair('alpha'))
     const { world } = runHeadless(sim.ctx, sim.world, { [PLAYER_ID]: new Skipper() }, {
       maxTicks: 60 * 60 * 30,
       until: (state) => state.race.progress[PLAYER_ID]?.status === 'finished',
@@ -229,7 +216,7 @@ describe('the wind a game is sailed in', () => {
 
 describe('the wind of a standalone game', () => {
   it('has shifts for the player to set going, from the same start bias', () => {
-    const wind = createSimulation(duel('r1')).wind
+    const wind = createSimulation(standaloneRace('r1')).wind
     expect(wind.schedule[0]?.angle).toBe(wind.startBias)
     expect(new Set(wind.schedule.map((keyframe) => keyframe.angle)).size).toBeGreaterThan(1)
   })

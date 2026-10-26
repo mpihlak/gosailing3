@@ -31,9 +31,18 @@ import {
   type CrewReading,
   timing,
 } from '@/presentation/ui'
-import { Skipper } from '@/agents/ai'
+import { boatEndStarboardStart, personalityFor, pinEndPortStart, Skipper } from '@/agents/ai'
 import { cleanName, HELM_HZ, OnlineRace, type Placing } from '@/net'
-import { DEFAULT_SERVER, duel, GAME_PACE, playerSeconds, PLAYER_ID, randomSeed } from './scenario'
+import {
+  DEFAULT_SERVER,
+  FLEET_COLORS,
+  GAME_PACE,
+  playerSeconds,
+  PLAYER_ID,
+  randomSeed,
+  ROBOTS,
+  standaloneRace,
+} from './scenario'
 import { Menu } from './menu'
 
 const canvas = requireElement<HTMLCanvasElement>('#stage')
@@ -94,10 +103,12 @@ const REGATTA_CONTROLS = BY_TOUCH
 
 const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hullBlue, trail: PALETTE.trailBlue, trailWidth: 2 }
 
-/** Colors for the boats the player is racing against, handed out in order. */
-const OPPONENT_STYLES: BoatStyle[] = [
-  { hull: PALETTE.hullRed, trail: PALETTE.trailRed, trailWidth: 1.5 },
-]
+/** Colors for the boats the player is racing against, handed out in order: the fleet's, less hers. */
+const OPPONENT_STYLES: BoatStyle[] = FLEET_COLORS.slice(1).map((color) => ({
+  hull: color.hex,
+  trail: translucent(color.hex),
+  trailWidth: 1.5,
+}))
 
 let simulation: Simulation
 /** The standalone race's wind, whose shifts the player can freeze and set going. */
@@ -296,7 +307,7 @@ function showLobby(): void {
 }
 
 function start(seed: string, immediate = false): void {
-  const made = createSimulation(duel(seed))
+  const made = createSimulation(standaloneRace(seed))
   // As the player last left them. Frozen, the start bias holds.
   shifts = new FreezableWind(made.wind, shiftsOn ? undefined : made.world.time)
   simulation = { ...made, ctx: { ...made.ctx, wind: shifts } }
@@ -325,8 +336,7 @@ function start(seed: string, immediate = false): void {
 
   showOverlay(
     'Ready to race',
-    `<p>You are <b style="color: ${PALETTE.hullBlue}">Blue</b>, racing
-     <b style="color: ${PALETTE.hullRed}">Red</b>.
+    `<p>You are <b style="color: ${PALETTE.hullBlue}">Blue</b>, racing ${ROBOTS} robots.
      <br />The gun is in thirty seconds. Cross the line, leave the orange mark to port,
      and come back through the line to finish.
      <br /><br />${CONTROLS}</p>`,
@@ -717,11 +727,25 @@ function doingText(boatId: string): string {
  */
 function helmsFor(sim: Simulation): Record<string, InputSource> {
   const helms: Record<string, InputSource> = {}
+  let robots = 0
   for (const [boatId, controller] of Object.entries(sim.controllers)) {
     if (controller === 'human') helms[boatId] = helm
-    if (controller === 'ai') helms[boatId] = new Skipper()
+    if (controller === 'ai') helms[boatId] = robotHelm(sim, boatId, robots++)
   }
   return helms
+}
+
+/**
+ * A robot as the regatta's robots sail: her personality follows her name, her chances
+ * the race's seed, and every other one starts at the other end of the line, so the
+ * fleet does not all go for the pin.
+ */
+function robotHelm(sim: Simulation, boatId: string, index: number): Skipper {
+  const name = sim.names[boatId] ?? boatId
+  const personality = personalityFor(name)
+  const options = { clearance: personality.startClearance }
+  const start = index % 2 === 0 ? pinEndPortStart(options) : boatEndStarboardStart(options)
+  return new Skipper({ start, personality, seed: `${name}:${sim.spec.seed}` })
 }
 
 function stylesFor(sim: Simulation): Record<string, BoatStyle> {
@@ -886,4 +910,10 @@ function rememberShifts(on: boolean): void {
   } catch {
     // As above.
   }
+}
+
+/** A trail as faint as the player's, in a boat's own color. */
+function translucent(hex: string): string {
+  const rgb = Number.parseInt(hex.slice(1), 16)
+  return `rgba(${(rgb >> 16) & 255}, ${(rgb >> 8) & 255}, ${rgb & 255}, 0.36)`
 }

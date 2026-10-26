@@ -19,7 +19,6 @@ export const PALETTE = {
   hullOutline: '#0b2233',
   sail: '#ffffff',
   trailBlue: 'rgba(79, 163, 221, 0.36)',
-  trailRed: 'rgba(196, 101, 92, 0.32)',
   trailRival: 'rgba(160, 190, 210, 0.22)',
   penalty: '#ff5d5d',
   // The sides a sailor already knows by their lights: green to starboard, red to port.

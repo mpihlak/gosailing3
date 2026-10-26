@@ -20,13 +20,13 @@ vi.mock('./scenario', async () => {
   const actual = await vi.importActual<typeof Scenario>('./scenario')
   return {
     ...actual,
-    duel: (seed: number | string) => ({
-      ...actual.duel(seed),
+    standaloneRace: (seed: number | string) => ({
+      ...actual.standaloneRace(seed),
       boats: [
         // Parked well clear, pointing away, so the only news is the rival's.
         { id: actual.PLAYER_ID, name: 'Blue', controller: 'human' as const, position: vec(-400, -400), heading: 200 },
         // Running down onto the mark from upwind, which is an angle she can hold.
-        { id: actual.OPPONENT_ID, name: 'Red', controller: 'idle' as const, position: vec(0, MARK + 40), heading: 180 },
+        { id: 'rival', name: 'Red', controller: 'idle' as const, position: vec(0, MARK + 40), heading: 180 },
       ],
       course: { legLength: MARK, lineLength: 400, startCenter: vec(0, 0) },
       config: { startSequence: 0 },

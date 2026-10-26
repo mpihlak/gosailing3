@@ -44,7 +44,7 @@ describe('the game, started against the real page', () => {
     const overlay = document.querySelector<HTMLElement>('#overlay')
     expect(overlay?.dataset.visible).toBe('true')
     expect(overlay?.textContent).toContain('Blue')
-    expect(overlay?.textContent).toContain('Red')
+    expect(overlay?.textContent).toContain('racing 9 robots')
   })
 
   it('fills in the instruments rather than leaving them blank', () => {
@@ -55,17 +55,18 @@ describe('the game, started against the real page', () => {
     expect(values.filter((value) => value === '—').length).toBeLessThan(2)
   })
 
-  it('puts both boats on the board, with what each is sailing for', () => {
+  it('puts every boat on the board, with what each is sailing for', () => {
     const board = document.querySelector<HTMLElement>('#standings')
     expect(board?.textContent).toContain('Blue')
     expect(board?.textContent).toContain('Red')
     const doing = [...document.querySelectorAll('#standings .doing')].map((it) => it.textContent)
-    expect(doing).toEqual(['to start', 'to start'])
+    expect(doing).toHaveLength(10)
+    expect(new Set(doing)).toEqual(new Set(['to start']))
   })
 
   it('shows how fast each of them is going', () => {
     const speeds = [...document.querySelectorAll('#standings .speed')].map((it) => it.textContent)
-    expect(speeds).toHaveLength(2)
+    expect(speeds).toHaveLength(10)
     for (const speed of speeds) expect(speed).toMatch(/^\d+\.\d$/)
   })
 

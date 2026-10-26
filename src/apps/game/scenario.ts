@@ -1,13 +1,11 @@
 import { vec } from '@/foundation/geom'
 import type { Meters, Seconds } from '@/foundation/units'
-import { CRUISER_35_SPEC, type BoatId } from '@/domain/boat'
-import { pointAt } from '@/domain/course'
+import type { BoatId } from '@/domain/boat'
 import type { ScenarioSpec } from '@/sim'
 import type { FleetColor } from '@/net'
 import { PALETTE } from '@/presentation/render'
 
 export const PLAYER_ID = 'player'
-export const OPPONENT_ID = 'opponent'
 
 /**
  * Sailing at true scale is too slow to be much fun: the course below takes a boat about
@@ -38,8 +36,6 @@ const WIND_SPEED = 12
 const START_CENTER = vec(0, 0)
 const LEG_LENGTH: Meters = 450
 const LINE_LENGTH: Meters = 260
-/** How far to leeward of the line the fleet waits. */
-const BERTH_TO_LEEWARD: Meters = 70
 const RACE_DURATION: Seconds = 1200
 /**
  * The wind of a standalone game: the race's bias to one end of the line, then shifts from
@@ -47,39 +43,39 @@ const RACE_DURATION: Seconds = 1200
  */
 const SHIFTING_WIND = { direction: WIND_DIRECTION, speed: WIND_SPEED, biasUntil: 0 }
 
-/**
- * The race the game opens with: the player and one opponent, one lap.
- *
- * The two lie stern to stern with a boat length of water between them, on the same
- * latitude and pointing opposite ways along the line. The player is on port tack heading
- * for the committee boat and the opponent on starboard heading for the pin, which puts
- * the pair a little west of the middle of the line.
- */
-export function duel(seed: number | string): ScenarioSpec {
-  const alongLine = WIND_DIRECTION + 90
-  const playerBerth = pointAt(START_CENTER, WIND_DIRECTION + 180, BERTH_TO_LEEWARD)
-  // Centres two lengths apart leaves one length between the sterns.
-  const opponentBerth = pointAt(playerBerth, alongLine + 180, CRUISER_35_SPEC.length * 2)
+/** One for each of the ten boats a race will hold, so no two of them look alike. */
+export const FLEET_COLORS: readonly FleetColor[] = [
+  { name: 'Blue', hex: PALETTE.hullBlue },
+  { name: 'Red', hex: PALETTE.hullRed },
+  { name: 'Silver', hex: PALETTE.hullRival },
+  { name: 'Amber', hex: '#e0a458' },
+  { name: 'Violet', hex: '#9d7fd8' },
+  { name: 'Teal', hex: '#5fc9b5' },
+  { name: 'Rose', hex: '#d67fb0' },
+  { name: 'Olive', hex: '#b8c45c' },
+  { name: 'Azure', hex: '#6f9bd1' },
+  { name: 'Copper', hex: '#cf8b6a' },
+]
 
+/** How many robots race the player in a standalone game. */
+export const ROBOTS = 9
+
+/**
+ * The race the game opens with: the player and `ROBOTS` robots, one lap. The course
+ * spreads the fleet along the line, moved round from race to race, so the player starts
+ * from a different berth and tack each time. Each robot is named for the color she is
+ * drawn in.
+ */
+export function standaloneRace(seed: number | string): ScenarioSpec {
+  const robots = FLEET_COLORS.slice(1, 1 + ROBOTS).map((color, index) => ({
+    id: `robot-${index + 1}`,
+    name: color.name,
+    controller: 'ai' as const,
+  }))
   return {
-    name: 'Windward-leeward duel',
+    name: 'Windward-leeward',
     seed,
-    boats: [
-      {
-        id: PLAYER_ID,
-        name: 'Blue',
-        controller: 'human',
-        position: playerBerth,
-        heading: alongLine,
-      },
-      {
-        id: OPPONENT_ID,
-        name: 'Red',
-        controller: 'ai',
-        position: opponentBerth,
-        heading: alongLine + 180,
-      },
-    ],
+    boats: [{ id: PLAYER_ID, name: FLEET_COLORS[0]!.name, controller: 'human' }, ...robots],
     course: { legLength: LEG_LENGTH, lineLength: LINE_LENGTH, startCenter: START_CENTER },
     wind: SHIFTING_WIND,
     config: { startSequence: COUNTDOWN * GAME_PACE },
@@ -106,20 +102,6 @@ export function regattaRace(
     duration: RACE_DURATION * GAME_PACE,
   }
 }
-
-/** One for each of the ten boats a race will hold, so no two of them look alike. */
-export const FLEET_COLORS: readonly FleetColor[] = [
-  { name: 'Blue', hex: PALETTE.hullBlue },
-  { name: 'Red', hex: PALETTE.hullRed },
-  { name: 'Silver', hex: PALETTE.hullRival },
-  { name: 'Amber', hex: '#e0a458' },
-  { name: 'Violet', hex: '#9d7fd8' },
-  { name: 'Teal', hex: '#5fc9b5' },
-  { name: 'Rose', hex: '#d67fb0' },
-  { name: 'Olive', hex: '#b8c45c' },
-  { name: 'Azure', hex: '#6f9bd1' },
-  { name: 'Copper', hex: '#cf8b6a' },
-]
 
 /** Nobody racing is painted this, so an onlooker is never taken for a boat. */
 export const WATCHER_COLOR: FleetColor = { name: 'Watcher', hex: '#9aa7b1' }

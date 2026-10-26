@@ -21,11 +21,12 @@ vi.mock('./scenario', async () => {
   return {
     ...actual,
     // The game's own race, with a shorter beat and both boats steered by the AI.
-    duel: (seed: number | string) => {
-      const race = actual.duel(seed)
+    standaloneRace: (seed: number | string) => {
+      const race = actual.standaloneRace(seed)
       return {
         ...race,
-        boats: race.boats.map((boat) => ({ ...boat, controller: 'ai' as const })),
+        // Two of the fleet, so the card has two rows to show.
+        boats: race.boats.slice(0, 2).map((boat) => ({ ...boat, controller: 'ai' as const })),
         course: { ...race.course, legLength: 200 },
         config: { startSequence: 20 },
       }
