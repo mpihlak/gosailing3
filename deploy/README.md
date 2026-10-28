@@ -86,7 +86,7 @@ Docker keeps five files of 10 MB for each service's output and drops the oldest.
 
 ## The robots
 
-Two robot sailors run in their own container, so there is always a race on to join or
+Nine robot sailors run in their own container, so there is always a race on to join or
 watch. They reach the server over the compose network at `ws://server:8080`, not
 through the tunnel, and race each other for as long as nobody else turns up. The robots'
 container starts once the server answers `/health`.

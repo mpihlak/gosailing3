@@ -15,7 +15,7 @@ services:
   ai:
     image: mpihlak/gosailing-ai:${AI_TAG:-latest}
     restart: unless-stopped
-    command: ['ws://server:8080', '--count', '2']
+    command: ['ws://server:8080', '--count', '9']
     depends_on:
       server: { condition: service_healthy }
     logging: *logging
