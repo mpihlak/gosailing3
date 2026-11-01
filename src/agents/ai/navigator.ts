@@ -42,10 +42,10 @@ const ROUNDING_OFFSET: Meters = 24
  */
 const PASSING_BESIDE = 2
 /**
- * How far off the direct line the boat may stray before it tacks back is a fraction of
- * the distance still to run, which each skipper chooses for herself. A cone rather than a
- * fixed width: long tacks early, short ones near the mark, which is how the leg is
- * actually sailed. These bound it.
+ * How far off the wind's line through the mark the boat may stray before it tacks back is
+ * a fraction of the distance still to run, which each skipper chooses for herself. A cone
+ * rather than a fixed width: long tacks early, short ones near the mark, which is how the
+ * leg is actually sailed. These bound it.
  */
 const CORRIDOR_MIN: Meters = 35
 const CORRIDOR_MAX: Meters = 320
@@ -307,7 +307,8 @@ function planMark(
   // A boat that slipped by on the wrong side, or overshot the mark without the pass
   // counting, has to drop back downwind and come at it again. Without this she sits on a
   // target she has already reached and waits for a rounding that cannot happen.
-  const mustComeAgain = !passedMark && (alreadyPast || !onApproachSide)
+  const mustComeAgain =
+    !passedMark && (alreadyPast || !(onApproachSide || canReachSide(boat, spec, wind, stage)))
 
   /*
    * Up past it on the correct side, `PASSING_BESIDE` off it and a length beyond:
@@ -365,6 +366,31 @@ function layTheMark(
 }
 
 /**
+ * Whether she can still sail to the correct side of the mark from the wrong one: on one
+ * tack or the other at the angle she sails the leg, she crosses the line through it,
+ * square to the leg, on the clearing side. Only a boat that cannot is sent back below it;
+ * otherwise every boat on the left of the beat makes for the same point right of the mark.
+ */
+function canReachSide(
+  boat: BoatState,
+  spec: BoatSpec,
+  wind: WindSample,
+  stage: Extract<CourseStage, { kind: 'mark' }>,
+): boolean {
+  const { mark, approach } = stage
+  const clearingSide = approach + (mark.rounding === 'port' ? 90 : -90)
+  const angle =
+    Math.abs(angleDelta(wind.direction, approach)) < 90
+      ? spec.polar.beatAngle(wind.speed)
+      : spec.polar.runAngle(wind.speed)
+  return [1, -1].some((side) => {
+    const bearing = normalizeBearing(wind.direction + side * angle)
+    const beside = passesBeside(mark.position, approach, clearingSide, boat.position, bearing)
+    return Number.isFinite(beside) && beside > 0
+  })
+}
+
+/**
  * How far to the clearing side of the mark she crosses the line through it, square to
  * the leg, sailing `bearing` from where she is. Negative is the wrong side. Infinite if
  * that course never reaches the line.
@@ -388,7 +414,7 @@ function passesBeside(
 /**
  * Sail toward a point as directly as the boat allows. Inside the no-go zone that means
  * beating, dead downwind it means gybing, and the choice of tack comes from staying
- * inside a corridor either side of the direct line.
+ * inside a corridor either side of the wind's line through the destination.
  */
 function planFor(
   boat: BoatState,
@@ -418,10 +444,10 @@ function planFor(
     return { bearing: direct, reason: reason === 'holding' ? reason : 'fetching' }
 
   // Hold the current tack until the boat strays outside the corridor, then take the one
-  // that works back toward the direct line. Port tack carries you east of it, starboard
-  // west, whether the leg is a beat or a run. A skipper who favors a side has more room
-  // on it and less on the other.
-  const offset = crossTrack(boat.position, destination, direct)
+  // that works back toward the wind's line through the destination. Port tack carries
+  // you east of it, starboard west, whether the leg is a beat or a run. A skipper who
+  // favors a side has more room on it and less on the other.
+  const offset = crossTrack(boat.position, destination, wind.direction)
   const corridor = Math.min(
     CORRIDOR_MAX,
     Math.max(CORRIDOR_MIN, Math.hypot(toDestination.x, toDestination.y) * personality.corridor),
@@ -436,9 +462,11 @@ function planFor(
   }
 }
 
-/** Signed distance from the direct line to the destination. Positive means east of it. */
-function crossTrack(position: Vec2, destination: Vec2, direct: Degrees): Meters {
-  const along = bearingToVector(direct)
+/**
+ * Signed distance from the wind's line through the destination. Positive means east of it.
+ */
+function crossTrack(position: Vec2, destination: Vec2, windDirection: Degrees): Meters {
+  const along = bearingToVector(windDirection)
   const offset = sub(position, destination)
   return offset.x * along.y - offset.y * along.x
 }

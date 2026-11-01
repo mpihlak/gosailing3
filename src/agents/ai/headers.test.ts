@@ -5,8 +5,9 @@ import { createSimulation, fixedSource, SimulationRunner, type InputSource } fro
 import { Skipper } from './skipper'
 
 /**
- * A robot racing up a long beat on port, in a wind that does what the test says. A long
- * leg, so her corridor is wide and only a header would tack her.
+ * A robot racing up a beat on port, in a wind that does what the test says. She starts
+ * well west of the wind's line through the mark, so in the time a test runs her corridor
+ * does not tack her, whichever way the wind swings that line.
  */
 function beating(
   direction: (time: number) => number,
@@ -16,10 +17,10 @@ function beating(
     name: 'headers',
     seed: 'headers',
     boats: [
-      { id: 'robot', name: 'Bob', controller: 'ai', position: vec(0, 100), heading: 40 },
+      { id: 'robot', name: 'Bob', controller: 'ai', position: vec(-200, 100), heading: 40 },
       ...others.map((other) => ({ ...other, name: other.id, controller: 'human' as const })),
     ],
-    course: { legLength: 2000, lineLength: 260, startCenter: vec(0, 0) },
+    course: { legLength: 700, lineLength: 260, startCenter: vec(0, 0) },
     wind: { direction: 0, speed: 12 },
     config: { startSequence: 0 },
     duration: 4800,
@@ -103,7 +104,7 @@ describe('tacking on a header', () => {
     const tacks = tacksOver(
       beating(
         (time) => (time < 60 ? 0 : 15),
-        [{ id: 'other', position: vec(-12, 96), heading: 40 }],
+        [{ id: 'other', position: vec(-212, 96), heading: 40 }],
       ),
       64,
       { other: fixedSource({ rudder: 0 }) },
