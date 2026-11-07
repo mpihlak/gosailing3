@@ -95,6 +95,29 @@ export function tapOverlay(): void {
     ?.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true }))
 }
 
+/** A finger tapping the water, which opens the race menu. */
+export function tapWater(): void {
+  const stage = document.querySelector('#stage')
+  for (const type of ['pointerdown', 'pointerup']) {
+    const init = { bubbles: true, pointerType: 'touch', clientX: 100, clientY: 100 }
+    stage?.dispatchEvent(new window.PointerEvent(type, init))
+  }
+}
+
+/** The buttons on the card, by what they say. */
+export function cardChoices(): string[] {
+  return [...document.querySelectorAll('#overlay button')].map((it) => it.textContent ?? '')
+}
+
+/** Tapping one of the card's buttons. */
+export function choose(label: string): void {
+  const button = [...document.querySelectorAll('#overlay button')].find(
+    (it) => it.textContent === label,
+  )
+  if (!button) throw new Error(`the card has no ${label} button`)
+  button.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true }))
+}
+
 export function overlayText(): string {
   return document.querySelector('#overlay')?.textContent ?? ''
 }

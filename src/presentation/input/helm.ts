@@ -5,7 +5,9 @@ import type { Tiller } from './tiller'
 
 export type HelmCommand =
   | 'toggleRun'
+  | 'menu'
   | 'restart'
+  | 'endRace'
   | 'help'
   | 'toggleShadows'
   | 'toggleShifts'
@@ -74,7 +76,7 @@ export class Helm implements InputSource {
 
     /*
      * A touch on the water is not steering — that is the tiller's job — so it is taken
-     * as asking to stop or carry on. Only a tap: a drag is somebody's thumb moving, not
+     * as asking for the race menu. Only a tap: a drag is somebody's thumb moving, not
      * somebody asking for anything.
      */
     let touchedAt: { x: number; y: number; at: number } | undefined
@@ -89,7 +91,7 @@ export class Helm implements InputSource {
       const moved = Math.hypot(event.clientX - touchedAt.x, event.clientY - touchedAt.y)
       const held = event.timeStamp - touchedAt.at
       touchedAt = undefined
-      if (moved < 12 && held < 400) this.options.onCommand?.('toggleRun')
+      if (moved < 12 && held < 400) this.options.onCommand?.('menu')
     }
 
     window.addEventListener('keydown', keyDown)
@@ -126,6 +128,7 @@ function heldFor(key: string): HeldKey | null {
 function commandFor(key: string): HelmCommand | null {
   if (key === ' ' || key === 'Spacebar') return 'toggleRun'
   if (key === 'r' || key === 'R') return 'restart'
+  if (key === 'e' || key === 'E') return 'endRace'
   if (key === 'h' || key === 'H' || key === '?') return 'help'
   if (key === 'w' || key === 'W') return 'toggleShadows'
   if (key === 'f' || key === 'F') return 'toggleShifts'

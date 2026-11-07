@@ -49,7 +49,6 @@ const hud = new Hud(
   requireElement<HTMLElement>('[data-banner]'),
 )
 const overlay = requireElement<HTMLElement>('#overlay')
-const hostControls = requireElement<HTMLElement>('#host')
 const standingsPanel = requireElement<HTMLElement>('#standings')
 /** The telltales are drawn on the canvas; this is the place the page keeps for them. */
 const telltalesSlot = requireElement<HTMLElement>('#telltales')
@@ -83,8 +82,11 @@ const LAYLINE_ANGLE = 45
 const CONTROLS = BY_TOUCH
   ? `Pull the <b>tiller</b> at the foot of the screen to steer — hold it over and she
      keeps turning, let go and it centres.
-     <br />Tap the water to stop and carry on. Tap this card to start.`
-  : `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start and pause · <b>R</b> new race
+     <br />Tap the water to pause, start again, end the race or leave.
+     Tap this card to start.`
+  : `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start, and pause with the race menu
+     <br /><b>R</b> new race
+     · <b>E</b> end race
      <br /><b>W</b> wind shadows · <b>L</b> laylines · <b>F</b> wind shifts
      <br /><b>H</b> or <b>?</b> these keys
      <br />Hold <b>Shift</b> to watch the race run on`
@@ -93,11 +95,18 @@ const CONTROLS = BY_TOUCH
 const REGATTA_CONTROLS = BY_TOUCH
   ? `Pull the <b>tiller</b> at the foot of the screen to steer — hold it over and she
      keeps turning, let go and it centres.
-     <br />The race is sailed on the server, so there is nothing here to pause.`
+     <br />Tap the water to leave the race, or, as the host, to end or restart it.
+     The race is sailed on the server, so there is nothing here to pause.`
   : `<b>← →</b> or <b>A D</b> steer · <b>W</b> wind shadows · <b>L</b> laylines
-     <br /><b>H</b> or <b>?</b> these keys
+     <br /><b>Space</b> the race menu · <b>H</b> or <b>?</b> these keys
      <br />The race is sailed on the server: it cannot be paused or hurried, and the
-     host is the one who ends it or starts another.`
+     host is the one who ends it with <b>E</b> or starts another with <b>R</b>.`
+
+/** A button on a card: what it says, and what pressing it does. */
+interface CardChoice {
+  readonly label: string
+  readonly action: () => void
+}
 
 const PLAYER_STYLE: BoatStyle = { hull: PALETTE.hullBlue, trail: PALETTE.trailBlue, trailWidth: 2 }
 
@@ -140,6 +149,8 @@ let panelAnchor = { left: 16, top: 16 }
  * further down the file is not yet alive to be assigned to.
  */
 let onCardTap: (() => void) | undefined
+/** The buttons on the card, if it has any, each with what it does. */
+let cardChoices: Readonly<Record<string, CardChoice>> = {}
 let measuredAt = ''
 /**
  * The race as it stands, and the boat the screen belongs to.
@@ -168,7 +179,12 @@ if (tillerBar) {
   tiller.attach(tillerBar)
   helm.tiller = tiller
 }
-overlay.addEventListener('pointerup', () => onCardTap?.())
+overlay.addEventListener('pointerup', (event) => {
+  const choice = (event.target as HTMLElement).closest('button')?.dataset.choice
+  const chosen = choice === undefined ? undefined : cardChoices[choice]
+  if (chosen) chosen.action()
+  else onCardTap?.()
+})
 
 
 /**
@@ -207,7 +223,9 @@ const menu = new Menu(requireElement<HTMLElement>('#menu'), {
 
 // Each choice made on the menu is a step in the history, so the browser's back button is
 // the way back to it.
-window.addEventListener('popstate', () => {
+window.addEventListener('popstate', () => backToMenu())
+
+function backToMenu(): void {
   if (menu.open) return
   menu.show()
   if (onlyWatching) return
@@ -215,12 +233,8 @@ window.addEventListener('popstate', () => {
   // A race at home stops where it is; the regatta goes on behind the menu again.
   running = false
   joinRegatta(server, '', true)
-})
+}
 
-hostControls.addEventListener('click', (event) => {
-  const command = (event.target as HTMLElement).closest('button')?.dataset.command
-  if (command === 'endRace' || command === 'restart') online?.order(command)
-})
 // A tab that has stopped drawing gets no frames, and silence is how the server decides
 // a sailor has gone. This keeps her alive; the frame loop is what makes her quick.
 window.setInterval(() => online?.sendHelm(), 1000 / HELM_HZ)
@@ -258,7 +272,6 @@ function leaveRegatta(): void {
   onlyWatching = false
   greetedAt = undefined
   following = undefined
-  showHostControls(false)
   hideOverlay()
 }
 
@@ -271,11 +284,6 @@ function sayWhoHasGone(race: OnlineRace): void {
   for (const sailor of race.takeDepartures()) {
     hud.showBanner(`${sailor.name} left the race`, 'warn', 2600)
   }
-}
-
-/** The host's buttons belong on the water, where there is a race to cut short. */
-function showHostControls(visible: boolean): void {
-  hostControls.dataset.visible = visible ? 'true' : 'false'
 }
 
 /** What the card says while there is no race to draw. */
@@ -343,9 +351,21 @@ function start(seed: string, immediate = false): void {
 }
 
 function handleCommand(command: HelmCommand): void {
+  if (command === 'menu') {
+    showRaceMenu()
+    return
+  }
+  if (command === 'endRace') {
+    if (!online) {
+      running = false
+      showResults()
+    } else if (online.hosting) online.order('endRace')
+    else hud.showBanner('Only the host can end a network race', 'info', 2200)
+    return
+  }
   if (command === 'restart') {
     /*
-     * A regatta is the server's to restart, and it has a button for it. Starting a race
+     * A regatta is the server's to restart, and only its host may. Starting a race
      * here would have dropped a sailor out of the one she is in and into a race against
      * the computer, with the socket still open behind it.
      */
@@ -361,23 +381,18 @@ function handleCommand(command: HelmCommand): void {
   }
   if (command === 'toggleRun') {
     /*
-     * The race is being sailed on a server and runs on whether or not this page is
-     * watching, so there is nothing here to stop. A Paused card over a race still
-     * running is a worse answer than saying so.
+     * The race menu, as a tap on the water opens it. A race on the server runs on
+     * whether or not this page is watching, so there the key only puts the menu up and
+     * away again, and leaves any other card where it is.
      */
     if (online) {
-      hud.showBanner('A network race cannot be paused', 'info', 2200)
+      if (overlay.dataset.visible !== 'true') showRaceMenu()
+      else if (Object.keys(cardChoices).length > 0) hideOverlay()
       return
     }
     running = !running
     if (running) hideOverlay()
-    else {
-      showOverlay(
-        'Paused',
-        `<p>${BY_TOUCH ? 'Tap to carry on.' : 'Press <b>Space</b> to carry on.'}</p>`,
-        () => handleCommand('toggleRun'),
-      )
-    }
+    else showRaceMenu()
   }
   if (command === 'help') {
     // Online the card is the only thing to put away, since there is no race here to
@@ -541,10 +556,6 @@ function takeFromRegatta(timestamp: number): boolean {
    * board, but on the water the colour is the only thing telling her which of the boats
    * to steer, and she should not have to find it in a list.
    */
-  // Before anything that might not draw: the host's way out of a race must not depend
-  // on there being something to draw, which is exactly when she would want it.
-  showHostControls(race.phase === 'racing' && race.hosting)
-
   const hers = race.fleet.find((sailor) => sailor.id === race.you)
   if (hers && greetedAt === undefined) {
     greetedAt = timestamp
@@ -829,18 +840,22 @@ function specOfPlayer() {
   return spec
 }
 
-/** The finishing order, once the last boat is home. */
+/**
+ * The finishing order, once the last boat is home or the race is ended early. Ended
+ * early, as in a regatta: the boats home keep their places and times, and the rest are
+ * DNF, in the order they stood on the course.
+ */
 function showResults(): void {
-  const { race } = latest
-  const rows = race.finishOrder
-    .map((boatId) => {
-      const progress = race.progress[boatId]
-      const elapsed = playerSeconds(progress?.finishTime ?? 0)
+  const rows = standings(simulation.ctx, latest)
+    .map(({ boatId, finished, finishTime }) => {
+      const progress = latest.race.progress[boatId]
+      const how = finished ? timing(playerSeconds(finishTime ?? 0)) : 'DNF'
       const name = escapeHtml(simulation.names[boatId] ?? boatId)
       const color = cssColor(styles[boatId]?.hull)
       const paint = color ? ` style="color: ${color}"` : ''
       const mine = boatId === watching ? ' class="mine"' : ''
-      return `<tr${mine}><td>${escapeHtml(progress?.place ?? '')}</td><td${paint}>${name}</td><td>${timing(elapsed)}</td></tr>`
+      const place = finished ? escapeHtml(progress?.place ?? '') : ''
+      return `<tr${mine}><td>${place}</td><td${paint}>${name}</td><td>${how}</td></tr>`
     })
     .join('')
 
@@ -860,17 +875,64 @@ function showResults(): void {
  * `body` is the card's own markup, headline apart, because the results are a table and
  * everything else is a paragraph.
  */
-function showOverlay(title: string, body: string, onTap: () => void): void {
+function showOverlay(
+  title: string,
+  body: string,
+  onTap: () => void,
+  choices: Readonly<Record<string, CardChoice>> = {},
+): void {
   // The menu is the card while it is up; the regatta behind it says nothing.
   if (menu.open) return
-  overlay.innerHTML = `<div class="card"><h1>${title}</h1>${body}</div>`
+  const buttons = Object.entries(choices)
+    .map(([key, choice]) => `<button type="button" data-choice="${key}">${choice.label}</button>`)
+    .join('')
+  const row = buttons ? `<div class="choices">${buttons}</div>` : ''
+  overlay.innerHTML = `<div class="card"><h1>${title}</h1>${body}${row}</div>`
   overlay.dataset.visible = 'true'
   onCardTap = onTap
+  cardChoices = choices
 }
 
 function hideOverlay(): void {
   overlay.dataset.visible = 'false'
   onCardTap = undefined
+  cardChoices = {}
+}
+
+/**
+ * What a tap on the water offers: on a phone there are no keys for it. A race at home
+ * stops while it is up; a race on the server cannot, and runs on behind it. Only the
+ * host is offered the regatta's own commands, because the server takes them from nobody
+ * else.
+ */
+function showRaceMenu(): void {
+  if (!online) {
+    running = false
+    const carryOn = BY_TOUCH ? '' : '<p>Press <b>Space</b> to carry on.</p>'
+    showOverlay('Paused', carryOn, () => handleCommand('toggleRun'), {
+      resume: { label: 'Resume', action: () => handleCommand('toggleRun') },
+      restart: { label: 'Restart', action: () => handleCommand('restart') },
+      end: { label: 'End race', action: () => handleCommand('endRace') },
+      leave: { label: 'Leave', action: () => backToMenu() },
+    })
+    return
+  }
+  const race = online
+  const hostChoices: Record<string, CardChoice> =
+    race.hosting && race.phase === 'racing'
+      ? {
+          end: { label: 'End race', action: () => (race.order('endRace'), hideOverlay()) },
+          restart: { label: 'Restart', action: () => (race.order('restart'), hideOverlay()) },
+        }
+      : {}
+  const goesOn = BY_TOUCH
+    ? 'The race goes on while this is up.'
+    : 'The race goes on while this is up. <b>Space</b> puts it away.'
+  showOverlay('Race control', `<p>${goesOn}</p>`, hideOverlay, {
+    ...hostChoices,
+    leave: { label: 'Leave', action: () => backToMenu() },
+    close: { label: 'Back to race', action: hideOverlay },
+  })
 }
 
 

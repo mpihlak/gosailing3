@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll } from 'vitest'
-import { mountPage, bannerText } from './page.harness'
+import { mountPage, bannerText, cardChoices, choose, tapWater } from './page.harness'
 
 /**
  * A sailor who arrives while a race is being sailed is in the next one, not this one. She
@@ -109,21 +109,38 @@ describe('arriving while a race is on', () => {
   })
 })
 
+describe('the race menu in a regatta', () => {
+  const visible = () => document.querySelector<HTMLElement>('#overlay')?.dataset.visible
+
+  it('offers somebody who is not the host only the way out, and the way back', () => {
+    tapWater()
+    expect(visible()).toBe('true')
+    expect(cardChoices()).toEqual(['Leave', 'Back to race'])
+  })
+
+  it('goes back to the race, which never stopped', () => {
+    choose('Back to race')
+    expect(visible()).toBe('false')
+  })
+})
+
 /*
- * The keys and the tap that pause or restart a race at home have nothing to act on in a
- * regatta: the race is sailed on a server and runs whether or not this page is watching.
- * Pausing put a Paused card over a race that carried on underneath, and restarting
- * dropped the sailor into a race against the computer with the socket still open.
+ * The keys that pause or restart a race at home have nothing to stop in a regatta: the
+ * race is sailed on a server and runs whether or not this page is watching. Restarting
+ * once dropped the sailor into a race against the computer with the socket still open.
  */
 describe('the controls that cannot apply to a regatta', () => {
   const press = (key: string) =>
     window.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }))
+  const visible = () => document.querySelector<HTMLElement>('#overlay')?.dataset.visible
 
-  it('does not put a Paused card over a race that is still running', () => {
+  it('puts the race menu up for the pause key, and away again', () => {
     press(' ')
     page.frame(1600)
-    expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')
-    expect(bannerText()).toContain('cannot be paused')
+    expect(visible()).toBe('true')
+    expect(cardChoices()).toEqual(['Leave', 'Back to race'])
+    press(' ')
+    expect(visible()).toBe('false')
   })
 
   it('stays in the regatta when the restart key is pressed', () => {

@@ -222,38 +222,6 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      /* The host's buttons. Only her page shows them, and only while there is a race to
-         cut short. Sized for a thumb rather than a cursor: both ends sail on phones. They
-         sit under the wind instruments, out of the middle where the boats are, and above
-         the banners so a message never pushes them down the screen. */
-      #host {
-        display: none;
-        gap: 8px;
-        grid-column: 3;
-        justify-self: start;
-        /* #top lets taps through to the water; these are the one thing up here that
-           has to catch them. */
-        pointer-events: auto;
-      }
-      #host[data-visible='true'] {
-        display: flex;
-      }
-      #host button {
-        min-height: 36px;
-        padding: 0 14px;
-        border-radius: 999px;
-        background: var(--panel);
-        border: 1px solid var(--edge);
-        color: inherit;
-        font: inherit;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        backdrop-filter: blur(8px);
-      }
-      #host button:active {
-        background: var(--edge);
-      }
       /* Her own name under her colour, quieter than it. */
       .card .also {
         color: var(--dim);
@@ -340,10 +308,15 @@
       body[data-menu='open'] #bottom { visibility: hidden; }
       #menu .card { width: min(340px, 100%); }
       #menu h1 { font-size: 26px; margin-bottom: 18px; }
-      #menu .choices { display: flex; flex-direction: column; gap: 10px; }
+      #menu .choices,
+      #overlay .choices { display: flex; flex-direction: column; gap: 10px; }
+      #overlay .choices { margin-top: 14px; }
+      /* The paused card is as wide as its buttons, so they carry their own width. */
+      #overlay button { padding: 0 28px; }
       #menu .network .choices { flex-direction: row; }
       #menu .network .choices button { flex: 1; }
-      #menu button {
+      #menu button,
+      #overlay button {
         min-height: 44px;
         border-radius: 10px;
         background: rgba(79, 163, 221, 0.22);
@@ -354,7 +327,8 @@
         font-weight: 600;
         cursor: pointer;
       }
-      #menu button:hover:not(:disabled) { background: rgba(79, 163, 221, 0.4); }
+      #menu button:hover:not(:disabled),
+      #overlay button:hover { background: rgba(79, 163, 221, 0.4); }
       #menu button:disabled { opacity: 0.4; cursor: default; }
       #menu .network {
         margin-top: 18px;
@@ -408,9 +382,6 @@
         #telltales { order: 7; margin-right: auto; }
         /* So the board, under them. */
         #standings { left: 0; }
-        /* On the telltales' line, at the other edge: under the wind instruments, which
-           close the row above. */
-        #host { order: 8; }
       }
       @media (pointer: coarse), (max-width: 560px) {
         #tiller { display: block; }
@@ -468,10 +439,6 @@
           <div class="gauge" data-field="targetVmg"><span class="label">%VMG</span><span class="value">—</span></div>
         </div>
         <div class="row-break"></div>
-        <div id="host" data-visible="false">
-          <button type="button" data-command="endRace">End race</button>
-          <button type="button" data-command="restart">Restart</button>
-        </div>
         <div id="standings"></div>
       </div>
       <div data-banner data-visible="false"></div>

@@ -1,6 +1,14 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll } from 'vitest'
-import { bannerText, mountPage, tapOverlay, type MountedPage } from './page.harness'
+import {
+  bannerText,
+  cardChoices,
+  choose,
+  mountPage,
+  tapOverlay,
+  tapWater,
+  type MountedPage,
+} from './page.harness'
 
 /**
  * Starts the game against the real page and checks that it comes up: that it runs, draws,
@@ -68,6 +76,29 @@ describe('the game, started against the real page', () => {
   })
 })
 
+describe('the race menu a tap on the water opens', () => {
+  const overlay = () => document.querySelector<HTMLElement>('#overlay')
+
+  it('pauses the race and offers to carry on, start again or end it', () => {
+    tapWater()
+    expect(overlay()?.dataset.visible).toBe('true')
+    expect(cardChoices()).toEqual(['Resume', 'Restart', 'End race', 'Leave'])
+  })
+
+  it('carries on when Resume is tapped', () => {
+    choose('Resume')
+    expect(overlay()?.dataset.visible).toBe('false')
+  })
+
+  it('is what the pause key puts up on a keyboard, and takes away again', () => {
+    press(' ')
+    expect(overlay()?.dataset.visible).toBe('true')
+    expect(cardChoices()).toEqual(['Resume', 'Restart', 'End race', 'Leave'])
+    press(' ')
+    expect(overlay()?.dataset.visible).toBe('false')
+  })
+})
+
 describe('watching the race run on', () => {
   it('doubles the pace while the key is held, and gives it back on release', () => {
     press('Shift')
@@ -105,5 +136,25 @@ describe('the wind shifts', () => {
     press('f')
     nextFrame()
     expect(bannerText()).toBe('Wind shifts frozen')
+  })
+})
+
+describe('ending a race at home early', () => {
+  it('scores it where it stands, as a regatta would, with the boats not home DNF', () => {
+    press('r')
+    nextFrame()
+    tapWater()
+    choose('End race')
+    const card = document.querySelector<HTMLElement>('#overlay')
+    expect(card?.dataset.visible).toBe('true')
+    expect(card?.textContent).toContain('Results')
+    const rows = [...document.querySelectorAll('#overlay .results tr')]
+    expect(rows).toHaveLength(10)
+    expect(rows.every((row) => row.textContent?.includes('DNF'))).toBe(true)
+  })
+
+  it('starts another race when the results are tapped', () => {
+    tapOverlay()
+    expect(document.querySelector<HTMLElement>('#overlay')?.dataset.visible).toBe('false')
   })
 })

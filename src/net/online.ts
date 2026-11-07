@@ -99,7 +99,7 @@ export class OnlineRace {
   /** Far enough back that the first helm after joining goes out at once. */
   private lastHelmAt = Number.NEGATIVE_INFINITY
 
-  /** Whether the regatta answers to this page, which is what shows the host's buttons. */
+  /** Whether the regatta answers to this page, which is what offers the host's commands. */
   get hosting(): boolean {
     return this.fleet.some((sailor) => sailor.id === this.you && sailor.host)
   }
