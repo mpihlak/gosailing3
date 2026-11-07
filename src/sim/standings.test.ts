@@ -55,6 +55,50 @@ describe('standings', () => {
     expect(board[0]?.boatId).toBe('a')
   })
 
+  /** The fleet moved to where the test wants them, all on one stage. */
+  function onStage(stageIndex: number, spots: Record<string, { x: number; y: number }>) {
+    const { ctx, world } = fleet()
+    let moved: WorldState = {
+      ...world,
+      boats: world.boats.map((boat) => ({ ...boat, position: spots[boat.id] ?? boat.position })),
+    }
+    for (const id of Object.keys(spots)) moved = place(moved, id, { stageIndex })
+    return standings(ctx, moved).map((entry) => entry.boatId)
+  }
+
+  it('measures the beat up the course, not across it', () => {
+    // Alpha is 100 m out to one side and 100 m short of the mark's height; Bravo is right
+    // below it and 130 m short. Straight-line distance would have put Bravo ahead.
+    const order = onStage(1, { a: vec(100, 800), b: vec(0, 770) })
+    expect(order.indexOf('a')).toBeLessThan(order.indexOf('b'))
+  })
+
+  it('measures the run to the finish square to the line, not to its middle', () => {
+    // Bravo is making for one end, 60 m short of the line; Alpha is 100 m short of its
+    // middle. Bravo is nearer finishing.
+    const order = onStage(2, { a: vec(0, 100), b: vec(150, 60) })
+    expect(order.indexOf('b')).toBeLessThan(order.indexOf('a'))
+  })
+
+  it('puts a boat past the mark ahead of one still coming up to it', () => {
+    const { ctx, world } = fleet()
+    const moved: WorldState = {
+      ...world,
+      boats: world.boats.map((boat) =>
+        boat.id === 'a'
+          ? { ...boat, position: vec(10, 905) }
+          : boat.id === 'b'
+            ? { ...boat, position: vec(10, 898) }
+            : boat,
+      ),
+    }
+    const rounding = place(place(moved, 'a', { stageIndex: 1, passedMark: true }), 'b', {
+      stageIndex: 1,
+    })
+    const order = standings(ctx, rounding).map((entry) => entry.boatId)
+    expect(order.indexOf('a')).toBeLessThan(order.indexOf('b'))
+  })
+
   it('keeps a finished boat ahead of one still racing, whatever her position', () => {
     const { ctx, world } = fleet()
     const home = place(world, 'c', { status: 'finished', place: 1, finishTime: 400, stageIndex: 3 })
