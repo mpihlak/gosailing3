@@ -80,8 +80,8 @@ const LAYLINE_ANGLE = 45
 
 /** How to sail her, written once so no two cards can drift apart. */
 const CONTROLS = BY_TOUCH
-  ? `Pull the <b>tiller</b> at the foot of the screen to steer — hold it over and she
-     keeps turning, let go and it centres.
+  ? `Drag across the bottom of the screen to swing the <b>tiller</b> — hold it over
+     and she keeps turning, let go and it centres.
      <br />Tap the water to pause, start again, end the race or leave.
      Tap this card to start.`
   : `<b>← →</b> or <b>A D</b> steer · <b>Space</b> start, and pause with the race menu
@@ -93,8 +93,8 @@ const CONTROLS = BY_TOUCH
 
 /** The same list, less what a race on a server has no answer for. */
 const REGATTA_CONTROLS = BY_TOUCH
-  ? `Pull the <b>tiller</b> at the foot of the screen to steer — hold it over and she
-     keeps turning, let go and it centres.
+  ? `Drag across the bottom of the screen to swing the <b>tiller</b> — hold it over
+     and she keeps turning, let go and it centres.
      <br />Tap the water to leave the race, or, as the host, to end or restart it.
      The race is sailed on the server, so there is nothing here to pause.`
   : `<b>← →</b> or <b>A D</b> steer · <b>W</b> wind shadows · <b>L</b> laylines

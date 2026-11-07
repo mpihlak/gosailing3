@@ -30,7 +30,8 @@ const HOME_INDICATOR = 34
 
 const panelWidth = css('panel-width')
 const panelHeight = css('panel-height')
-const tillerHeight = css('tiller-height')
+/** The bottom third of the screen, which the stylesheet gives the tiller. */
+const tillerHeight = SCREEN.height / 3
 const tillerWidth = css('tiller-width')
 
 const wide = {
@@ -150,42 +151,52 @@ describe('the board under the telltales', () => {
     expect(stacked?.[1] ?? '').toMatch(/#standings \{ left: 0; \}/)
   })
 
-  it('stands on the tiller where there is one, the last boat just above it', () => {
+  it('stands on the bottom edge where there is a tiller, over it', () => {
     const touch = PAGE.match(/@media \(pointer: coarse\), \(max-width: 560px\) \{([\s\S]*?)\n {6}\}/)
     expect(touch?.[1] ?? '').toMatch(
-      /#standings \{[^}]*position: fixed;[^}]*var\(--tiller-height\) \+ 8px/,
+      /#standings \{[^}]*position: fixed;[^}]*bottom: max\(var\(--edge-pad-narrow\), env\(safe-area-inset-bottom\)\);/,
     )
   })
 
-  it('fits a fleet of ten between the instruments and the tiller on a phone', () => {
+  it('fits a fleet of ten between the instruments and the bottom of a phone', () => {
     // A row is its 18px line and the 1px gap under it.
-    expect(SCREEN.height - belowTheWater - 8 - 10 * 19).toBeGreaterThan(aboveTheWater)
+    const board = HOME_INDICATOR + 10 * 19
+    expect(SCREEN.height - board).toBeGreaterThan(aboveTheWater)
+  })
+
+  it('lets a thumb on the board steer, because the board takes no touches', () => {
+    expect(PAGE).toMatch(/#top \{[^}]*pointer-events: none;/)
+    expect(PAGE).toMatch(/<div id="top">[\s\S]*<div id="standings">/)
   })
 })
 
 describe('what is left for the water', () => {
-  it('leaves most of the screen to sail in', () => {
+  it('leaves the water clear between the instruments and the tiller', () => {
     const water = SCREEN.height - belowTheWater - aboveTheWater
-    expect(water).toBeGreaterThan(SCREEN.height * 0.45)
+    expect(water).toBeGreaterThan(SCREEN.height * 0.3)
+  })
+
+  it('lets the water show through the tiller, which draws only its arc', () => {
+    const tiller = PAGE.match(/#tiller \{([^}]*)\}/)?.[1] ?? ''
+    expect(tiller).not.toMatch(/background/)
   })
 
   it('keeps the instruments out of the top third', () => {
     expect(aboveTheWater).toBeLessThan(SCREEN.height / 3)
   })
 
-  it('gives the tiller a thumb-sized bar', () => {
-    // Anything under about forty-four points is hard to hit without looking.
-    expect(tillerHeight).toBeGreaterThanOrEqual(44)
+  it('gives the tiller the bottom third of the screen', () => {
+    expect(PAGE).toMatch(/--tiller-height: calc\(100dvh \/ 3\);/)
   })
 
   it('fits the tiller across a phone', () => {
     expect(tillerWidth).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
   })
 
-  it('caps how long the tiller gets, because a longer bar is a slower helm', () => {
-    // The rudder comes from how far along the bar the thumb is, so across a tablet the
-    // same movement was worth a third of the rudder it is worth on a phone.
-    expect(PAGE).toMatch(/#tiller \{[^}]*max-width: var\(--tiller-width\)/)
+  it('caps how wide the arc gets, because a wider arc is a slower helm', () => {
+    // The rudder comes from how far the thumb moves against the arc's width, so across a
+    // tablet the same movement was worth a third of the rudder it is worth on a phone.
+    expect(PAGE).toMatch(/#tiller svg \{[^}]*max-width: var\(--tiller-width\)/)
     expect(tillerWidth).toBeLessThanOrEqual(SCREEN.width)
   })
 })

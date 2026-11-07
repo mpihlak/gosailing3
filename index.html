@@ -24,10 +24,10 @@
         --gauge-gap-narrow: 4px;
         --edge-pad-narrow: 8px;
         --gauge-height-narrow: 46px;
-        --tiller-height: 56px;
-        /* The bar a phone gives it, and as wide as it ever gets. The rudder is taken from
-           how far along the bar the thumb is, so a longer bar is a slower helm: across an
-           iPad the same movement was worth a third of the rudder. */
+        --tiller-height: calc(100dvh / 3);
+        /* The arc a phone gives it, and as wide as it ever gets. The rudder is taken from
+           how far the thumb moves against the arc's width, so a wider arc is a slower helm:
+           across an iPad the same movement was worth a third of the rudder. */
         --tiller-width: 374px;
         --ink: #eaf2f8;
         --dim: #8aa7ba;
@@ -160,40 +160,47 @@
         flex-direction: column;
         gap: 1px;
       }
+      /* The bottom third of a phone, all of it the tiller: the thumb goes down anywhere in
+         it. The water shows through; only the arc and the tiller on it are drawn. */
       #tiller {
         display: none;
-        position: relative;
         height: var(--tiller-height);
-        max-width: var(--tiller-width);
         pointer-events: auto;
-        border-radius: 999px;
-        background: var(--panel);
-        border: 1px solid var(--edge);
-        backdrop-filter: blur(8px);
         touch-action: none;
         user-select: none;
+        -webkit-user-select: none;
       }
-      #tiller::before {
-        content: '';
-        position: absolute;
-        left: calc(50% - 1px);
-        top: 12px;
-        bottom: 12px;
-        width: 2px;
-        background: rgba(255, 255, 255, 0.16);
+      #tiller svg {
+        display: block;
+        width: 100%;
+        max-width: var(--tiller-width);
+        height: 100%;
+        margin: 0 auto;
+        overflow: visible;
       }
-      #tiller .grip {
-        position: absolute;
-        top: 5px;
-        bottom: 5px;
-        left: calc(50% - 34px);
-        width: 68px;
-        border-radius: 999px;
-        background: rgba(79, 163, 221, 0.45);
-        border: 1px solid rgba(255, 255, 255, 0.28);
-        transition: transform 0.16s ease-out;
+      #tiller path { fill: none; stroke-linecap: round; }
+      #tiller .bed { stroke: rgba(8, 28, 44, 0.45); stroke-width: 8; }
+      #tiller .arc { stroke: rgba(255, 255, 255, 0.45); stroke-width: 1.5; }
+      #tiller .minor { stroke: rgba(255, 255, 255, 0.4); stroke-width: 0.8; }
+      #tiller .major { stroke: rgba(255, 255, 255, 0.8); stroke-width: 1.5; }
+      #tiller text {
+        fill: var(--ink);
+        font-size: 11px;
+        font-weight: 600;
+        text-anchor: middle;
+        dominant-baseline: middle;
+        paint-order: stroke;
+        stroke: rgba(8, 28, 44, 0.7);
+        stroke-width: 3px;
       }
-      #tiller.holding .grip { transition: none; background: rgba(79, 163, 221, 0.66); }
+      #tiller .indicator { transition: transform 0.16s ease-out; }
+      #tiller .indicator circle {
+        fill: rgba(79, 163, 221, 0.75);
+        stroke: rgba(255, 255, 255, 0.8);
+        stroke-width: 2;
+      }
+      #tiller.holding .indicator { transition: none; }
+      #tiller.holding .indicator circle { fill: rgba(79, 163, 221, 0.95); }
       .crew {
         font-size: 13px;
         line-height: 18px;
@@ -385,14 +392,13 @@
       }
       @media (pointer: coarse), (max-width: 560px) {
         #tiller { display: block; }
-        /* Down at the foot of the screen, growing up from just above the tiller, so the
-           middle of the screen is left to the water. */
+        /* Down at the foot of the screen, growing up from the bottom edge, so the middle
+           of the screen is left to the water. It lies over the tiller beside the arc, and
+           a thumb on it still steers: the board takes no touches. */
         #standings {
           position: fixed;
           top: auto;
-          bottom: calc(
-            max(var(--edge-pad-narrow), env(safe-area-inset-bottom)) + var(--tiller-height) + 8px
-          );
+          bottom: max(var(--edge-pad-narrow), env(safe-area-inset-bottom));
           left: max(var(--edge-pad-narrow), env(safe-area-inset-left));
         }
       }
@@ -444,7 +450,7 @@
       <div data-banner data-visible="false"></div>
     </div>
     <div id="bottom">
-      <div id="tiller"><div class="grip"></div></div>
+      <div id="tiller"></div>
     </div>
     <div id="overlay" data-visible="false"></div>
     <div id="menu" data-visible="false">
