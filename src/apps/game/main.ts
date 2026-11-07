@@ -24,11 +24,9 @@ import {
   cssColor,
   escapeHtml,
   Hud,
-  OCS,
   penaltyCause,
   StandingsBoard,
   targetVmgRatio,
-  type CrewReading,
   timing,
 } from '@/presentation/ui'
 import { boatEndStarboardStart, personalityFor, pinEndPortStart, Skipper } from '@/agents/ai'
@@ -527,7 +525,7 @@ function drawFrame(timestamp: number): void {
   })
 
   if (player) updateInstruments(player, wind.speed)
-  board.update(standings(simulation.ctx, latest), watching, boardReadings(world.boats))
+  board.update(standings(simulation.ctx, latest), watching, overEarly())
 }
 
 /**
@@ -702,23 +700,10 @@ function updateInstruments(player: BoatState, windSpeed: number): void {
 
 /** What the board says about each boat. Speeds come from the interpolated frame, so they
  *  read as smoothly as the boats move. */
-function boardReadings(boats: readonly BoatState[]): Record<string, CrewReading> {
-  return Object.fromEntries(
-    boats.map((boat) => [boat.id, { doing: doingText(boat.id), speed: boat.speed }]),
-  )
-}
-
-/** What a boat is sailing for now, said the way the board says it. */
-function doingText(boatId: string): string {
-  const progress = latest.race.progress[boatId]
-  if (!progress) return ''
-  if (progress.status === 'overEarly') return OCS
-  if (progress.status === 'finished') return 'finished'
-  const stage = simulation.ctx.course.stages[progress.stageIndex]
-  if (!stage) return 'finished'
-  if (stage.kind === 'start') return 'to start'
-  if (stage.kind === 'mark') return `to ${stage.mark.name.toLowerCase()}`
-  return 'to finish'
+/** The boats over the line at the gun that have not yet gone back to clear it. */
+function overEarly(): Set<string> {
+  const progress = Object.entries(latest.race.progress)
+  return new Set(progress.filter(([, it]) => it.status === 'overEarly').map(([id]) => id))
 }
 
 /**

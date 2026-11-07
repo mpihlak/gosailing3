@@ -18,15 +18,6 @@
         --gauge-gap: 6px;
         --edge-pad: 12px;
         --one-row-until: 840px;
-        /* How far the telltales' left edge lies from the middle of the screen: half the
-           clock, the two gauges between them, and the panel itself. The board lines up
-           with it. */
-        --telltales-offset: calc(
-          var(--timer-width) / 2 + var(--gauge-width) * 2 + var(--gauge-gap) * 3 +
-            var(--panel-width)
-        );
-        --standings-width: 214px;
-        --standings-height: 58px;
         /* The narrow layout's budget. The layout test reads these. */
         --gauge-narrow: 64px;
         --gauge-narrow-timer: 90px;
@@ -90,6 +81,7 @@
         align-items: start;
         gap: var(--gauge-gap);
         width: 100%;
+        position: relative;
       }
       .side {
         display: flex;
@@ -139,8 +131,7 @@
       }
       .gauge.timer { width: var(--timer-width); }
       .gauge.timer .value { font-size: 34px; line-height: 1.1; }
-      /* The board and, under it, the tiller. Neither is steered by, so both are out of
-         the way at the foot of the screen. */
+      /* The tiller, out of the way at the foot of the screen. */
       #bottom {
         position: absolute;
         left: 0;
@@ -154,15 +145,20 @@
           max(var(--edge-pad), env(safe-area-inset-bottom))
           max(var(--edge-pad), env(safe-area-inset-left));
       }
+      /* No panel: the names sit on the water, which shows through between them. Under the
+         telltales, its left edge on theirs, so it does not jump when the order changes. The
+         clock is in the middle, so that edge is half the clock, the two gauges, their three
+         gaps and the telltales' own width short of the middle. */
       #standings {
-        width: var(--standings-width);
-        min-height: var(--standings-height);
-        margin-left: calc(50% - var(--telltales-offset));
-        background: var(--panel);
-        border: 1px solid var(--edge);
-        border-radius: 10px;
-        padding: 6px 4px;
-        backdrop-filter: blur(8px);
+        position: absolute;
+        top: calc(100% + 6px);
+        left: calc(
+          50% - var(--timer-width) / 2 - var(--gauge-width) * 2 - var(--gauge-gap) * 3 -
+            var(--panel-width)
+        );
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
       }
       #tiller {
         display: none;
@@ -199,38 +195,19 @@
       }
       #tiller.holding .grip { transition: none; background: rgba(79, 163, 221, 0.66); }
       .crew {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 3px 7px;
         font-size: 13px;
+        line-height: 18px;
         color: var(--dim);
         white-space: nowrap;
+        /* Dark round the letters, so a name reads over the grid and the boats alike. */
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.9);
       }
-      .crew.mine { color: var(--ink); font-weight: 600; }
-      .crew .pos { width: 1em; text-align: right; font-variant-numeric: tabular-nums; }
-      .crew .who { flex: 0 0 auto; }
+      /* Heavier than plain bold: the dark outline already thickens every name. */
+      .crew.mine { color: var(--ink); font-weight: 800; }
+      .crew .pos { margin-right: 4px; font-variant-numeric: tabular-nums; }
       .crew.home .who::after { content: ' ✓'; color: var(--good); }
-      /* What she is sailing for now. Quieter than her name, which is what you look for. */
-      .crew .doing {
-        flex: 1;
-        text-align: right;
-        font-size: 11px;
-        font-weight: 400;
-        color: var(--dim);
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .crew.ocs .doing { color: var(--warn); font-weight: 600; }
-      /* How fast she is going, in the same tabular figures as the speed gauge. */
-      .crew .speed {
-        min-width: 2.2em;
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-        color: var(--ink);
-      }
-      .crew .pen { min-width: 2.2em; text-align: right; }
-      .crew .turns { color: var(--penalty); font-weight: 600; }
+      .crew .ocs { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--warn); }
+      .crew .turns { margin-left: 3px; color: var(--penalty); font-weight: 600; }
       [data-banner] {
         margin-top: 8px;
         padding: 9px 18px;
@@ -427,19 +404,26 @@
            width in this mode and never tack themselves onto the end of the row. */
         .row-break { display: block; flex-basis: 100%; height: 0; order: 6; }
         /* The auto margin beats the centering on that line alone, putting the telltales
-           against the same edge as the board at the foot of the screen. */
+           against the left edge. */
         #telltales { order: 7; margin-right: auto; }
+        /* So the board, under them. */
+        #standings { left: 0; }
         /* On the telltales' line, at the other edge: under the wind instruments, which
            close the row above. */
         #host { order: 8; }
-        /* No centered row to line up with any more, so the board takes the same edge, and
-           the same width as the tiller below it. */
-        #standings { margin-left: 0; width: auto; max-width: var(--tiller-width); }
       }
       @media (pointer: coarse), (max-width: 560px) {
-        /* The tiller is under the thumb, so the board goes below it rather than above. */
-        #tiller { display: block; order: 1; }
-        #standings { order: 2; }
+        #tiller { display: block; }
+        /* Down at the foot of the screen, growing up from just above the tiller, so the
+           middle of the screen is left to the water. */
+        #standings {
+          position: fixed;
+          top: auto;
+          bottom: calc(
+            max(var(--edge-pad-narrow), env(safe-area-inset-bottom)) + var(--tiller-height) + 8px
+          );
+          left: max(var(--edge-pad-narrow), env(safe-area-inset-left));
+        }
       }
       /* A phone held upright. */
       @media (max-width: 560px) {
@@ -488,11 +472,11 @@
           <button type="button" data-command="endRace">End race</button>
           <button type="button" data-command="restart">Restart</button>
         </div>
+        <div id="standings"></div>
       </div>
       <div data-banner data-visible="false"></div>
     </div>
     <div id="bottom">
-      <div id="standings"></div>
       <div id="tiller"><div class="grip"></div></div>
     </div>
     <div id="overlay" data-visible="false"></div>

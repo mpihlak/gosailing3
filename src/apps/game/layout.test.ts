@@ -32,14 +32,12 @@ const panelWidth = css('panel-width')
 const panelHeight = css('panel-height')
 const tillerHeight = css('tiller-height')
 const tillerWidth = css('tiller-width')
-const standingsHeight = css('standings-height')
 
 const wide = {
   gauge: css('gauge-width'),
   timer: css('timer-width'),
   gap: css('gauge-gap'),
   padding: css('edge-pad'),
-  standings: css('standings-width'),
   until: css('one-row-until'),
 }
 
@@ -127,49 +125,45 @@ describe('the instruments once the row is too wide for the screen', () => {
   })
 })
 
-describe('the board at the foot of the screen', () => {
-  it('lines its left edge up with the telltales', () => {
-    // The clock is centered, so the telltales start half a clock, the two gauges between
-    // them and their own width in from the middle. The board is offset by the same sum.
+/** Where the instruments end and the tiller begins on a phone. */
+const aboveTheWater = NOTCH + narrow.padding + narrow.gaugeHeight + 6 + panelHeight
+const belowTheWater = tillerHeight + narrow.padding + HOME_INDICATOR
+
+describe('the board under the telltales', () => {
+  it("hangs from the instruments, its left edge on the telltales'", () => {
+    expect(PAGE).toMatch(/#hud\s*\{[^}]*position: relative;/)
+    expect(PAGE).toMatch(/<div id="hud">[\s\S]*<div id="standings"><\/div>\s*<\/div>/)
     expect(PAGE).toMatch(
-      /--telltales-offset:\s*calc\(\s*var\(--timer-width\) \/ 2 \+ var\(--gauge-width\) \* 2 \+ var\(--gauge-gap\) \* 3 \+\s*var\(--panel-width\)\s*\)/,
-    )
-    expect(PAGE).toMatch(
-      /#standings\s*\{[^}]*margin-left: calc\(50% - var\(--telltales-offset\)\)/,
+      /#standings\s*\{[^}]*left: calc\(\s*50% - var\(--timer-width\) \/ 2 - var\(--gauge-width\) \* 2 - var\(--gauge-gap\) \* 3 -\s*var\(--panel-width\)\s*\)/,
     )
   })
 
   it('stays on the screen at the narrowest width that still uses one row', () => {
-    const offset = wide.timer / 2 + wide.gauge * 2 + wide.gap * 3 + panelWidth
-    const left = wide.until / 2 - offset
+    const left = wide.until / 2 - wide.timer / 2 - wide.gauge * 2 - wide.gap * 3 - panelWidth
     expect(left).toBeGreaterThanOrEqual(wide.padding)
-    expect(left + wide.standings).toBeLessThanOrEqual(wide.until - wide.padding)
   })
 
-  it('goes under the tiller where there is one, and takes the left edge back', () => {
-    expect(PAGE).toMatch(/#tiller \{ display: block; order: 1; \}\s*#standings \{ order: 2; \}/)
-    const stacked = PAGE.match(new RegExp(`@media \\(max-width: ${wide.until}px\\)([\\s\\S]*?)\\n      \\}`))
-    expect(stacked?.[1] ?? '').toMatch(/#standings \{ margin-left: 0;/)
+  it('takes the left edge with the telltales once they go under the instruments', () => {
+    const stacked = PAGE.match(
+      new RegExp(`@media \\(max-width: ${wide.until}px\\)([\\s\\S]*?)\\n      \\}`),
+    )
+    expect(stacked?.[1] ?? '').toMatch(/#standings \{ left: 0; \}/)
   })
 
-  it('runs the width of the tiller on a phone, and fits', () => {
-    expect(PAGE).toMatch(/#standings \{[^}]*max-width: var\(--tiller-width\)/)
-    expect(tillerWidth).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
+  it('stands on the tiller where there is one, the last boat just above it', () => {
+    const touch = PAGE.match(/@media \(pointer: coarse\), \(max-width: 560px\) \{([\s\S]*?)\n {6}\}/)
+    expect(touch?.[1] ?? '').toMatch(
+      /#standings \{[^}]*position: fixed;[^}]*var\(--tiller-height\) \+ 8px/,
+    )
   })
 
-  it('has room for a name, what she is sailing for and her speed', () => {
-    // Place, name, the doing column, her speed and a penalty flag, at 13px and 11px.
-    expect(wide.standings).toBeGreaterThanOrEqual(200)
-    expect(tillerWidth).toBeGreaterThanOrEqual(200)
+  it('fits a fleet of ten between the instruments and the tiller on a phone', () => {
+    // A row is its 18px line and the 1px gap under it.
+    expect(SCREEN.height - belowTheWater - 8 - 10 * 19).toBeGreaterThan(aboveTheWater)
   })
-
-
 })
 
 describe('what is left for the water', () => {
-  const aboveTheWater = NOTCH + narrow.padding + narrow.gaugeHeight + 6 + panelHeight
-  const belowTheWater = tillerHeight + 8 + standingsHeight + HOME_INDICATOR
-
   it('leaves most of the screen to sail in', () => {
     const water = SCREEN.height - belowTheWater - aboveTheWater
     expect(water).toBeGreaterThan(SCREEN.height * 0.45)
@@ -182,6 +176,10 @@ describe('what is left for the water', () => {
   it('gives the tiller a thumb-sized bar', () => {
     // Anything under about forty-four points is hard to hit without looking.
     expect(tillerHeight).toBeGreaterThanOrEqual(44)
+  })
+
+  it('fits the tiller across a phone', () => {
+    expect(tillerWidth).toBeLessThanOrEqual(SCREEN.width - narrow.padding * 2)
   })
 
   it('caps how long the tiller gets, because a longer bar is a slower helm', () => {

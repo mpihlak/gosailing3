@@ -50,7 +50,7 @@ describe('a board built from a hostile server', () => {
       { [boatId]: overrides.name ?? 'Ann' },
       { [boatId]: overrides.color ?? '#4fa3dd' },
     )
-    board.update([{ ...standing, boatId }], boatId, { [boatId]: { doing: '', speed: 6 } })
+    board.update([{ ...standing, boatId }], boatId, new Set())
     return root
   }
 
@@ -72,11 +72,11 @@ describe('a board built from a hostile server', () => {
     expect(who.getAttribute('style')).toContain('#c4655c')
   })
 
-  it('survives an id that is markup, and still writes her speed', () => {
+  it('survives an id that is markup, and still names her', () => {
     const root = render({ id: '"><img src=x onerror=alert(1)>' })
     expect(root.querySelector('img')).toBeNull()
     expect(root.querySelectorAll('.crew')).toHaveLength(1)
-    expect(root.querySelector('.speed')?.textContent).toBe('6.0')
+    expect(root.querySelector('.who')?.textContent).toBe('Ann')
   })
 })
 

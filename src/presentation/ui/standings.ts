@@ -1,23 +1,16 @@
 import type { BoatId } from '@/domain/boat'
-import type { Knots } from '@/foundation/units'
 import type { Standing } from '@/sim'
 import { cssColor, escapeHtml } from './text'
-
-/** What the board shows about a boat beyond where she lies in the fleet. */
-export interface CrewReading {
-  /** What she is sailing for now, in the words the player reads. */
-  readonly doing: string
-  readonly speed: Knots
-}
 
 /** On the course side of the line at the gun, and owing a return to clear it. */
 export const OCS = 'OCS'
 
-/** The board at the foot of the screen: who is where, what for, and who owes turns. */
+/**
+ * The board at the foot of the screen: the fleet in order, a line or two of names with
+ * the water showing through, and who owes turns or a return.
+ */
 export class StandingsBoard {
   private shown = ''
-  /** The speed cells, in the order the board was last built in. */
-  private cells: readonly Element[] = []
 
   constructor(
     private readonly root: HTMLElement,
@@ -29,34 +22,12 @@ export class StandingsBoard {
   update(
     standings: readonly Standing[],
     playerId: BoatId,
-    reading: Readonly<Record<BoatId, CrewReading>>,
+    overEarly: ReadonlySet<BoatId>,
   ): void {
-    this.rebuildIfChanged(standings, playerId, reading)
-
-    /*
-     * Speed is written into the cells rather than counted as a reason to rebuild. It
-     * changes every frame, and the board is built by replacing its markup wholesale, so
-     * including it would throw the board away and make it again sixty times a second.
-     *
-     * The cells are taken in the order they were built in rather than looked up by boat.
-     * A lookup means a selector, and the id in it comes off a socket.
-     */
-    standings.forEach((standing, row) => {
-      const cell = this.cells[row]
-      const shown = reading[standing.boatId]?.speed.toFixed(1) ?? ''
-      if (cell && cell.textContent !== shown) cell.textContent = shown
-    })
-  }
-
-  private rebuildIfChanged(
-    standings: readonly Standing[],
-    playerId: BoatId,
-    reading: Readonly<Record<BoatId, CrewReading>>,
-  ): void {
-    // The rest of the board changes rarely and the frame is every sixteen milliseconds,
-    // so it is rebuilt only when it would look different.
+    // The board changes rarely and the frame is every sixteen milliseconds, so it is
+    // rebuilt only when it would look different.
     const key = standings
-      .map((s) => `${s.boatId}${s.place}${s.penalties}${s.finished}${reading[s.boatId]?.doing ?? ''}`)
+      .map((s) => `${s.boatId}${s.place}${s.penalties}${s.finished}${overEarly.has(s.boatId)}`)
       .join('|')
     if (key === this.shown) return
     this.shown = key
@@ -64,26 +35,18 @@ export class StandingsBoard {
     this.root.innerHTML = standings
       .map((standing) => {
         const name = escapeHtml(this.names[standing.boatId] ?? standing.boatId)
-        const says = reading[standing.boatId]?.doing ?? ''
         const classes = [
           'crew',
           standing.boatId === playerId ? 'mine' : '',
           standing.finished ? 'home' : '',
-          says === OCS ? 'ocs' : '',
         ]
           .filter(Boolean)
           .join(' ')
         const color = cssColor(this.colors[standing.boatId])
-        return `<div class="${classes}">
-          <span class="pos">${escapeHtml(standing.place)}</span>
-          <span class="who"${color ? ` style="color: ${color}"` : ''}>${name}</span>
-          <span class="doing">${says}</span>
-          <span class="speed"></span>
-          <span class="pen">${turns(standing.penalties)}</span>
-        </div>`
+        const ocs = overEarly.has(standing.boatId) ? `<span class="ocs">${OCS}</span>` : ''
+        return `<span class="${classes}"><span class="pos">${escapeHtml(standing.place)}</span><span class="who"${color ? ` style="color: ${color}"` : ''}>${name}</span>${ocs}${turns(standing.penalties)}</span>`
       })
       .join('')
-    this.cells = [...this.root.querySelectorAll('.speed')]
   }
 }
 
