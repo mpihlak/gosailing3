@@ -21,7 +21,13 @@ import type { RightOfWayRule } from '@/domain/rules'
 import type { SimEvent } from './events'
 
 export type RacePhase = 'prestart' | 'racing' | 'complete'
-export type BoatStatus = 'prestart' | 'overEarly' | 'racing' | 'finished'
+/** A boat who is 'dnf' crossed the line and then fouled a boat still racing. */
+export type BoatStatus = 'prestart' | 'overEarly' | 'racing' | 'finished' | 'dnf'
+
+/** Finished or out, and so no longer racing: rule 24 has her keep clear of everyone who is. */
+export function doneRacing(status: BoatStatus | undefined): boolean {
+  return status === 'finished' || status === 'dnf'
+}
 
 export interface BoatProgress {
   readonly boatId: BoatId
@@ -198,7 +204,7 @@ export function stepRace(race: RaceState, input: RaceStepInput): RaceStepResult 
     progress[boat.id] = next
   }
 
-  const everyoneHome = Object.values(progress).every((boat) => boat.status === 'finished')
+  const everyoneHome = Object.values(progress).every((boat) => doneRacing(boat.status))
   const phase: RacePhase = everyoneHome ? 'complete' : started ? 'racing' : 'prestart'
   if (phase === 'complete' && race.phase !== 'complete') events.push({ kind: 'raceFinished' })
 
@@ -457,4 +463,30 @@ export function penalise(
   events.push(rule === undefined
     ? { kind: 'penalised', boatId: offender, otherId: other }
     : { kind: 'penalised', boatId: offender, otherId: other, rule })
+}
+
+/**
+ * A boat who has finished has no turn left to take, so failing to keep clear of a boat
+ * still racing costs her the finish. Whoever crossed after her moves up a place.
+ */
+export function loseFinish(
+  race: RaceState,
+  progress: Record<BoatId, BoatProgress>,
+  offender: BoatId,
+  other: BoatId,
+  events: SimEvent[],
+): RaceState {
+  const mine = progress[offender]
+  if (!mine) return race
+  const out: BoatProgress = { ...mine, status: 'dnf' }
+  delete (out as { place?: number }).place
+  delete (out as { finishTime?: Seconds }).finishTime
+  progress[offender] = out
+  const finishOrder = race.finishOrder.filter((id) => id !== offender)
+  finishOrder.forEach((id, index) => {
+    const home = progress[id]
+    if (home) progress[id] = { ...home, place: index + 1 }
+  })
+  events.push({ kind: 'lostFinish', boatId: offender, otherId: other })
+  return { ...race, finishOrder }
 }

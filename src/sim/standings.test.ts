@@ -119,6 +119,14 @@ describe('standings', () => {
     expect(board.slice(0, 2).map((entry) => entry.boatId)).toEqual(['b', 'a'])
   })
 
+  it('puts a boat scored DNF at the bottom, however far round she got', () => {
+    const { ctx, world } = fleet()
+    const board = standings(ctx, place(world, 'c', { status: 'dnf', stageIndex: 3 }))
+    expect(board[2]?.boatId).toBe('c')
+    expect(board[2]?.dnf).toBe(true)
+    expect(board[2]?.finished).toBe(false)
+  })
+
   it('carries the turns each boat owes', () => {
     const { ctx, world } = fleet()
     const board = standings(ctx, place(world, 'a', { penalties: 2 }))

@@ -764,9 +764,10 @@ function announce(event: TimedEvent): void {
    * What happens to a rival is mostly not news: told about all of it, the player gets a
    * report of her mark rounding and a finish card when she crosses the line. Her penalty
    * is the exception. It decides who wins, and nothing else on the water shows it — a
-   * mark gives way rather than stopping her, so she sails through it and sails on.
+   * mark gives way rather than stopping her, so she sails through it and sails on. So
+   * does a finish lost.
    */
-  if (!mine && event.kind !== 'penalised') return
+  if (!mine && event.kind !== 'penalised' && event.kind !== 'lostFinish') return
 
   switch (event.kind) {
     case 'raceStarted':
@@ -787,6 +788,12 @@ function announce(event: TimedEvent): void {
         mine ? 3600 : 3000,
       )
     }
+    case 'lostFinish':
+      return hud.showBanner(
+        `DNF for ${nameOf(event.boatId)} — fouled ${nameOf(event.otherId)} after finishing`,
+        mine ? 'warn' : 'info',
+        mine ? 4200 : 3000,
+      )
     // A coming-together is reported as the penalty it earns. Announcing the contact as
     // well overwrote that with a vaguer line naming a boat by her id.
     case 'penaltyCleared':

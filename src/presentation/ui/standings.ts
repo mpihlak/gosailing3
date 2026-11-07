@@ -7,7 +7,7 @@ export const OCS = 'OCS'
 
 /**
  * The board at the foot of the screen: the fleet in order, a line or two of names with
- * the water showing through, and who owes turns or a return.
+ * the water showing through, and who owes turns or a return, or is out.
  */
 export class StandingsBoard {
   private shown = ''
@@ -27,7 +27,9 @@ export class StandingsBoard {
     // The board changes rarely and the frame is every sixteen milliseconds, so it is
     // rebuilt only when it would look different.
     const key = standings
-      .map((s) => `${s.boatId}${s.place}${s.penalties}${s.finished}${overEarly.has(s.boatId)}`)
+      .map(
+        (s) => `${s.boatId}${s.place}${s.penalties}${s.finished}${s.dnf}${overEarly.has(s.boatId)}`,
+      )
       .join('|')
     if (key === this.shown) return
     this.shown = key
@@ -44,7 +46,8 @@ export class StandingsBoard {
           .join(' ')
         const color = cssColor(this.colors[standing.boatId])
         const ocs = overEarly.has(standing.boatId) ? `<span class="ocs">${OCS}</span>` : ''
-        return `<span class="${classes}"><span class="pos">${escapeHtml(standing.place)}</span><span class="who"${color ? ` style="color: ${color}"` : ''}>${name}</span>${ocs}${turns(standing.penalties)}</span>`
+        const dnf = standing.dnf ? '<span class="ocs">DNF</span>' : ''
+        return `<span class="${classes}"><span class="pos">${escapeHtml(standing.place)}</span><span class="who"${color ? ` style="color: ${color}"` : ''}>${name}</span>${ocs}${dnf}${turns(standing.penalties)}</span>`
       })
       .join('')
   }

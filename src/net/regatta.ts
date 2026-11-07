@@ -2,6 +2,7 @@ import type { Seconds } from '@/foundation/units'
 import type { BoatId } from '@/domain/boat'
 import {
   createSimulation,
+  doneRacing,
   SimulationRunner,
   raceTime,
   timeToStart,
@@ -507,7 +508,7 @@ export class Regatta {
     if (!runner || !simulation) return undefined
 
     const progress = runner.world.race.progress
-    const done = (id: BoatId) => this.retired.has(id) || progress[id]?.status === 'finished'
+    const done = (id: BoatId) => this.retired.has(id) || doneRacing(progress[id]?.status)
     const elapsed = raceTime(simulation.ctx, runner.world) / this.options.pace
 
     const finishTimes = [...this.starters.keys()]
@@ -540,7 +541,9 @@ export class Regatta {
         ? 'retired'
         : boat?.status === 'finished'
           ? 'finished'
-          : 'timedOut'
+          : boat?.status === 'dnf'
+            ? 'dnf'
+            : 'timedOut'
       return {
         boatId: id,
         name,
@@ -548,14 +551,14 @@ export class Regatta {
         /*
          * Where she comes when nobody has finished. Whoever crossed is ahead of
          * whoever did not; whoever was still sailing at the end is ahead of whoever
-         * had given up and gone; and among those still sailing, whoever was furthest
-         * round. Left to the order they joined in, a boat that quit on the first leg
+         * had given up and gone or been scored DNF; and among those still sailing,
+         * whoever was furthest round. Left to the order they joined in, a boat that quit on the first leg
          * beat the boat that was leading when the race was called.
          */
         rank: [
           boat?.place === undefined ? 1 : 0,
           boat?.place ?? 0,
-          this.retired.has(id) ? 1 : 0,
+          this.retired.has(id) || boat?.status === 'dnf' ? 1 : 0,
           -(boat?.stageIndex ?? 0),
         ],
         ...(boat?.place === undefined ? {} : { place: boat.place }),

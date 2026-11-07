@@ -246,13 +246,12 @@ describe('contacts', () => {
     })
   })
 
-  it('puts the turn on a boat who has finished and sails into one still racing', () => {
-    /*
-     * Her race is over and the other boat's is not, so rule 24 asks her to keep out of
-     * the way whatever the tacks and the overlap would otherwise say. Judged on those
-     * alone, a boat could cross the line and then go back and lean on the one still out
-     * there, and collect a turn for the trouble.
-     */
+  /*
+   * A boat who has finished is no longer racing, so rule 24 asks her to keep out of the
+   * way of one who still is, whatever the tacks and the overlap would otherwise say. She
+   * has no turn left to take, so fouling one costs her the finish.
+   */
+  describe('after finishing', () => {
     const sim = createSimulation({
       name: 'finished',
       seed: 'finished',
@@ -260,25 +259,87 @@ describe('contacts', () => {
         // Overlapped on port, so rule 11 on its own puts the turn on the windward boat.
         { id: 'windward', name: 'Windward', position: vec(-1.5, -200), heading: 10 },
         { id: 'leeward', name: 'Leeward', position: vec(1.5, -200), heading: 10 },
+        { id: 'later', name: 'Later', position: vec(300, -200), heading: 10 },
       ],
       wind: { direction: 0, speed: 12, shiftAmplitude: 0, startBias: 0, gustiness: 0, gradientStrength: 0 },
       config: { startSequence: 0 },
     })
     const racing = sim.world.race.progress
-    const homeAlready = {
-      ...sim.world,
-      race: {
-        ...sim.world.race,
-        progress: { ...racing, leeward: { ...racing.leeward!, status: 'finished' as const } },
-      },
+
+    /** The world with these boats already home, in this order. */
+    function home(...ids: string[]): WorldState {
+      const progress = { ...racing }
+      ids.forEach((id, index) => {
+        progress[id] = {
+          ...racing[id]!,
+          status: 'finished',
+          place: index + 1,
+          finishTime: 300 + index,
+        }
+      })
+      return { ...sim.world, race: { ...sim.world.race, progress, finishOrder: ids } }
     }
 
-    expect(runHeadless(sim.ctx, sim.world, {}, { maxTicks: 5 }).events).toContainEqual(
-      expect.objectContaining({ kind: 'penalised', boatId: 'windward', rule: 11 }),
-    )
-    expect(runHeadless(sim.ctx, homeAlready, {}, { maxTicks: 5 }).events).toContainEqual(
-      expect.objectContaining({ kind: 'penalised', boatId: 'leeward', rule: 24 }),
-    )
+    it('judges two boats still racing on the tacks and the overlap', () => {
+      expect(runHeadless(sim.ctx, sim.world, {}, { maxTicks: 5 }).events).toContainEqual(
+        expect.objectContaining({ kind: 'penalised', boatId: 'windward', rule: 11 }),
+      )
+    })
+
+    it('scores a boat who sails into one still racing DNF, with no turn to take', () => {
+      const { world: after, events } = runHeadless(sim.ctx, home('leeward'), {}, { maxTicks: 5 })
+      expect(events).toContainEqual(
+        expect.objectContaining({ kind: 'lostFinish', boatId: 'leeward', otherId: 'windward' }),
+      )
+      expect(events.filter((event) => event.kind === 'penalised')).toEqual([])
+      const leeward = after.race.progress.leeward
+      expect(leeward?.status).toBe('dnf')
+      expect(leeward?.place).toBeUndefined()
+      expect(leeward?.finishTime).toBeUndefined()
+      expect(leeward?.penalties).toBe(0)
+      expect(after.race.progress.windward?.penalties).toBe(0)
+    })
+
+    it('moves whoever finished after her up a place', () => {
+      const { world: after } = runHeadless(sim.ctx, home('leeward', 'later'), {}, { maxTicks: 5 })
+      expect(after.race.finishOrder).toEqual(['later'])
+      expect(after.race.progress.later?.place).toBe(1)
+      expect(after.race.progress.later?.finishTime).toBe(301)
+    })
+
+    it('charges nothing when two boats who have both finished touch', () => {
+      const { world: after, events } = runHeadless(
+        sim.ctx,
+        home('leeward', 'windward'),
+        {},
+        { maxTicks: 5 },
+      )
+      expect(events.filter((event) => event.kind === 'contact')).toHaveLength(1)
+      expect(
+        events.filter((event) => event.kind === 'penalised' || event.kind === 'lostFinish'),
+      ).toEqual([])
+      expect(after.race.progress.leeward?.place).toBe(1)
+      expect(after.race.progress.windward?.place).toBe(2)
+    })
+
+    it('charges nothing more to a boat already out, nor to the one she touched', () => {
+      const out = home()
+      const progress = {
+        ...out.race.progress,
+        leeward: { ...racing.leeward!, status: 'dnf' as const },
+      }
+      const { world: after, events } = runHeadless(
+        sim.ctx,
+        { ...out, race: { ...out.race, progress } },
+        {},
+        { maxTicks: 5 },
+      )
+      expect(events.filter((event) => event.kind === 'contact')).toHaveLength(1)
+      expect(
+        events.filter((event) => event.kind === 'penalised' || event.kind === 'lostFinish'),
+      ).toEqual([])
+      expect(after.race.progress.windward?.penalties).toBe(0)
+    })
   })
 
   it('charges one turn for one coming together, however long they stay locked', () => {

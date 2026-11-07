@@ -27,6 +27,8 @@ export type SimEvent =
       readonly otherId: string
       readonly rule?: RightOfWayRule
     }
+  /** She fouled a boat still racing after she had finished, and is scored DNF for it. */
+  | { readonly kind: 'lostFinish'; readonly boatId: BoatId; readonly otherId: BoatId }
   | { readonly kind: 'penaltyCleared'; readonly boatId: BoatId; readonly remaining: number }
   /** She crossed the finishing line owing turns, so she has not finished. */
   | { readonly kind: 'finishRefused'; readonly boatId: BoatId; readonly penalties: number }

@@ -22,7 +22,7 @@ import {
 import { hullCentreline, hullRadius, type BoatSpec, type BoatState } from '@/domain/boat'
 import type { WindSample } from '@/domain/wind'
 import { encounter, type Contender, type RightOfWayRule } from '@/domain/rules'
-import { specFor, type SimContext, type WorldState } from '@/sim'
+import { doneRacing, specFor, type SimContext, type WorldState } from '@/sim'
 import { obstacleShare } from './obstacles'
 import { tackIsClear } from './tacking'
 
@@ -131,7 +131,7 @@ export function giveWay(
     return {
       boat: of,
       spec: specFor(ctx, of.id),
-      racing: progress?.status !== 'finished',
+      racing: !doneRacing(progress?.status),
       tacking: progress?.tacking === true,
     }
   }

@@ -9,6 +9,8 @@ export interface Standing {
   /** Where she lies now, finished or not. */
   readonly place: number
   readonly finished: boolean
+  /** Out of the race after fouling a boat still racing once she had finished. */
+  readonly dnf: boolean
   readonly finishTime?: Seconds
   readonly penalties: number
 }
@@ -30,7 +32,7 @@ function toGoOn(stage: CourseStage | undefined, position: Vec2): Meters {
  * The order the fleet is in, at any moment and not only at the end. Boats already home
  * keep the places they finished in; the rest are ranked by how much of the course they
  * have put behind them, and then by how close they are to the next thing they have to
- * get to.
+ * get to. A boat scored DNF is out of it, and goes to the bottom.
  */
 export function standings(ctx: SimContext, world: WorldState): Standing[] {
   const ranked = world.boats
@@ -51,6 +53,8 @@ export function standings(ctx: SimContext, world: WorldState): Standing[] {
       if (first.place !== undefined && second.place !== undefined) return first.place - second.place
       if (first.place !== undefined) return -1
       if (second.place !== undefined) return 1
+      if ((first.status === 'dnf') !== (second.status === 'dnf'))
+        return first.status === 'dnf' ? 1 : -1
 
       // Further round the course leads.
       if (one.leg !== two.leg) return two.leg - one.leg
@@ -61,6 +65,7 @@ export function standings(ctx: SimContext, world: WorldState): Standing[] {
     boatId: entry.boat.id,
     place: index + 1,
     finished: entry.progress?.status === 'finished',
+    dnf: entry.progress?.status === 'dnf',
     ...(entry.progress?.finishTime === undefined ? {} : { finishTime: entry.progress.finishTime }),
     penalties: entry.progress?.penalties ?? 0,
   }))

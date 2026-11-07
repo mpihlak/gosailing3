@@ -40,7 +40,7 @@ describe('cssColor', () => {
  * not the name, not the color, not the id the name is filed under.
  */
 describe('a board built from a hostile server', () => {
-  const standing: Standing = { boatId: 'a', place: 1, penalties: 2, finished: false }
+  const standing: Standing = { boatId: 'a', place: 1, penalties: 2, finished: false, dnf: false }
 
   function render(overrides: { id?: string; name?: string; color?: string }) {
     const boatId = overrides.id ?? 'a'

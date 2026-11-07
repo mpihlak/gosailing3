@@ -18,7 +18,7 @@ import { lineEndBodies } from '@/domain/course'
 import { shade } from '@/domain/wind'
 import { encounter } from '@/domain/rules'
 import { shadowersIn } from './wind'
-import { penalise, stepRace } from './race'
+import { doneRacing, loseFinish, penalise, stepRace } from './race'
 import type { SimEvent, TimedEvent } from './events'
 import type { Seconds } from '@/foundation/units'
 import type { InputFrame, SimContext, WorldState } from './world'
@@ -58,7 +58,7 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
 
   const { boats, contacts, keys } = resolveContacts(ctx, sailed, world.contacts)
 
-  const { race, events: raceEvents } = stepRace(world.race, {
+  const { race: raced, events: raceEvents } = stepRace(world.race, {
     course: ctx.course,
     specs: ctx.specs,
     previous: world.boats,
@@ -74,6 +74,7 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
   })
 
   // A contact is news on the tick it starts, not for every tick the boats stay locked.
+  let race = raced
   const progress = { ...race.progress }
   const penaltyEvents: SimEvent[] = []
 
@@ -110,13 +111,20 @@ export function step(ctx: SimContext, world: WorldState, inputs: InputFrame): St
     const two = before(contact.otherId)
     if (!one || !two) continue
 
-    const stillRacing = (id: string) => progress[id]?.status !== 'finished'
+    const stillRacing = (id: string) => !doneRacing(progress[id]?.status)
+    // Two boats out of the race have nothing left to lose to one another.
+    if (!stillRacing(one.id) && !stillRacing(two.id)) continue
     const tacking = (id: string) => world.race.progress[id]?.tacking === true
     const verdict = encounter(
       { boat: one, spec: specFor(ctx, one.id), racing: stillRacing(one.id), tacking: tacking(one.id) },
       { boat: two, spec: specFor(ctx, two.id), racing: stillRacing(two.id), tacking: tacking(two.id) },
     )
-    penalise(progress, verdict.keepClear, verdict.rightOfWay, penaltyEvents, verdict.rule)
+    const offender = progress[verdict.keepClear]?.status
+    if (offender === 'finished') {
+      race = loseFinish(race, progress, verdict.keepClear, verdict.rightOfWay, penaltyEvents)
+    } else if (offender !== 'dnf') {
+      penalise(progress, verdict.keepClear, verdict.rightOfWay, penaltyEvents, verdict.rule)
+    }
   }
 
   const events: TimedEvent[] = [

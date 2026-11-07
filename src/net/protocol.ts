@@ -58,7 +58,7 @@ export type Role = 'racer' | 'observer'
 export type Phase = 'lobby' | 'racing' | 'results'
 
 /** Why a boat is no longer sailing. */
-export type Outcome = 'finished' | 'timedOut' | 'retired'
+export type Outcome = 'finished' | 'timedOut' | 'retired' | 'dnf'
 
 export interface Sailor {
   readonly id: BoatId
