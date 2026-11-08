@@ -86,15 +86,18 @@ Docker keeps five files of 10 MB for each service's output and drops the oldest.
 
 ## The robots
 
-Nine robot sailors run in their own container, so there is always a race on to join or
-watch. They reach the server over the compose network at `ws://server:8080`, not
-through the tunnel, and race each other for as long as nobody else turns up. The robots'
-container starts once the server answers `/health`.
+Nine robot sailors run in their own container, to race whoever turns up. They reach the
+server over the compose network at `ws://server:8080`, not through the tunnel. The
+robots' container starts once the server answers `/health`.
 
-Each robot reconnects on her own when her connection drops: five seconds later, and
-twice as long after each attempt that fails, up to a minute. That covers a server
-restart and a server that is not up yet. A robot who gave up her seat to a person stays
-away.
+They race only people. The first person to join opens the regatta; the server turns
+robots away until then. The robots ask `/health` every three seconds whether it is
+open, and join when it is. Thirty seconds after the last person racing has gone, the
+server throws the race away, sends the robots off and closes the regatta again. So
+with nobody racing, nothing is sailed and no race is logged.
+
+A robot whose connection drops joins again on the next look, which covers a server
+restart. A robot who gave up her seat to a person stays away until the regatta closes.
 
 ```sh
 ssh martin@voyager 'cd ~/gosailing-docker && docker compose logs -f ai'

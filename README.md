@@ -32,6 +32,9 @@ npm run server                                  # somewhere to race
 npm run ai-player -- ws://localhost:8080 --count 2
 ```
 
+They race only people: they wait until a person has joined the server, and leave when
+the last one has gone.
+
 They take alternate ends of the line, so a fleet of them starts on both tacks and
 converges on the line from both directions rather than filing out together.
 

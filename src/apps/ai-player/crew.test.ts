@@ -59,7 +59,7 @@ beforeEach(() => {
   socket = new FakeSocket()
   clock = 0
   robot = new Robot({ url: 'ws://test', name: 'Ann', open: () => socket, now: () => clock })
-  robot.join()
+  robot.board()
 })
 
 /** Every helm she has put on the wire. */
@@ -153,13 +153,12 @@ describe('which end of the line she goes for', () => {
   })
 })
 
-describe('a robot whose connection drops', () => {
+describe('a robot going to the regatta and back', () => {
   let sockets: FakeSocket[]
   let robot: Robot
 
   beforeEach(() => {
     sockets = []
-    clock = 0
     robot = new Robot({
       url: 'ws://test',
       name: 'Ann',
@@ -168,54 +167,46 @@ describe('a robot whose connection drops', () => {
         sockets.push(opened)
         return opened
       },
-      now: () => clock,
+      now: () => 0,
     })
-    robot.join()
   })
 
-  /** Step her at a given time, as the loop would. */
-  const at = (ms: number) => {
-    clock = ms
-    robot.step()
-  }
   const joins = (socket: FakeSocket | undefined) =>
     socket?.sent.map((text) => JSON.parse(text)).filter((one) => one.kind === 'join')
 
-  it('comes back on her own, after a wait', () => {
-    sockets[0]!.drop()
-    at(0)
-    at(4_999)
-    expect(sockets).toHaveLength(1)
-    at(5_000)
-    expect(sockets).toHaveLength(2)
-    expect(joins(sockets[1])).toEqual([{ kind: 'join', name: 'Ann', role: 'racer', robot: true }])
+  it('stays ashore, with no connection, until she is sent', () => {
+    expect(robot.ashore).toBe(true)
+    expect(sockets).toHaveLength(0)
   })
 
-  /** A server that is down for an hour should not be asked every five seconds of it. */
-  it('waits twice as long each time coming back fails, and starts over once she is in', () => {
-    sockets[0]!.drop()
-    at(0)
-    at(5_000)
-    sockets[1]!.drop()
-    at(5_000)
-    at(14_999)
-    expect(sockets).toHaveLength(2)
-    at(15_000)
-    expect(sockets).toHaveLength(3)
-
-    sockets[2]!.say({ kind: 'welcome', you: 'c9', role: 'racer', phase: 'lobby', fleet: [] })
-    at(15_001)
-    sockets[2]!.drop()
-    at(15_002)
-    at(20_002)
-    expect(sockets).toHaveLength(4)
+  it('joins as a robot when she is sent', () => {
+    robot.board()
+    expect(robot.ashore).toBe(false)
+    expect(joins(sockets[0])).toEqual([{ kind: 'join', name: 'Ann', role: 'racer', robot: true }])
   })
 
-  it('stays away once her seat has gone to a person', () => {
+  it('is ashore again when the regatta sends her off, and comes back on a new connection', () => {
+    robot.board()
+    sockets[0]!.say({ kind: 'closed' })
+    sockets[0]!.drop()
+    expect(robot.ashore).toBe(true)
+    robot.board()
+    expect(sockets).toHaveLength(2)
+    expect(joins(sockets[1])).toHaveLength(1)
+  })
+
+  it('is ashore again when her connection drops', () => {
+    robot.board()
+    sockets[0]!.drop()
+    expect(robot.ashore).toBe(true)
+  })
+
+  it('stays away once her seat has gone to a person, until that regatta closes', () => {
+    robot.board()
     sockets[0]!.say({ kind: 'removed' })
     sockets[0]!.drop()
-    at(0)
-    at(600_000)
-    expect(sockets).toHaveLength(1)
+    expect(robot.ashore).toBe(false)
+    robot.regattaClosed()
+    expect(robot.ashore).toBe(true)
   })
 })

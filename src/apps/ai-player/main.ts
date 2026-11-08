@@ -10,10 +10,16 @@ import { describePersonality } from '@/agents/ai'
  * They join over a socket like anybody else and sail by what the server tells them,
  * which is the point: nothing here looks at the world the server is keeping, only at
  * the messages a player's page would have received.
+ *
+ * They only race people. The server's health check says whether a person has opened the
+ * regatta, and they go and join it when one has; the server sends them off again when
+ * the last person has gone.
  */
 const STEP_HZ = 60
 /** Long enough apart that a pair do not all arrive on the same tick of the lobby. */
 const APART = 400
+/** How often she looks to see whether a person has opened the regatta. */
+const LOOK_EVERY = 3000
 
 const args = process.argv.slice(2)
 const url = args.find((arg) => !arg.startsWith('--')) ?? 'ws://localhost:8080'
@@ -37,12 +43,41 @@ console.log(
 )
 for (const robot of crew) say(robot.name, describePersonality(robot.personality))
 
-for (const [index, robot] of crew.entries()) {
-  setTimeout(() => {
-    robot.join()
-    say(robot.name, 'joined')
-  }, index * APART)
+/** The server's health check, on the same host and port as the regatta. */
+function healthOf(regatta: string): string {
+  const at = new URL(regatta)
+  at.protocol = at.protocol === 'wss:' ? 'https:' : 'http:'
+  at.pathname = '/health'
+  return at.toString()
 }
+const health = healthOf(url)
+
+/** Join whoever is ashore if the regatta is open. A server that does not answer is left alone. */
+async function lookIn(): Promise<void> {
+  let open: boolean
+  try {
+    const answer = await fetch(health)
+    open = ((await answer.json()) as { open?: unknown }).open === true
+  } catch {
+    return
+  }
+  if (!open) {
+    for (const robot of crew) robot.regattaClosed()
+    return
+  }
+  crew
+    .filter((robot) => robot.ashore)
+    .forEach((robot, index) => {
+      setTimeout(() => {
+        // Looked at again, because the last look may have sent her already.
+        if (!robot.ashore) return
+        robot.board()
+        say(robot.name, 'joined')
+      }, index * APART)
+    })
+}
+void lookIn()
+setInterval(() => void lookIn(), LOOK_EVERY)
 
 const step = setInterval(() => {
   for (const robot of crew) robot.step()
@@ -60,13 +95,15 @@ setInterval(() => {
 const was = new Map<string, string>()
 setInterval(() => {
   for (const robot of crew) {
-    const { phase, you, rtt, trouble } = robot.race
+    const race = robot.race
+    if (!race) continue
+    const { phase, you, rtt, trouble } = race
     const now = trouble ?? `${phase}${you ? ` as ${you}` : ''}`
     if (was.get(robot.name) === now) continue
     was.set(robot.name, now)
     say(robot.name, `${now}${rtt === undefined || trouble ? '' : ` (${rtt}ms)`}`)
   }
-  const done = crew[0]?.race.results
+  const done = crew[0]?.race?.results
   if (done && was.get('results') !== JSON.stringify(done)) {
     was.set('results', JSON.stringify(done))
     for (const place of done) {

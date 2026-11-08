@@ -42,7 +42,8 @@ interface Open {
  *
  * A race is a file. It opens on the `racing` that carries a seed this logbook has not
  * seen — a late arrival is sent the same seed, and is not a new race — and closes on the
- * result, or on the next race starting if it never reached one.
+ * result. One that never reaches a result closes as abandoned when the regatta goes back
+ * to the lobby without it, or when the next race starts.
  */
 export class Logbook {
   private open: Open | undefined
@@ -61,6 +62,7 @@ export class Logbook {
     // the ones that go to one sailor are how a replayer knows what she alone was shown.
     this.line({ t: 'out', ms: this.since(), to, m: message })
     if (message.kind === 'results') this.over('scored', message.places)
+    if (message.kind === 'fleet' && message.phase === 'lobby') this.over('abandoned')
   }
 
   heard(from: string, message: ClientMessage): void {

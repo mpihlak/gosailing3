@@ -65,9 +65,10 @@ const sessions = new Sessions(
     heard: (id, message) => logbook.heard(id, message),
     sent: (to, message) => {
       logbook.sent(to, message)
-      // A robot that has given up her place goes once she has been told. This is heard
-      // before the message is written, so the closing waits until it has been.
-      if (message.kind === 'removed') {
+      // A robot that has given up her place, or been sent off because nobody is racing,
+      // goes once she has been told. This is heard before the message is written, so the
+      // closing waits until it has been.
+      if (message.kind === 'removed' || message.kind === 'closed') {
         setImmediate(() => {
           for (const id of to) sockets.get(id)?.close()
         })
@@ -104,7 +105,7 @@ setInterval(() => {
 /**
  * Sailors arrive over a websocket, but the port answers plain HTTP as well, so a deploy
  * can ask whether the thing came up and the tunnel in front of it has something to talk
- * to besides an upgrade.
+ * to besides an upgrade. The robots ask it whether a person has opened the regatta.
  */
 const web = createServer((request, response) => {
   if (request.url !== '/health') {
@@ -112,7 +113,14 @@ const web = createServer((request, response) => {
     return response.end()
   }
   response.writeHead(200, { 'content-type': 'application/json' })
-  response.end(JSON.stringify({ ok: true, phase: regatta.state, sailors: regatta.fleet.length }))
+  response.end(
+    JSON.stringify({
+      ok: true,
+      open: regatta.open,
+      phase: regatta.state,
+      sailors: regatta.fleet.length,
+    }),
+  )
 })
 
 /**

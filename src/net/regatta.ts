@@ -54,6 +54,12 @@ export interface RegattaLimits {
    * down to it, so it is short enough to count: five, four, three, two, one.
    */
   readonly resultsFor: Seconds
+  /**
+   * How long the regatta stays open once the last person racing has gone, in the
+   * player's seconds. A page reloaded, or a sailor who goes back to the menu and comes
+   * straight in again, finds her race still there.
+   */
+  readonly closeAfter: Seconds
 }
 
 const DEFAULTS: RegattaLimits = {
@@ -63,6 +69,7 @@ const DEFAULTS: RegattaLimits = {
   abandonAfter: 600,
   idleAfter: 10,
   resultsFor: 5,
+  closeAfter: 30,
 }
 
 export interface RegattaOptions {
@@ -109,6 +116,11 @@ function markedAs(color: FleetColor, given: string): string {
 /**
  * One regatta: a lobby, a race, a result, and round again.
  *
+ * It is open only while a person is racing in it. The first person to join opens it, and
+ * robots joining from elsewhere are turned away until somebody has. When the last person
+ * racing has been gone for a while, the race is thrown away and the robots are sent
+ * off, so a fleet of robots never sails round the clock for nobody.
+ *
  * It owns the race and the clock and knows nothing of sockets. Time only moves when
  * `tick` is called, so a test can sail a whole race in a loop and read every message the
  * server would have sent.
@@ -141,6 +153,9 @@ export class Regatta {
   private resultsSince = 0
   /** The player's seconds since the server started. */
   private now: Seconds = 0
+  private opened = false
+  /** When the last person racing went, while the regatta waits to see if she comes back. */
+  private desertedSince: Seconds | undefined
 
   constructor(private readonly options: RegattaOptions) {
     this.limits = { ...DEFAULTS, ...options.limits }
@@ -148,6 +163,11 @@ export class Regatta {
 
   get state(): Phase {
     return this.phase
+  }
+
+  /** Whether a person has opened the regatta, so robots may join it. */
+  get open(): boolean {
+    return this.opened
   }
 
   get fleet(): readonly Sailor[] {
@@ -269,7 +289,7 @@ export class Regatta {
   /** Move the regatta on by this much of the player's time. */
   tick(dt: Seconds): Addressed[] {
     this.now += dt
-    const out: Addressed[] = [...this.dropTheSilent()]
+    const out: Addressed[] = [...this.dropTheSilent(), ...this.closeIfDeserted()]
 
     if (this.phase === 'racing') out.push(...this.sailOn(dt))
     else if (this.phase === 'results') {
@@ -285,6 +305,7 @@ export class Regatta {
     // join tells the whole fleet and a client repeating it turns one frame into as many
     // as there are sailors.
     if (this.entries.has(id)) return []
+    if (robot && !this.opened) return [{ to: [id], message: { kind: 'closed' } }]
 
     // Nobody races without a name. She can still watch.
     const racing = role === 'racer' && name !== ''
@@ -308,6 +329,7 @@ export class Regatta {
       person: !robot,
     }
     this.entries.set(id, entry)
+    if (seated && !robot) this.opened = true
 
     const out: Addressed[] = [
       ...room,
@@ -575,6 +597,31 @@ export class Regatta {
       this.tally.set(placing.boatId, total)
       return { ...placing, points, total }
     })
+  }
+
+  /**
+   * Close the regatta once nobody has been racing in it for long enough: throw the race
+   * away unscored, send the robots off and start the scores again.
+   */
+  private closeIfDeserted(): Addressed[] {
+    if (!this.opened) return []
+    if (this.racers().some(([, entry]) => entry.person)) {
+      this.desertedSince = undefined
+      return []
+    }
+    this.desertedSince ??= this.now
+    if (this.now - this.desertedSince < this.limits.closeAfter) return []
+
+    this.opened = false
+    this.desertedSince = undefined
+    this.abandon()
+    const robots = [...this.entries].filter(([, entry]) => !entry.person)
+    for (const [id] of robots) this.entries.delete(id)
+    this.tally.clear()
+    // A robot sailing from somewhere else is told, and her connection is closed after.
+    const remote = robots.filter(([, entry]) => !entry.robot).map(([id]) => id)
+    const told: Addressed[] = remote.length > 0 ? [{ to: remote, message: { kind: 'closed' } }] : []
+    return [...told, this.announceFleet()]
   }
 
   private backToTheLobby(): Addressed[] {

@@ -340,11 +340,12 @@ describe('making room for a person', () => {
   })
 
   it('takes the newest robot when none of them has any points', () => {
-    const race = regatta({ maxRacers: 2, fleetSize: 10 })
+    const race = regatta({ maxRacers: 3, fleetSize: 10 })
+    race.say('a', joins('Ann'))
     race.say('r1', robotJoins('One'))
     race.say('r2', robotJoins('Two'))
     race.say('b', joins('Bob'))
-    expect(race.fleet.map((sailor) => sailor.id)).toEqual(['r1', 'b'])
+    expect(race.fleet.map((sailor) => sailor.id)).toEqual(['a', 'r1', 'b'])
   })
 
   it('takes the robot with the fewest points', () => {
@@ -375,10 +376,12 @@ describe('making room for a person', () => {
   })
 
   it("does not let a robot take another robot's seat", () => {
-    const race = regatta({ maxRacers: 1, fleetSize: 10 })
+    const race = regatta({ maxRacers: 2, fleetSize: 10 })
+    race.say('a', joins('Ann'))
     race.say('r1', robotJoins('One'))
     race.say('r2', robotJoins('Two'))
     expect(race.fleet.map((sailor) => [sailor.id, sailor.role])).toEqual([
+      ['a', 'racer'],
       ['r1', 'racer'],
       ['r2', 'observer'],
     ])
@@ -611,28 +614,29 @@ describe('keeping score', () => {
   describe('starting again for people', () => {
     const pointsOf = (race: Regatta) => race.fleet.map((sailor) => sailor.points)
 
-    /** One robot sailing, and one from elsewhere to be sent the results. */
+    /** Two robots sailing, and somebody watching to be sent the results. */
     function robotsAlone() {
       const race = regatta({ fleetSize: 2, maxRacers: 10 })
       race.addRobot('Rob')
-      race.say('r', { kind: 'join', name: 'Rita', robot: true })
+      race.addRobot('Bot')
+      race.say('w', watches('Wendy'))
       race.tick(1)
-      scored(sailItOut(race, ['r']))
-      expect(pointsOf(race)).toEqual([2, 1])
+      scored(sailItOut(race, ['w']))
+      expect(pointsOf(race).slice(0, 2).sort()).toEqual([1, 2])
       return race
     }
 
     it('wipes what the robots ran up when the first person sits down to race', () => {
       const race = robotsAlone()
       race.say('a', joins('Ann'))
-      expect(pointsOf(race)).toEqual([0, 0, 0])
+      expect(pointsOf(race)).toEqual([0, 0, 0, 0])
     })
 
     /** Every page watches from behind its menu, so watching cannot be what wipes it. */
     it('leaves it alone for somebody who only watches', () => {
       const race = robotsAlone()
-      race.say('w', watches('Wendy'))
-      expect(pointsOf(race)).toEqual([2, 1, 0])
+      race.say('v', watches('Vera'))
+      expect(pointsOf(race).slice(0, 2).sort()).toEqual([1, 2])
     })
 
     it('keeps adding up while a person is still racing', () => {
@@ -791,8 +795,8 @@ describe('who holds the race controls', () => {
 
   it('answers a command from the person, not from a robot who asks first', () => {
     const race = regatta({ fleetSize: 2 })
-    race.say('bot', joinsAsRobot('Alice'))
     race.say('her', joins('Martin'))
+    race.say('bot', joinsAsRobot('Alice'))
     race.tick(1)
     expect(race.state).toBe('racing')
 
@@ -818,5 +822,81 @@ describe('who holds the race controls', () => {
     expect(race.fleet.find((one) => one.host)?.id).toBe('one')
     race.leave('one')
     expect(race.fleet.find((one) => one.host)?.id).toBe('two')
+  })
+})
+
+/*
+ * Robots race only people. Left to race each other they sailed round the clock with
+ * nobody watching, and wrote every race down.
+ */
+describe('opening and closing the regatta', () => {
+  const robotJoins = (name: string) => ({ kind: 'join', name, robot: true }) as const
+  const closedTo = (sent: Addressed[]) =>
+    sent.filter((one) => one.message.kind === 'closed').flatMap((one) => one.to)
+
+  it('turns a robot away while nobody is racing', () => {
+    const race = regatta()
+    expect(closedTo(race.say('r', robotJoins('Rob')))).toEqual(['r'])
+    expect(race.fleet).toEqual([])
+    expect(race.open).toBe(false)
+  })
+
+  it('is opened by a person racing, not by one watching', () => {
+    const race = regatta()
+    race.say('w', watches('Wendy'))
+    expect(race.open).toBe(false)
+    race.say('a', joins('Ann'))
+    expect(race.open).toBe(true)
+  })
+
+  it('lets robots in once a person is racing', () => {
+    const race = regatta()
+    race.say('a', joins('Ann'))
+    expect(closedTo(race.say('r', robotJoins('Rob')))).toEqual([])
+    expect(race.fleet.map((sailor) => sailor.id)).toEqual(['a', 'r'])
+  })
+
+  describe('when the last person racing goes', () => {
+    function deserted() {
+      const race = regatta({ closeAfter: 30, idleAfter: 1000 })
+      race.say('a', joins('Ann'))
+      race.say('r', robotJoins('Rob'))
+      race.say('w', watches('Wendy'))
+      race.tick(1)
+      expect(race.state).toBe('racing')
+      race.leave('a')
+      return race
+    }
+
+    it('keeps the race going for a while, in case she comes back', () => {
+      const race = deserted()
+      sail(race, 29)
+      expect(race.open).toBe(true)
+      expect(race.state).toBe('racing')
+    })
+
+    it('stays open if a person comes back to race in time', () => {
+      const race = deserted()
+      sail(race, 20)
+      race.say('b', joins('Bob'))
+      sail(race, 20)
+      expect(race.open).toBe(true)
+    })
+
+    it('then throws the race away, sends the robots off and closes', () => {
+      const race = deserted()
+      const sent = sail(race, 31)
+      expect(closedTo(sent)).toEqual(['r'])
+      expect(resultsIn(sent)).toBeUndefined()
+      expect(race.state).toBe('lobby')
+      expect(race.open).toBe(false)
+      expect(race.fleet.map((sailor) => sailor.id)).toEqual(['w'])
+    })
+
+    it('turns robots away again once it has closed', () => {
+      const race = deserted()
+      sail(race, 31)
+      expect(closedTo(race.say('r2', robotJoins('Rita')))).toEqual(['r2'])
+    })
   })
 })

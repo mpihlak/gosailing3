@@ -143,6 +143,19 @@ describe('telling one race from another', () => {
     expect(only().lines.at(-1)).toMatchObject({ t: 'over', ending: 'abandoned' })
     expect(logbook.racing).toBeUndefined()
   })
+
+  it('closes an unfinished race when the regatta goes back to the lobby without it', () => {
+    logbook.sent(['c1', 'c2'], racing('seed-a'))
+    logbook.sent(['c1'], { kind: 'fleet', phase: 'lobby', fleet: [] })
+    expect(only().lines.at(-1)).toMatchObject({ t: 'over', ending: 'abandoned' })
+    expect(logbook.racing).toBeUndefined()
+  })
+
+  it('leaves the race open while the fleet changes during it', () => {
+    logbook.sent(['c1', 'c2'], racing('seed-a'))
+    logbook.sent(['c1'], { kind: 'fleet', phase: 'racing', fleet: [] })
+    expect(logbook.racing).toBe('id1')
+  })
 })
 
 describe('the index of races', () => {

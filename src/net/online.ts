@@ -262,6 +262,9 @@ export class OnlineRace {
         this.removed = true
         this.trouble = 'Gave up her place to a person.'
         return
+      case 'closed':
+        this.trouble = 'The regatta is closed: nobody is racing.'
+        return
       case 'timing':
         // Whatever the far end says is only data. A number or nothing.
         this.rtt = Number.isFinite(message.rtt) ? message.rtt : undefined

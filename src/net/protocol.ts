@@ -176,6 +176,11 @@ export type ServerMessage =
    */
   | { readonly kind: 'removed' }
   /**
+   * Sent to a robot when no person is racing: she is turned away at the door, or sent off
+   * when the last person has gone. The server closes her connection after it.
+   */
+  | { readonly kind: 'closed' }
+  /**
    * How long her messages are taking to go and come back, in milliseconds. Sent to each
    * sailor about her own connection and nobody else's.
    *

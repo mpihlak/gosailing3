@@ -29,10 +29,6 @@ export function crewName(index: number): string {
   return lap === 0 ? name : `${name}${lap + 1}`
 }
 
-/** How long she waits before trying again, doubled each time it fails, up to the most. */
-const RETRY_FIRST = 5_000
-const RETRY_MOST = 60_000
-
 export interface RobotOptions {
   readonly url: string
   readonly name: string
@@ -60,18 +56,14 @@ export class Robot {
   private skipper: Skipper
   /** The race the current skipper was made for, so a new one gets a fresh head. */
   private sailing: Simulation | undefined
-  /** Her connection to the regatta. A new one replaces it each time she comes back. */
-  private connection: OnlineRace
-  /** When she tries again, once her connection has gone. */
-  private retryAt: number | undefined
-  private retryWait = RETRY_FIRST
+  /** Her connection to the regatta, once she has gone to join it. A new one each time. */
+  private connection: OnlineRace | undefined
 
   constructor(private readonly options: RobotOptions) {
     this.skipper = this.freshSkipper()
-    this.connection = this.connect()
   }
 
-  get race(): OnlineRace {
+  get race(): OnlineRace | undefined {
     return this.connection
   }
 
@@ -83,36 +75,33 @@ export class Robot {
     return this.options.end ?? 'pin'
   }
 
-  join(): void {
-    this.race.join()
+  /**
+   * Whether she is free to join the regatta: she never has, or her connection has gone,
+   * or the regatta sent her off. A seat she gave up to a person is not taken back while
+   * that regatta lasts.
+   */
+  get ashore(): boolean {
+    const race = this.connection
+    return !race || (race.trouble !== undefined && !race.removed)
+  }
+
+  /** Go and join the regatta, on a new connection. */
+  board(): void {
+    this.connection?.leave()
+    this.connection = this.connect()
+    this.connection.join()
+  }
+
+  /** The regatta has closed, so a seat she gave up is nobody's any more and she may come back. */
+  regattaClosed(): void {
+    if (!this.connection?.removed) return
+    this.connection.leave()
+    this.connection = undefined
   }
 
   /** One turn of the loop the browser would run on a frame. */
   step(): void {
-    this.keepConnected()
-    this.race.sendHelm()
-  }
-
-  /**
-   * A connection that drops comes back on its own, after a wait that grows while it keeps
-   * failing, so a server that is down is not asked every few seconds for an hour. A seat
-   * given to a person is not taken back.
-   */
-  private keepConnected(): void {
-    const race = this.race
-    if (!race.trouble) {
-      if (race.you !== undefined) this.retryWait = RETRY_FIRST
-      return
-    }
-    if (race.removed) return
-    const now = this.clock()
-    this.retryAt ??= now + this.retryWait
-    if (now < this.retryAt) return
-    this.retryAt = undefined
-    this.retryWait = Math.min(this.retryWait * 2, RETRY_MOST)
-    race.leave()
-    this.connection = this.connect()
-    this.connection.join()
+    this.connection?.sendHelm()
   }
 
   private connect(): OnlineRace {
@@ -133,14 +122,15 @@ export class Robot {
   }
 
   leave(): void {
-    this.race.leave()
+    this.connection?.leave()
   }
 
   /** Where she is and what she is doing, for somebody watching the output instead. */
   standing(): string | undefined {
-    const { simulation, you } = this.race
-    if (!simulation || !you) return undefined
-    const world = this.race.frameAt(this.clock())
+    const race = this.connection
+    if (this.ashore || !race?.simulation || !race.you) return undefined
+    const { simulation, you } = race
+    const world = race.frameAt(this.clock())
     const boat = world?.boats.find((one) => one.id === you)
     if (!world || !boat) return undefined
     const place = standings(simulation.ctx, world).find((one) => one.boatId === you)
@@ -166,13 +156,14 @@ export class Robot {
   }
 
   private rudder(): number {
-    const { simulation, you } = this.race
-    if (!simulation || !you) return 0
+    const race = this.connection
+    if (!race?.simulation || !race.you) return 0
+    const { simulation, you } = race
     if (simulation !== this.sailing) {
       this.sailing = simulation
       this.skipper = this.freshSkipper()
     }
-    const world = this.race.frameAt(this.clock())
+    const world = race.frameAt(this.clock())
     // Nothing to steer until two snapshots have arrived, and nothing to steer with while
     // she waits out a race she arrived too late for: her boat is not in the water.
     if (!world) return 0
